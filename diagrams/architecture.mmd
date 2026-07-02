@@ -1,0 +1,60 @@
+%% Waterfall Enrichment Engine — system architecture (Phase 4, ADR-0010). Authoritative for docs/04-System-Architecture.md.
+%% Style: modulith control-plane + elastic stateless data-plane. Service names: docs/05-Microservices.md. Glossary: docs/00 §7.
+flowchart TB
+    client["Tenant client / CRM"] -->|REST / batch / bulk / webhook, TLS| edge
+
+    subgraph CELL["Regional cell (blast-radius + scale unit — 'stamp another cell')"]
+        edge["api-gateway edge\nauthN/Z · tenant_id from verified principal (mTLS/JWT) · rate-limit · versioning"]
+
+        subgraph CP["Control-plane MODULITH (one deployable; in-process modules, no network hops)"]
+            api["enrichment-api\nsync intake + async job persist"]
+            orch["orchestrator\nPandora reservation-value ordering + Thompson router (proposes)"]
+            idsvc["identity-service\ntiered resolution (ADR-0004) + cache/preview"]
+            verify["verification-engine\ncalibrate → log-odds fuse → SPRT (ADR-0005)"]
+            intent["intent-engine"]
+            cost["cost/billing\ncost ceiling (G4) + idempotency ledger owners"]
+            keymgr["key-manager\nprovider key pools · rotation · health"]
+        end
+
+        subgraph DP["Data-plane (independently scaled, stateless)"]
+            workers["execution-engine worker pool\nbounded G3/G4 gate · deterministic merge · provider-adapters SPI lib\n(scales on in-flight IO — Little's Law)"]
+            egress(["egress-proxy fleet — SOLE SSRF boundary\nFQDN allow-list · DNS-rebinding-safe resolver · provider keys injected HERE"])
+            learn[["offline-learning jobs\nrecompute calibrators / reservation values / reliability weights / bandit posteriors → versioned config"]]
+            dash["dashboard/admin API\n(read-mostly; replica + ClickHouse)"]
+        end
+
+        api -->|single record, inline| orch
+        orch --> verify
+        api -->|batch/bulk| kafka[["Kafka/Redpanda\nintake partitioned by tenant_id · webhook/DLQ topics"]]
+        kafka --> workers
+        orch -. plan .-> workers
+        verify -. plan .-> workers
+        workers --> egress
+        cost -. pre-flight reserve .-> workers
+        keymgr -. keys .-> egress
+
+        subgraph DATA["Datastores (tenant-isolated)"]
+            pg[("PostgreSQL — OLTP system-of-record\nFORCE RLS (pool) · field_versions (W3C PROV, G5) · ledgers · config-as-data")]
+            redis[("Redis — cache/preview · idempotency fast-path · cost reservation · breaker state · concurrency tokens")]
+            ch[("ClickHouse — analytics: api_logs, usage, provider_statistics, history")]
+        end
+        CP --> pg
+        CP --> redis
+        workers --> pg
+        workers --> redis
+        pg -. CDC .-> ch
+        learn --> ch
+        learn --> pg
+        dash --> pg
+        dash --> ch
+    end
+
+    vault[["secrets manager / Vault"]] -.-> keymgr
+    egress ==>|HTTPS API only, no scraping| providers[("46-provider roster (external APIs)")]
+
+    classDef sec fill:#fde,stroke:#b00,stroke-width:2px;
+    classDef store fill:#eef,stroke:#33a;
+    class egress,vault sec;
+    class pg,redis,ch store;
+
+    %% NETWORK: control-plane + workers run in a default-deny NO-EGRESS subnet; only egress-proxy has an internet route.

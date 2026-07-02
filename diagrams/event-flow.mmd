@@ -1,0 +1,26 @@
+%% Event & queue flow (Phase 4). Authoritative for docs/04-System-Architecture.md §5. Detailed queue design → docs/10-Queue-System.md.
+flowchart LR
+    api["enrichment-api"] -->|per-record work items\npartition=tenant_id · hash=record-id (idempotent)| intake{{"topic: enrichment-intake"}}
+    intake -->|consume at per-(provider,key-pool) budget rate\n(lag = back-pressure + autoscale signal)| workers["execution-engine worker pool"]
+
+    workers -->|success| results{{"topic: enrichment-results"}}
+    workers -->|circuit-open / retry-exhausted / poisoned| dlq{{"topic: DLQ (per-stage)"}}
+    workers -->|completion| wh{{"topic: webhook-delivery"}}
+
+    results --> billing["billing rollup"]
+    results -->|CDC| ch[("ClickHouse analytics")]
+    wh -->|idempotent, HMAC-signed| egress(["egress-proxy"]) --> tenanthook["tenant webhook endpoint"]
+    wh -->|delivery failure| whretry{{"topic: webhook-retry (jittered backoff, capped)"}}
+    whretry --> wh
+
+    dlq --> ops["ops review / replay tool"]
+    ops -.->|manual replay (idempotent)| intake
+
+    ch --> learn[["offline-learning jobs"]]
+    learn -.->|versioned config: calibrators / reservation values / reliability weights / bandit posteriors| cfg[("config-as-data (Postgres)")]
+    cfg -.->|hot copy| redis[("Redis")]
+
+    classDef topic fill:#eef,stroke:#33a;
+    classDef sec fill:#fde,stroke:#b00;
+    class intake,results,dlq,wh,whretry topic;
+    class egress sec;

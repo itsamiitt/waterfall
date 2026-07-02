@@ -1,0 +1,24 @@
+%% Async queue + orchestration flow (Phase 10). Authoritative for docs/10-Queue-System.md.
+%% Transport = Kafka-protocol log (ADR-0013); Orchestration = Temporal, cost-gated (ADR-0014). Split is deliberate.
+flowchart TB
+    api["enrichment-api"] -->|per-record items · key=tenant_id (fairness) · hash=record-id (idempotent)| intake{{"Redpanda/Kafka: enrichment-intake\n(partition-by-tenant · lag = back-pressure + autoscale)"}}
+    intake -->|consume at per-(provider,key-pool) budget rate| tw["Temporal workers (orchestration)\nSaga in workflow code · RetryPolicy/Activity · event-sourced checkpoint recovery\nTask-Queue FAIRNESS (weighted per-tenant, no whale starvation)"]
+
+    tw -->|idempotent Activity| exec["execution-engine step\n(bounded G3/G4 gate)"]
+    exec --> idem{{"Redis KV: idempotency/dedupe store (TTL)"}}
+    exec --> egress(["egress-proxy → provider API"])
+    tw -->|success| results{{"topic: enrichment-results"}}
+    tw -->|terminal failure| dlq{{"topic: DLQ per-stage"}}
+    tw -->|completion| wh{{"topic: webhook-delivery"}}
+
+    results -->|CDC| ch[("ClickHouse")]
+    dlq --> ops["ops replay tool (idempotent)"] -.-> intake
+
+    note["NOTE (ADR-0014): do NOT push ~6,400 msg/s of raw transport through Temporal.\nKafka is the high-volume buffer; Temporal orchestrates the waterfall per record/batch.\nIf the Action-cost spike (QS-TMP-1) fails → fallback: hand-rolled Saga+outbox on the same backbone."]
+
+    classDef topic fill:#eef,stroke:#33a;
+    classDef sec fill:#fde,stroke:#b00;
+    classDef gate fill:#fff3e0,stroke:#ef6c00;
+    class intake,results,dlq,wh topic;
+    class egress sec;
+    class tw,note gate;

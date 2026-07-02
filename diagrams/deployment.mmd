@@ -1,0 +1,27 @@
+%% Deployment topology (Phase 19, ADR-0015). Authoritative for docs/19-Deployment.md. Portability-first on K8s; regional cells.
+flowchart TB
+    dns["Global DNS / GeoDNS + WAF"] --> lb1
+    subgraph R1["Regional cell — region A (residency-scoped)"]
+        lb1["Load balancer / API gateway edge"]
+        subgraph K8S1["Kubernetes (EKS/AKS/GKE)"]
+            cp1["control-plane modulith (blue-green)\nHPA on p95/CPU"]
+            wk1["execution-engine workers (canary)\nHPA on queue lag"]
+            px1(["egress-proxy fleet (default-deny egress boundary)"])
+            tw1["Temporal workers (gated, ADR-0014)"]
+        end
+        subgraph MGD1["Managed data services (portable)"]
+            pg1[("Postgres primary + replica (Aurora/CloudSQL)")]
+            rd1[("Redis (ElastiCache/Memorystore)")]
+            kf1[("Kafka/Redpanda (MSK/Redpanda Cloud)")]
+            ch1[("ClickHouse")]
+        end
+        cp1 --> pg1 & rd1
+        wk1 --> kf1 & rd1 & pg1
+        wk1 --> px1
+        cp1 --> kf1
+    end
+    px1 ==> ext[("external provider APIs")]
+    pg1 -. async replication .-> R2[("region B cell (DR / residency)\nsame stack, cross-region failover")]
+    vault[["Secrets manager / Vault"]] -.-> px1
+    obs["Prometheus/Grafana/OTel/ELK (20)"] -.scrape/trace.-> K8S1
+    ci["GitHub Actions CI/CD\nbuild→test→scan→ Terraform/Helm →blue-green/canary"] -.deploy.-> K8S1

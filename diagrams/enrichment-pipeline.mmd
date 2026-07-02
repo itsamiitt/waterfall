@@ -1,0 +1,48 @@
+%% Per-record enrichment methodology pipeline (Phase 2). Source of truth for docs/02-Waterfall-Research.md §3.
+%% Spine invariant: learned components PROPOSE; the Execution Engine deterministically enforces G3/G4 and the merge is rule-deterministic ("model proposes, gate disposes").
+flowchart TB
+    start([EnrichmentRequest: tenant_id, record, fields, profile]) --> cache{Cache / negative-cache hit?<br/>cheap discovery before paid reveal}
+    cache -- hit --> done
+    cache -- miss --> idr
+
+    subgraph IDR["1 · Identity Resolution (tiered) — ADR-0004"]
+        idr["Tier0 deterministic exact on strong keys<br/>(email, domain+name, linkedin) — idempotent"] --> idrb{resolved?}
+        idrb -- no --> block["Tier1 tenant-scoped blocking (LSH/MinHash, cap K)"]
+        block --> fs["Tier2 Fellegi-Sunter scoring (EM m/u, 2 thresholds)<br/>per-field weights → G5 provenance"]
+        fs --> mid{ambiguous middle band?}
+        mid -- yes, cost-gated --> ml["Tier3 ML (Ditto) — feature-flag, G3/G4 gated"]
+    end
+    idrb -- yes --> order
+    mid -- no --> order
+    ml --> order
+
+    subgraph PLAN["2 · Ordering + Routing — ADR-0007 / ADR-0008"]
+        order["Pandora reservation-value index (offline per tenant,field)<br/>cheap-first cascade; skip if index < best-in-hand"] --> route["Thompson-sampling router PROPOSES ranking<br/>(per provider,field,region; value-per-$)"]
+    end
+    route --> gate
+
+    subgraph EXEC["3 · Execution + Stop Gate — ADR-0005 (deterministic spine)"]
+        gate["Execution Engine: for next provider(s) in order"] --> guard{{"G4 cost ceiling + credits reserved?<br/>G3 timeout/breaker ok?"}}
+        guard -- no --> stop
+        guard -- yes --> call["call adapter (bounded, idempotent, retry+jitter)"]
+        call --> cal["Layer1 calibrate provider score (per provider,field)"]
+        cal --> fuse["Layer2 log-odds Bayesian fusion<br/>weight caps + correlation discount"]
+        fuse --> sprt{"SPRT stop:<br/>confidence ≥ target?"}
+        sprt -- no, providers remain --> gate
+    end
+    sprt -- yes --> merge
+    stop([STOP: ceiling / timeout / providers exhausted]) --> merge
+
+    subgraph MERGE["4 · Conflict Resolution / Merge — ADR-0006"]
+        merge["Online deterministic reliability-weighted resolution<br/>(CRH weights + freshness decay + tenant authority + tie-break)"] --> prov["Persist ALL candidates (winners+losers) as W3C PROV (G5)"]
+    end
+    prov --> done([EnrichedRecord + provenance + cost ledger])
+
+    prov -. reward + audit .-> learn[["Offline learning loop: recalibrate, re-estimate FS m/u,<br/>source reliabilities (Accu copy-discount), reservation indices,<br/>bandit posteriors — Conservative-Bandit floor vs static baseline"]]
+    learn -. updated weights/priors .-> order
+    learn -. updated calibrators .-> cal
+
+    classDef det fill:#e8f5e9,stroke:#2e7d32;
+    classDef learn fill:#fff3e0,stroke:#ef6c00;
+    class guard,merge,idr det;
+    class route,learn learn;

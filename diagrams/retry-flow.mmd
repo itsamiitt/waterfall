@@ -1,0 +1,28 @@
+%% Retry / DLQ / breaker flow (Phase 10). Authoritative for docs/10-Queue-System.md §retry. Error taxonomy from api-integration skill.
+flowchart TD
+    call["provider call (bounded G3, idempotency-keyed G2)"] --> res{canonical result?}
+    res -->|success| ok["normalize → calibrate → fuse → merge (G5)"]
+    res -->|NOT_FOUND| fall["fall through to next waterfall step (not an error)"]
+    res -->|TRANSIENT 5xx/timeout/reset| tr{attempts < cap AND within G4 cost + G3 wall-time?}
+    res -->|RATE_LIMIT 429 / Hunter 403| rl["honor Retry-After / backoff · rotate key in pool"]
+    res -->|QUOTA 402 / credits| q["disable key · failover to pool key · alert"]
+    res -->|AUTH 401/403| au["disable key · alert · failover"]
+    res -->|PROVIDER_DOWN breaker-open| pd["skip provider · fall through"]
+
+    tr -->|yes| backoff["sleep = random(0, min(cap, base·2^n)) jitter"] --> call
+    tr -->|no (exhausted / would breach ceiling)| dlq["→ DLQ (per-stage)"]
+    rl --> tr
+    q --> fall
+    au --> fall
+    pd --> fall
+
+    dlq --> ops["ops review / replay (idempotent, G2)"]
+    ops -.->|manual/scheduled replay| call
+
+    %% webhook delivery retry (outbound)
+    whfail["outbound webhook delivery failed"] --> whr{attempts < cap?}
+    whr -->|yes| whb["jittered backoff (webhook-retry topic)"] --> whfail
+    whr -->|no| whdlq["→ webhook DLQ"]
+
+    classDef bad fill:#fde,stroke:#b00;
+    class dlq,whdlq,q,au bad;

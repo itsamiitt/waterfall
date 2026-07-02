@@ -1,0 +1,187 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Waterfall Enrichment Engine API",
+    "version": "0.1.0",
+    "description": "API-first, multi-tenant B2B enrichment. tenant_id is derived ONLY from the authenticated principal (never from a request body). Writes require an Idempotency-Key. Canonical: docs/07-API-Gateway.md. This spec is contract-tested against the implementation in internal/api (see openapi_test.go)."
+  },
+  "servers": [{ "url": "/", "description": "relative to the deployed gateway" }],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "security": [],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readiness probe — 200 only when dependencies (e.g. the datastore) are reachable",
+        "security": [],
+        "responses": {
+          "200": { "description": "ready" },
+          "503": { "description": "a dependency is unavailable" }
+        }
+      }
+    },
+    "/v1/enrichments": {
+      "post": {
+        "summary": "Submit an enrichment job (async by default; ?mode=sync runs inline)",
+        "parameters": [
+          { "name": "mode", "in": "query", "required": false, "schema": { "type": "string", "enum": ["sync"] } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubmitRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "sync result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+          "202": { "description": "accepted (async)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+          "400": { "description": "missing Idempotency-Key or invalid JSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "unauthenticated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "409": { "description": "Idempotency-Key reused with a different body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "422": { "description": "validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "429": { "description": "rate limited or queue saturated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/v1/enrichments/{id}": {
+      "get": {
+        "summary": "Get a job's status and (when finished) its outcome",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "job", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+          "401": { "description": "unauthenticated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "not found (incl. another tenant's job)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/v1/records/{subjectID}": {
+      "get": {
+        "summary": "Get current best value per field for a subject (tenant-scoped)",
+        "parameters": [{ "name": "subjectID", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "record", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecordsResponse" } } } },
+          "401": { "description": "unauthenticated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/v1/dead-letters": {
+      "get": {
+        "summary": "List the tenant's dead-lettered (parked) jobs (present only when the durable outbox is enabled)",
+        "parameters": [{ "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "dead-letter list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeadLettersResponse" } } } },
+          "401": { "description": "unauthenticated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/v1/dead-letters/{id}/redrive": {
+      "post": {
+        "summary": "Reset a parked job so the outbox re-delivers it (write; requires the write scope)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "redriven", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RedriveResponse" } } } },
+          "401": { "description": "unauthenticated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "missing write scope", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "no such dead-lettered job", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "SubmitRequest": {
+        "type": "object",
+        "required": ["subject", "want", "cost_ceiling"],
+        "properties": {
+          "subject": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string" },
+              "known": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          },
+          "want": { "type": "array", "items": { "type": "string" } },
+          "confidence_target": { "type": "number", "minimum": 0, "maximum": 1 },
+          "cost_ceiling": { "type": "integer", "minimum": 1 },
+          "config_version": { "type": "string" },
+          "priority": { "type": "string", "enum": ["premium", "bulk"] }
+        }
+      },
+      "Field": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "string" },
+          "confidence": { "type": "number" },
+          "provider": { "type": "string" },
+          "cost_credits": { "type": "integer" },
+          "idempotency_key": { "type": "string" },
+          "observed_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "JobResponse": {
+        "type": "object",
+        "required": ["job_id", "status"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed"] },
+          "committed_credits": { "type": "integer" },
+          "filled": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/Field" } },
+          "stops": { "type": "object", "additionalProperties": { "type": "string" } },
+          "error": { "type": "string" }
+        }
+      },
+      "RecordsResponse": {
+        "type": "object",
+        "properties": {
+          "subject_id": { "type": "string" },
+          "fields": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/Field" } }
+        }
+      },
+      "DeadLetterItem": {
+        "type": "object",
+        "properties": {
+          "job_id": { "type": "string" },
+          "status": { "type": "string" },
+          "attempts": { "type": "integer" },
+          "last_error": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "DeadLettersResponse": {
+        "type": "object",
+        "properties": {
+          "dead_letters": { "type": "array", "items": { "$ref": "#/components/schemas/DeadLetterItem" } }
+        }
+      },
+      "RedriveResponse": {
+        "type": "object",
+        "properties": {
+          "job_id": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

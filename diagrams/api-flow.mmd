@@ -1,0 +1,49 @@
+%% API request lifecycle (Phase 4). Authoritative for docs/04-System-Architecture.md §3. Two paths share one planner library.
+sequenceDiagram
+    autonumber
+    actor C as Tenant client
+    participant GW as api-gateway edge
+    participant API as enrichment-api (modulith)
+    participant ORCH as orchestrator+verify (modulith)
+    participant COST as cost/billing (G4)
+    participant Q as Kafka (async only)
+    participant W as execution-engine workers
+    participant PX as egress-proxy (SSRF)
+    participant P as provider API
+    participant DB as Postgres (RLS + provenance)
+
+    Note over C,DB: SYNC path — single record (no queue; lowest p95)
+    C->>GW: POST /enrich (JWT/mTLS)
+    GW->>GW: authN/Z; tenant_id from principal (never body); rate-limit
+    GW->>API: request + signed tenant context
+    API->>ORCH: plan(record, fields, profile)
+    ORCH->>ORCH: cache/preview → tiered identity → Pandora order + Thompson propose
+    ORCH->>COST: reserve credits ≤ ceiling (G4) BEFORE any call
+    COST-->>ORCH: reservation ok (else STOP)
+    loop bounded parallel-prefix / cascade until SPRT stop | ceiling | timeout
+        ORCH->>W: execute step (deadline, idempotency_key)
+        W->>DB: idempotency ledger check (G2)
+        alt cache/ledger hit
+            DB-->>W: prior result (no paid call)
+        else miss
+            W->>PX: provider call (bounded G3)
+            PX->>PX: allow-list + DNS-rebind-safe resolve; inject key
+            PX->>P: HTTPS
+            P-->>PX: result
+            PX-->>W: normalized result
+        end
+        W->>W: calibrate → log-odds fuse → SPRT check
+    end
+    W->>DB: deterministic merge → write field_versions (value+confidence+PROV+cost+config-versions, G5)
+    API-->>C: EnrichedRecord + provenance + cost ledger
+
+    Note over C,DB: ASYNC path — batch/bulk (queue = back-pressure reservoir)
+    C->>GW: POST /enrich/batch
+    GW->>API: request + tenant context
+    API->>DB: persist job + job_items (RLS)
+    API->>Q: enqueue per-record items (partition=tenant_id, hash=record-id, idempotent)
+    API-->>C: 202 job_id
+    Q->>W: consume at per-(provider,key-pool) budget rate
+    W->>PX: same pipeline as sync (shared planner lib)
+    W->>DB: results + provenance
+    W->>PX: webhook completion (idempotent, HMAC, via egress)

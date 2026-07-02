@@ -1,0 +1,28 @@
+%% Infrastructure / network zones (Phase 19, ADR-0015). Authoritative for docs/19-Deployment.md. Default-deny egress except proxy.
+flowchart LR
+    subgraph PUB["Public zone"]
+        waf["WAF + edge LB"]
+    end
+    subgraph APP["App zone (private, NO internet egress — default deny)"]
+        cp["control-plane modulith"]
+        wk["execution-engine + Temporal workers"]
+    end
+    subgraph EGZ["Egress zone (only zone with an internet route)"]
+        px(["egress-proxy fleet\nallow-list + DNS-rebind-safe resolver + key injection"])
+    end
+    subgraph DATA["Data zone (private)"]
+        pg[("Postgres")]
+        rd[("Redis")]
+        kf[("Kafka/Redpanda")]
+        ch[("ClickHouse")]
+        vault[["Vault / secrets"]]
+    end
+    waf --> cp
+    cp --> DATA
+    wk --> DATA
+    wk --> px
+    px ==> internet[("Internet: provider APIs / tenant webhooks")]
+    vault -.keys.-> px
+    classDef sec fill:#fde,stroke:#b00;
+    class px,vault,EGZ sec;
+    %% App zone has NO route to `internet`; all outbound is forced through the egress zone (SSRF choke, 13/18).

@@ -1,0 +1,65 @@
+%% Core ERD (Phase 6). Authoritative for docs/06-Database-Architecture.md. Every tenant-scoped table has tenant_id + FORCE RLS (ADR-0011).
+%% Config-as-data + provenance versioned/append-only. Not exhaustive; logs/analytics live in ClickHouse.
+erDiagram
+    TENANTS ||--o{ TENANT_ACCOUNTS : bills
+    TENANTS ||--o{ USERS : has
+    TENANTS ||--o{ COMPANIES : owns
+    TENANTS ||--o{ PERSONS : owns
+    TENANTS ||--o{ ENRICHMENT_JOBS : submits
+    TENANTS ||--o{ CREDITS : holds
+
+    COMPANIES ||--o{ PERSONS : employs
+    PERSONS ||--o{ IDENTITY_CLUSTERS : resolved_into
+    COMPANIES ||--o{ IDENTITY_CLUSTERS : resolved_into
+
+    ENRICHMENT_JOBS ||--o{ JOB_ITEMS : contains
+    JOB_ITEMS ||--o{ PROVIDER_RESULTS : produces
+    JOB_ITEMS ||--o{ FIELD_VERSIONS : writes
+    JOB_ITEMS ||--o{ IDEMPOTENCY_LEDGER : keyed_by
+    JOB_ITEMS ||--o{ COST_LEDGER : charges
+
+    PROVIDERS ||--o{ PROVIDER_KEYS : authenticated_by
+    KEY_POOLS ||--o{ PROVIDER_KEYS : groups
+    PROVIDERS ||--o{ PROVIDER_RESULTS : returns
+    PROVIDERS ||--o{ PROVIDER_STATISTICS : benchmarked_by
+    PROVIDERS ||--o{ PROVIDER_RELIABILITY_WEIGHTS : weighted_by
+    PROVIDERS ||--o{ RESERVATION_VALUES : ranked_by
+
+    PROVIDER_RESULTS ||--o{ FIELD_VERSIONS : candidates_for
+    FIELD_VERSIONS }o--|| CALIBRATORS : scored_by
+    FIELD_VERSIONS }o--|| PROVIDER_RELIABILITY_WEIGHTS : merged_by
+
+    FIELD_VERSIONS {
+      uuid id PK
+      uuid tenant_id FK "RLS"
+      uuid subject_id "person/company"
+      string field "canonical Field name"
+      string value
+      float confidence "calibrated 0..1"
+      float log_odds
+      string provider
+      numeric cost
+      timestamptz fetched_at
+      timestamptz valid_from "bitemporal"
+      timestamptz system_from "bitemporal"
+      boolean is_winner
+      uuid calibrator_version FK
+      uuid weight_version FK
+      uuid job_item_id FK
+      string idempotency_key "G2 key that produced this value"
+      jsonb prov_lineage "W3C PROV"
+    }
+    IDEMPOTENCY_LEDGER {
+      string idempotency_key PK "hash(tenant,record,field,provider,params,config_ver)"
+      uuid tenant_id FK "RLS"
+      string terminal_status
+      jsonb result_ref
+    }
+    COST_LEDGER {
+      uuid id PK
+      uuid tenant_id FK "RLS"
+      uuid job_item_id FK
+      numeric reserved
+      numeric actual
+      string state "reserved|committed|refunded"
+    }

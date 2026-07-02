@@ -1,0 +1,49 @@
+%% Service/module dependency graph (Phase 5). Authoritative for docs/05-Microservices.md. Style per ADR-0010.
+%% Solid = runtime call/dependency; dashed = data/async. CP modules are in-process (no network hop).
+flowchart TD
+    subgraph CP["Control-plane modulith (in-process modules)"]
+        api[enrichment-api]
+        orch[orchestrator]
+        idsvc[identity-service]
+        verify[verification-engine]
+        intent[intent-engine]
+        cost[cost/billing]
+        keymgr[key-manager]
+    end
+    subgraph DP["Data-plane (separate deployables)"]
+        workers[execution-engine workers]
+        egress[egress-proxy]
+        learn[offline-learning jobs]
+        dash[dashboard/admin API]
+    end
+    subgraph STORE["Datastores"]
+        pg[(Postgres)]
+        redis[(Redis)]
+        ch[(ClickHouse)]
+    end
+    gw[api-gateway edge] --> api
+    api --> orch
+    orch --> idsvc
+    orch --> verify
+    orch --> cost
+    orch -->|proposes plan| workers
+    intent --> workers
+    workers --> verify
+    workers --> egress
+    workers -->|reserve/consume| cost
+    cost --> keymgr
+    keymgr -->|keys injected| egress
+    idsvc --> redis
+    cost --> redis
+    workers --> redis
+    api --> pg
+    idsvc --> pg
+    cost --> pg
+    verify --> pg
+    workers --> pg
+    pg -.CDC.-> ch
+    learn -.reads.-> ch
+    learn -.writes versioned config.-> pg
+    dash -.reads.-> pg
+    dash -.reads.-> ch
+    egress ==> ext[(external provider APIs)]

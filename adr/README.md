@@ -25,8 +25,14 @@ Decision section in place.
 | [0013](0013-async-transport-kafka-log.md) | Async transport: Kafka-protocol log (Redpanda preferred) | Accepted |
 | [0014](0014-orchestration-temporal-cost-gated.md) | Orchestration: Temporal durable execution (cost-gated), fallback hand-rolled Saga | Accepted (gated) |
 | [0015](0015-cloud-and-region-topology.md) | Cloud & region topology: portability-first, AWS primary reference, regional cells | Accepted |
+| [0016](0016-frontend-dependency-exception.md) | Frontend dependency exception: React + TypeScript + Vite SPA with a pinned allowlist | Accepted |
+| [0017](0017-secrets-envelope-encryption.md) | Secrets at rest: AES-256-GCM envelope encryption behind a pluggable `secrets.Backend` | Accepted |
+| [0018](0018-dashboard-session-model.md) | Dashboard session model: cookie sessions for the SPA, JWT for machines, mandatory TOTP MFA | Accepted |
+| [0019](0019-dashboard-realtime-sse.md) | Dashboard realtime: one multiplexed SSE stream per tab over a Postgres read-poller | Accepted |
+| [0020](0020-platform-tenant-table-taxonomy.md) | Platform/tenant table taxonomy: Class P/T/R, sentinel platform tenant, dual GUC, FORCE RLS everywhere | Accepted |
 
 > All architecture decisions are recorded. **Resolved:** datastore (ADR-0011), API protocols (ADR-0012),
-> queue transport (ADR-0013), orchestration (ADR-0014, cost-gated), cloud/topology (ADR-0015). Remaining
-> deferred artifact-level choice: secrets backend (Vault vs cloud KMS) — to be an ADR at implementation
-> start (open item KM-1/SE-secrets).
+> queue transport (ADR-0013), orchestration (ADR-0014, cost-gated), cloud/topology (ADR-0015), secrets
+> backend (ADR-0017 — closes open item KM-1/SE-secrets), frontend dependency exception (ADR-0016),
+> dashboard sessions (ADR-0018), dashboard realtime transport (ADR-0019), platform/tenant table
+> taxonomy (ADR-0020).

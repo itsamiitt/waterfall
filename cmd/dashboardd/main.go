@@ -23,11 +23,13 @@ import (
 	"time"
 
 	"github.com/enrichment/waterfall/internal/auth"
+	"github.com/enrichment/waterfall/internal/bandit"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/providers"
+	"github.com/enrichment/waterfall/internal/dash/rotation"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
 	"github.com/enrichment/waterfall/internal/metrics"
@@ -127,15 +129,33 @@ func main() {
 	// and reads the Principal from ctx via httpx.CtxAuthenticator; the shared FeatureChain supplies
 	// the single authentication plus IP-allowlist, CSRF, and MFA-gate enforcement so feature routes
 	// get the same protections as the P0 surface without re-authenticating (doc 12 P1).
+	// P2 rotation engine: the single LeaseResolver instance is shared across the egress path
+	// (providers.Deps.Resolver — closing OI-KEYS-2: provider/key test/health-check probes now do a
+	// live bounded provider.Call with a resolved key) and rotation.Routes (so selection-state
+	// reflects the same live PoolState cache). Its background re-band + refresh loops start here.
+	rotEngine := rotation.New(rotation.Config{
+		Store:   rotation.NewStore(store),
+		Audit:   auditLog,
+		Secrets: rotation.NewSecretOpener(backend),
+		Bandit:  bandit.New(),
+		Now:     time.Now,
+		Logger:  logger,
+	})
+	rotEngine.Start()
+	defer rotEngine.Stop()
+
 	fmux := http.NewServeMux()
 	providers.Routes(fmux, providers.Deps{
 		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
-		Secrets: backend, Resolver: nil, Now: time.Now, Logger: logger,
+		Secrets: backend, Resolver: rotEngine, Now: time.Now, Logger: logger,
 	})
 	keys.Routes(fmux, keys.Deps{
 		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
 		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
 	})
+	// Rotation's key-pools/{id}/selection-state + key-pools/{id}/simulate coexist with keys'
+	// key-pools routes on the SAME fmux — net/http 1.22 disambiguates by full pattern.
+	rotation.Routes(fmux, rotation.Deps{Engine: rotEngine, Auth: httpx.CtxAuthenticator{}, Logger: logger})
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -143,7 +163,7 @@ func main() {
 	// precedence over "/", so /v1/admin/providers/{id} lands on featureHandler.
 	admin := http.NewServeMux()
 	admin.Handle("/", srv.Handler())
-	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs"} {
+	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}

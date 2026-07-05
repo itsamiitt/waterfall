@@ -352,6 +352,36 @@ func (e *Engine) Reconcile(ctx context.Context) (int, error) {
 	return reconcile(ctx, e.store)
 }
 
+// ReactivateKey drives one exhausted/rate_limited Provider Key back toward active through the KM-3
+// triggers machine (doc 07 §9): exhausted -> probing -> active, or rate_limited -> active. It is
+// the single rotation touch-point the health Reactivator injects (as a KeyReactivator adapter) so
+// auto re-enable probes never make health import rotation. It reads the key's authoritative status
+// to pick the legal recovery edge; a key in any other status (or absent) is a no-op (nil). The
+// in-memory PoolState cache picks the change up on its periodic refresh (or an Invalidate). Each
+// Apply is a legal KM-3 edge; an illegal edge (e.g. the key moved concurrently) returns
+// ErrIllegalTransition and performs no side effect.
+func (e *Engine) ReactivateKey(ctx context.Context, keyID string) error {
+	status, _, found, err := e.store.KeyStatus(ctx, keyID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	switch State(status) {
+	case StateExhausted:
+		// exhausted -> probing (persisted as status=exhausted + health=probing) -> active.
+		if aerr := e.trigger.Apply(ctx, keyID, StateExhausted, StateProbing, "", false); aerr != nil {
+			return aerr
+		}
+		return e.trigger.Apply(ctx, keyID, StateProbing, StateActive, "", false)
+	case StateRateLimited:
+		return e.trigger.Apply(ctx, keyID, StateRateLimited, StateActive, "", false)
+	default:
+		return nil // not a reactivation candidate
+	}
+}
+
 // --- region context ---
 
 type regionCtxKey struct{}

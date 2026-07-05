@@ -24,15 +24,18 @@ func (CtxAuthenticator) Authenticate(r *http.Request) (tenant.Principal, error) 
 // featureLabels bounds the instrument route label for feature routes to a small fixed set, so the
 // metric's route cardinality never grows with ids (doc 10 no-unbounded-labels rule).
 var featureLabels = map[string]string{
-	"providers":   "providers",
-	"keys":        "keys",
-	"key-pools":   "key-pools",
-	"key-imports": "key-imports",
-	"bulk-jobs":   "bulk-jobs",
-	"rotation":    "rotation",
-	"routing":     "routing",
-	"workflows":   "workflows",
-	"config":      "config",
+	"providers":      "providers",
+	"keys":           "keys",
+	"key-pools":      "key-pools",
+	"key-imports":    "key-imports",
+	"bulk-jobs":      "bulk-jobs",
+	"rotation":       "rotation",
+	"routing":        "routing",
+	"workflows":      "workflows",
+	"config":         "config",
+	"health":         "health",
+	"approvals":      "approvals",
+	"change-history": "change-history",
 }
 
 // featureLabel derives the bounded metric label from the request path's segment after /v1/admin/.

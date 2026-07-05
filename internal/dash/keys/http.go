@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/rbac"
@@ -63,6 +64,7 @@ type Deps struct {
 	Audit   *audit.Log
 	Auth    Authenticator
 	StepUp  StepUpVerifier // optional (§5.4)
+	Gate    approvals.Gate // optional; nil => approvals.NopGate (bulk op=delete runs inline)
 	Logger  *slog.Logger
 }
 
@@ -70,6 +72,7 @@ type router struct {
 	svc    *Service
 	auth   Authenticator
 	stepUp StepUpVerifier
+	gate   approvals.Gate
 	log    *slog.Logger
 }
 
@@ -80,10 +83,15 @@ func Routes(mux *http.ServeMux, d Deps) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	gate := d.Gate
+	if gate == nil {
+		gate = approvals.NopGate{}
+	}
 	rt := &router{
 		svc:    NewService(d.Store, d.Secrets, d.Audit, logger),
 		auth:   d.Auth,
 		stepUp: d.StepUp,
+		gate:   gate,
 		log:    logger,
 	}
 	rt.register(mux)
@@ -469,7 +477,28 @@ func (rt *router) bulkOp(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Filter = &f
 	}
-	// op=delete is approval-gated in the RBAC matrix; for P1 it executes inline+audited (OI-KEYS-1).
+	// op=delete is approval-gated (OI-KEYS-1). BEFORE executing, resolve the scope to its concrete
+	// key-id set and pin {"ids":[...]} into an approval request; on a pending decision answer 202
+	// {approval_request_id}. The real bulk delete runs EXACTLY ONCE through the registered Executor
+	// on quorum. Preview is a pure count and is never gated.
+	if in.Op == "delete" && !in.Preview {
+		ids, rerr := rt.svc.ResolveKeyIDs(r.Context(), in)
+		if rerr != nil {
+			rt.writeServiceError(w, rerr)
+			return
+		}
+		payload, _ := json.Marshal(map[string][]string{"ids": ids})
+		proceed, reqID, gerr := rt.gate.Check(r.Context(), approvals.ActionKeyBulkDelete, payload)
+		if gerr != nil {
+			rt.log.Error("approval gate check failed", "action_kind", approvals.ActionKeyBulkDelete, "err", gerr)
+			writeError(w, http.StatusInternalServerError, codeInternal, "approval gate error")
+			return
+		}
+		if !proceed {
+			writeJSON(w, http.StatusAccepted, map[string]string{"approval_request_id": reqID})
+			return
+		}
+	}
 	jobID, matched, err := rt.svc.BulkOp(r.Context(), in)
 	if err != nil {
 		rt.writeServiceError(w, err)

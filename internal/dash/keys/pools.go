@@ -256,6 +256,20 @@ func (svc *Service) BulkOp(ctx context.Context, in BulkInput) (jobID string, mat
 	return job.ID, len(ids), nil
 }
 
+// ResolveKeyIDs resolves a bulk-op scope (explicit ids or a filter, never both) to the concrete
+// Provider Key id set, so a gated bulk delete can pin the FULLY-RESOLVED id list at request time
+// (approvals payload pinning). It is a read-only projection over the same RLS-scoped filter query
+// BulkOp uses, so it never changes bulk behavior.
+func (svc *Service) ResolveKeyIDs(ctx context.Context, in BulkInput) ([]string, error) {
+	if (len(in.IDs) == 0) == (in.Filter == nil) {
+		return nil, fmt.Errorf("%w: exactly one of ids or filter is required", ErrValidation)
+	}
+	if in.Filter != nil {
+		return svc.store.listKeyIDsByFilter(ctx, *in.Filter)
+	}
+	return in.IDs, nil
+}
+
 func (svc *Service) applyBulk(ctx context.Context, op, id, reason string) error {
 	switch op {
 	case "enable":

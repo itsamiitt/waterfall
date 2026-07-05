@@ -50,6 +50,7 @@ type Store interface {
 	LoadPoolBySelector(ctx context.Context, selector string) (PoolData, bool, error)
 	LoadPoolByID(ctx context.Context, poolID string) (PoolData, bool, error)
 	StatusStore
+	KeyStatus(ctx context.Context, keyID string) (status, health string, found bool, err error)
 	leaser
 	reconcileStore
 	ListTriggers(ctx context.Context) ([]TriggerRow, error)
@@ -172,6 +173,27 @@ func loadMembers(c *pg.Conn, poolID string) ([]poolKeyRow, error) {
 		out = append(out, scanPoolKey(r))
 	}
 	return out, nil
+}
+
+// KeyStatus reads a Provider Key's current status + health (Class P). found=false when no such
+// key exists. It is the read the reactivation driver uses to pick the KM-3 recovery edge
+// (exhausted -> probing -> active vs rate_limited -> active) from the key's authoritative status.
+func (st *pgStore) KeyStatus(ctx context.Context, keyID string) (status, health string, found bool, err error) {
+	err = st.db.PlatformTx(ctx, func(c *pg.Conn) error {
+		res, qerr := c.QueryParams(
+			`select status, coalesce(health,'') from provider_keys where id = $1`, keyID)
+		if qerr != nil {
+			return qerr
+		}
+		if len(res.Rows) == 0 {
+			return nil
+		}
+		found = true
+		status = s(res.Rows[0][0])
+		health = s(res.Rows[0][1])
+		return nil
+	})
+	return status, health, found, err
 }
 
 // SetKeyStatus persists a KM-3 status transition (+ health for the probing pseudo-state). health

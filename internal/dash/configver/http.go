@@ -56,6 +56,14 @@ type DryRunner interface {
 	DryRun(ctx context.Context, scopeKey string, payload json.RawMessage, req DryRunRequest) (any, error)
 }
 
+// Gate is the approval seam publish/rollback consult before performing the pointer flip. It is
+// structurally identical to approvals.Gate; configver declares it locally (Go interfaces are
+// structural) so this package never imports approvals — routing/workflows pass their approvals.Gate
+// straight into KindSpec.Gate. A nil Gate means "no approval gating" (proceed inline).
+type Gate interface {
+	Check(ctx context.Context, actionKind string, payload json.RawMessage) (proceed bool, requestID string, err error)
+}
+
 // KindSpec parameterizes the generic HTTP surface for one config kind.
 type KindSpec struct {
 	Kind        string      // e.g. KindRoutingPolicy
@@ -63,6 +71,8 @@ type KindSpec struct {
 	RBACAction  rbac.Action // gates the surface (routing.publish / workflows.publish)
 	DryRun      DryRunner   // per-kind dry-run
 	IndexAsList bool        // true => GET {BasePath} serves the workflow_index instead of config_active
+	Gate        Gate        // optional approval gate for publish/rollback (nil => inline)
+	GateAction  string      // approvals action_kind for publish/rollback (e.g. routing_publish)
 }
 
 // HTTPDeps bundles the collaborators the generic handlers need.
@@ -289,6 +299,12 @@ func (h *handlers) publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expected := expectedParam(r)
+	// Approval gate (routing_publish / workflow_publish): pin the resolved publish target and, on a
+	// pending decision, answer 202 {approval_request_id} instead of flipping the pointer. The real
+	// publish runs EXACTLY ONCE through the registered Executor on quorum.
+	if h.gateBlocked(w, r, gatePublishPayload(r.PathValue("id"), expected)) {
+		return
+	}
 	v, err := h.svc.Publish(r.Context(), r.PathValue("id"), expected)
 	if err != nil {
 		h.fail(w, "publish", err)
@@ -309,12 +325,59 @@ func (h *handlers) rollback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, codeValidationFailed, "to_version must be a positive version number")
 		return
 	}
+	// Rollback is a publish of a prior version, so it shares the publish gate (routing_publish /
+	// workflow_publish).
+	if h.gateBlocked(w, r, gateRollbackPayload(r.PathValue("scope"), body.ToVersion, body.ExpectedActiveVersionID)) {
+		return
+	}
 	v, err := h.svc.Rollback(r.Context(), h.spec.Kind, r.PathValue("scope"), body.ToVersion, body.ExpectedActiveVersionID)
 	if err != nil {
 		h.fail(w, "rollback", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toDTO(v))
+}
+
+// gateBlocked consults the approval Gate for the pinned payload. It returns true iff a response was
+// already written (202 with an approval_request_id, or 500 on a gate error) and the caller must
+// stop. A nil Gate (or proceed=true from a defensively-disarmed policy) returns false so the
+// publish/rollback proceeds inline — nil-Gate behavior is unchanged.
+func (h *handlers) gateBlocked(w http.ResponseWriter, r *http.Request, payload json.RawMessage) bool {
+	if h.spec.Gate == nil {
+		return false
+	}
+	proceed, reqID, err := h.spec.Gate.Check(r.Context(), h.spec.GateAction, payload)
+	if err != nil {
+		h.log.Error("approval gate check failed", "action_kind", h.spec.GateAction, "err", err)
+		writeError(w, http.StatusInternalServerError, codeInternal, "approval gate error")
+		return true
+	}
+	if !proceed {
+		writeJSON(w, http.StatusAccepted, map[string]string{"approval_request_id": reqID})
+		return true
+	}
+	return false
+}
+
+// gatePublishPayload pins a publish target: {"op":"publish","version_id":...,"expected":...}.
+func gatePublishPayload(versionID string, expected *string) json.RawMessage {
+	m := map[string]any{"op": "publish", "version_id": versionID}
+	if expected != nil {
+		m["expected"] = *expected
+	}
+	b, _ := json.Marshal(m)
+	return b
+}
+
+// gateRollbackPayload pins a rollback target:
+// {"op":"rollback","scope_key":...,"to_version":N,"expected":...}.
+func gateRollbackPayload(scopeKey string, toVersion int, expected *string) json.RawMessage {
+	m := map[string]any{"op": "rollback", "scope_key": scopeKey, "to_version": toVersion}
+	if expected != nil {
+		m["expected"] = *expected
+	}
+	b, _ := json.Marshal(m)
+	return b
 }
 
 func (h *handlers) dryRun(w http.ResponseWriter, r *http.Request) {

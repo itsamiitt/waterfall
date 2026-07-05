@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,9 +25,11 @@ import (
 
 	"github.com/enrichment/waterfall/internal/auth"
 	"github.com/enrichment/waterfall/internal/bandit"
+	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/configver"
 	"github.com/enrichment/waterfall/internal/dash/db"
+	"github.com/enrichment/waterfall/internal/dash/health"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/providers"
@@ -34,6 +37,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/routing"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
+	"github.com/enrichment/waterfall/internal/dash/telemetry"
 	"github.com/enrichment/waterfall/internal/dash/workflows"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
@@ -148,23 +152,12 @@ func main() {
 	defer rotEngine.Stop()
 
 	fmux := http.NewServeMux()
-	providers.Routes(fmux, providers.Deps{
-		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
-		Secrets: backend, Resolver: rotEngine, Now: time.Now, Logger: logger,
-	})
-	keys.Routes(fmux, keys.Deps{
-		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
-		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
-	})
-	// Rotation's key-pools/{id}/selection-state + key-pools/{id}/simulate coexist with keys'
-	// key-pools routes on the SAME fmux — net/http 1.22 disambiguates by full pattern.
-	rotation.Routes(fmux, rotation.Deps{Engine: rotEngine, Auth: httpx.CtxAuthenticator{}, Logger: logger})
 
 	// P3 config versioning (modules 6+7): ONE shared configver lifecycle engine services both the
 	// routing_policy and waterfall_workflow kinds via their injected validators. BumpEpoch is wired
 	// to rotation.Engine.Invalidate for the pool-affecting sentinel kinds — closing OI-KEYS-4: the
-	// P3 config-epoch watcher hook the P2 rotation engine documented. The routing/workflows Routes
-	// coexist with the other features on the SAME fmux (distinct full patterns, no dup registration).
+	// P3 config-epoch watcher hook the P2 rotation engine documented. Built here (before the feature
+	// routes) so the P4 approvals executors can bind to it.
 	provSrc := provLookup{store: providers.NewPGStore(store)}
 	budgetSrc := configver.NewBudgetReader(store)
 	cfgSvc := configver.New(configver.Config{
@@ -184,12 +177,116 @@ func main() {
 		},
 		Now: time.Now,
 	})
+
+	// P4 telemetry backbone (doc 10 §2): the hot-path BufferedRecorder Sink plus the leader-elected
+	// Loops chassis (aggregator fold + partition maintainer + key-budget reconcile). The startup
+	// EnsurePartitions is best-effort here (the app role must OWN the 0009 telemetry tables to run
+	// DDL); a failure is alertable but must not wedge boot. The live rotation->usage_events hot path
+	// (feeding this recorder from Lease.Done) is deferred: OI-P4-1.
+	usageRecorder := telemetry.NewBufferedRecorder(telemetry.NewRecorder(store), telemetry.BufferedConfig{}, reg)
+	usageRecorder.Start(context.Background())
+	defer usageRecorder.Stop()
+	telemLoops := telemetry.NewLoops(store, time.Now, reg, telemetry.LoopConfig{})
+	if err := telemLoops.Start(context.Background()); err != nil {
+		logger.Warn("telemetry loops startup (partition ensure)", "err", err)
+	}
+	defer telemLoops.Stop()
+
+	// P4 approvals quorum engine (doc 05 §9): the Gate in front of the most dangerous writes. The
+	// orchestrator registers one Executor per gated action_kind (each drives the real service method
+	// under the approval request id as its Idempotency-Key), wires the Service as the Gate into the
+	// destructive/publish surfaces, and runs the expirer. Services below are built once here so the
+	// executors can reach them (they are stateless over the shared Store, so a second instance
+	// alongside each Routes() call is fine).
+	provSvc := providers.NewService(providers.Deps{
+		Store: store, Audit: auditLog, Resolver: rotEngine, Now: time.Now,
+	})
+	keysSvc := keys.NewService(store, backend, auditLog, logger)
+	apprSvc := approvals.NewService(approvals.Config{
+		Store:   store,
+		Audit:   auditLog,
+		Roster:  approvals.NewRoster(store),
+		Tenants: tenantSource{store: store},
+		Now:     time.Now,
+		Logger:  logger,
+	})
+	apprSvc.RegisterExecutor(approvals.ActionProviderDelete, func(ctx context.Context, payload json.RawMessage) error {
+		id, err := pinnedID(payload)
+		if err != nil {
+			return err
+		}
+		return provSvc.Delete(ctx, id)
+	})
+	apprSvc.RegisterExecutor(approvals.ActionProviderArchive, func(ctx context.Context, payload json.RawMessage) error {
+		id, err := pinnedID(payload)
+		if err != nil {
+			return err
+		}
+		_, err = provSvc.Archive(ctx, id)
+		return err
+	})
+	apprSvc.RegisterExecutor(approvals.ActionKeyBulkDelete, func(ctx context.Context, payload json.RawMessage) error {
+		var p struct {
+			IDs []string `json:"ids"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return err
+		}
+		_, _, err := keysSvc.BulkOp(ctx, keys.BulkInput{IDs: p.IDs, Op: "delete"})
+		return err
+	})
+	apprSvc.RegisterExecutor(approvals.ActionRoutingPublish, configExecutor(cfgSvc, configver.KindRoutingPolicy))
+	apprSvc.RegisterExecutor(approvals.ActionWorkflowPublish, configExecutor(cfgSvc, configver.KindWaterfallWorkflow))
+	apprSvc.Start()
+	defer apprSvc.Stop()
+
+	// Feature routes, now with the approvals Gate wired into the destructive/publish surfaces
+	// (providers DELETE/archive, keys bulk delete, routing/workflows publish+rollback). A nil Gate
+	// would default to NopGate; here every gated surface shares the one Service.
+	providers.Routes(fmux, providers.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		Secrets: backend, Resolver: rotEngine, Gate: apprSvc, Now: time.Now, Logger: logger,
+	})
+	keys.Routes(fmux, keys.Deps{
+		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		StepUp: &totpStepUp{users: users, now: time.Now}, Gate: apprSvc, Logger: logger,
+	})
+	// Rotation's key-pools/{id}/selection-state + key-pools/{id}/simulate coexist with keys'
+	// key-pools routes on the SAME fmux — net/http 1.22 disambiguates by full pattern.
+	rotation.Routes(fmux, rotation.Deps{Engine: rotEngine, Auth: httpx.CtxAuthenticator{}, Logger: logger})
 	routing.Routes(fmux, routing.Deps{
-		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Logger: logger,
+		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Gate: apprSvc, Logger: logger,
 	})
 	workflows.Routes(fmux, workflows.Deps{
-		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Logger: logger,
+		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Gate: apprSvc, Logger: logger,
 	})
+
+	// Approvals + change-history surface (doc 04 §2.12): deciders drive requests to quorum here,
+	// gated by this package's authenticate -> RBAC -> idempotency -> step-up chain (X-MFA-Code
+	// verified via the same TOTP step-up the keys surface uses).
+	approvals.Routes(fmux, approvals.Deps{
+		Service: apprSvc, Auth: httpx.CtxAuthenticator{},
+		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
+	})
+
+	// P4 Provider Health Center (doc 04 §2.5): the health surface + the scheduled-probe scheduler and
+	// the auto re-enable Reactivator. Reactivation delegates to rotation's KM-3 machine through the
+	// keyReactivator adapter (health never imports rotation).
+	healthDeps := health.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		Resolver: rotEngine, Reactivator: keyReactivator{eng: rotEngine},
+		Logger: logger, Now: time.Now,
+	}
+	health.Routes(fmux, healthDeps)
+	healthSched := health.NewScheduler(healthDeps)
+	healthSched.Start()
+	defer healthSched.Stop()
+	if react := health.NewReactivator(healthDeps); react != nil {
+		reactCtx, reactCancel := context.WithCancel(context.Background())
+		defer reactCancel()
+		go react.Start(reactCtx, time.Minute)
+	}
+
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -198,7 +295,7 @@ func main() {
 	admin := http.NewServeMux()
 	admin.Handle("/", srv.Handler())
 	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
-		"routing", "workflows", "config"} {
+		"routing", "workflows", "config", "health", "approvals", "change-history"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
@@ -264,6 +361,73 @@ func (v *totpStepUp) VerifyStepUp(ctx context.Context, code string) error {
 		return errStepUpFailed
 	}
 	return nil
+}
+
+// tenantSource enumerates active tenants for the approvals expirer sweep (RLS requires a bound
+// tenant per UPDATE). It reads the operator-readable tenants registry under PlatformTx; the sweep
+// covers 'platform' too (operator-level requests like provider_delete live under it).
+type tenantSource struct{ store *db.Store }
+
+func (t tenantSource) ActiveTenantIDs(ctx context.Context) ([]string, error) {
+	var ids []string
+	err := t.store.PlatformTx(ctx, func(c *pg.Conn) error {
+		res, qerr := c.Query("select id from tenants where status = 'active'")
+		if qerr != nil {
+			return qerr
+		}
+		for _, r := range res.Rows {
+			if r[0] != nil {
+				ids = append(ids, *r[0])
+			}
+		}
+		return nil
+	})
+	return ids, err
+}
+
+// keyReactivator adapts the rotation Engine into health.KeyReactivator: health decides WHICH
+// exhausted/rate_limited keys to probe and calls Probe, which drives the KM-3 recovery edge in
+// rotation. This one adapter is the only rotation touch-point in the health path.
+type keyReactivator struct{ eng *rotation.Engine }
+
+func (a keyReactivator) Probe(ctx context.Context, keyID string) error {
+	return a.eng.ReactivateKey(ctx, keyID)
+}
+
+// pinnedID reads {"id":"..."} from a pinned approval payload.
+func pinnedID(payload json.RawMessage) (string, error) {
+	var p struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return "", err
+	}
+	return p.ID, nil
+}
+
+// configExecutor builds the approvals Executor for a config kind (routing_policy / waterfall_workflow):
+// it parses the pinned publish/rollback payload and drives the real configver lifecycle method. The
+// approval request id rides ctx (RequestIDFromContext) for the underlying method's idempotency; the
+// approvals engine already guarantees exactly-once by running this Executor once under the quorum lock.
+func configExecutor(cfgSvc *configver.Service, kind string) approvals.Executor {
+	return func(ctx context.Context, payload json.RawMessage) error {
+		var p struct {
+			Op        string  `json:"op"`
+			VersionID string  `json:"version_id"`
+			ScopeKey  string  `json:"scope_key"`
+			ToVersion int     `json:"to_version"`
+			Expected  *string `json:"expected"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return err
+		}
+		if p.Op == "rollback" {
+			_, err := cfgSvc.Rollback(ctx, kind, p.ScopeKey, p.ToVersion, p.Expected)
+			return err
+		}
+		_, err := cfgSvc.Publish(ctx, p.VersionID, p.Expected)
+		return err
+	}
 }
 
 // provLookup adapts the providers PGStore into a configver.ProviderSource for the routing/workflow

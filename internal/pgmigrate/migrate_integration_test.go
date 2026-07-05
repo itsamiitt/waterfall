@@ -34,6 +34,11 @@ func TestApply_OrderedAndIdempotent(t *testing.T) {
 		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
 		// Migration 0006 (config versioning) tables + budgets (moved here per Deviation D-2).
 		"drop table if exists config_versions, config_active, config_epochs, workflow_index, budgets cascade",
+		// Migrations 0007 (alerts/approvals), 0008 (workers/queues), 0009 (telemetry/rollups);
+		// partitioned parents drop their partitions via cascade.
+		"drop table if exists alert_channels, alert_rules, alert_events, alert_notifications, approval_policies, approval_requests, approval_decisions cascade",
+		"drop table if exists workers, queue_defs, bulk_jobs cascade",
+		"drop table if exists usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d, key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d, cost_rollup_1d, queue_stats_1m, queue_stats_1h, worker_heartbeats, worker_stats_5m, provider_health_checks, provider_health_1d cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",
@@ -107,6 +112,11 @@ func TestPending_ReportsUnapplied(t *testing.T) {
 		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
 		// Migration 0006 (config versioning) tables + budgets (moved here per Deviation D-2).
 		"drop table if exists config_versions, config_active, config_epochs, workflow_index, budgets cascade",
+		// Migrations 0007 (alerts/approvals), 0008 (workers/queues), 0009 (telemetry/rollups);
+		// partitioned parents drop their partitions via cascade.
+		"drop table if exists alert_channels, alert_rules, alert_events, alert_notifications, approval_policies, approval_requests, approval_decisions cascade",
+		"drop table if exists workers, queue_defs, bulk_jobs cascade",
+		"drop table if exists usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d, key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d, cost_rollup_1d, queue_stats_1m, queue_stats_1h, worker_heartbeats, worker_stats_5m, provider_health_checks, provider_health_1d cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/rbac"
@@ -57,6 +58,7 @@ type Deps struct {
 	Auth     Authenticator
 	Secrets  secrets.Backend      // optional (reserved; provider ops hold no secrets directly)
 	Resolver provider.KeyResolver // optional; nil => probe actions report a typed no-key result
+	Gate     approvals.Gate       // optional; nil => approvals.NopGate (destructive actions run inline)
 	Now      func() time.Time
 	Logger   *slog.Logger
 }
@@ -70,6 +72,7 @@ func NewService(d Deps) *Service {
 type handlers struct {
 	svc  *Service
 	auth Authenticator
+	gate approvals.Gate
 	idem *idemLedger
 	log  *slog.Logger
 }
@@ -84,7 +87,11 @@ func Routes(mux *http.ServeMux, d Deps) {
 	if log == nil {
 		log = slog.Default()
 	}
-	registerRoutes(mux, &handlers{svc: NewService(d), auth: d.Auth, idem: newIdemLedger(), log: log})
+	gate := d.Gate
+	if gate == nil {
+		gate = approvals.NopGate{}
+	}
+	registerRoutes(mux, &handlers{svc: NewService(d), auth: d.Auth, gate: gate, idem: newIdemLedger(), log: log})
 }
 
 // registerRoutes mounts the endpoint table for h (split out so tests can wire a fake-backed
@@ -352,13 +359,18 @@ func (h *handlers) patch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDTO(p))
 }
 
-// delete is approval-gated once P4 lands (doc 04 §2.3; OI-IP-2). For P1 it deletes inline and
-// audits the pre-image. The approval gate slots in exactly here: check a gate, and on a pending
-// decision return 202 {approval_request_id} instead of performing the delete.
+// delete is approval-gated (doc 04 §2.3; OI-IP-2 RESOLVED in P4). It pins the {"id":...} payload
+// into an approval request via the Gate; on a pending decision it returns 202 {approval_request_id}
+// instead of deleting. The real delete then runs EXACTLY ONCE through the registered Executor on
+// quorum. proceed=true (a defensively-disarmed policy) falls through to the inline delete.
 func (h *handlers) delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	// P4 approval-gate hook: if h.svc had an approvals gate wired, this is where a 202 with an
-	// approval_request_id would return instead of the inline delete below (OI-IP-2).
+	if reqID, gated, ok := h.checkGate(w, r, approvals.ActionProviderDelete, gatePayload("id", id)); !ok {
+		return
+	} else if gated {
+		writeJSON(w, http.StatusAccepted, map[string]string{"approval_request_id": reqID})
+		return
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		h.fail(w, "delete", err)
 		return
@@ -367,15 +379,44 @@ func (h *handlers) delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) archive(w http.ResponseWriter, r *http.Request) {
-	// Approval-gated alongside delete once P4 lands (OI-IP-2); audited inline for P1.
+	id := r.PathValue("id")
 	var body actionBody
 	_ = optionalJSON(r, &body)
-	p, err := h.svc.Archive(r.Context(), r.PathValue("id"))
+	if reqID, gated, ok := h.checkGate(w, r, approvals.ActionProviderArchive, gatePayload("id", id)); !ok {
+		return
+	} else if gated {
+		writeJSON(w, http.StatusAccepted, map[string]string{"approval_request_id": reqID})
+		return
+	}
+	p, err := h.svc.Archive(r.Context(), id)
 	if err != nil {
 		h.fail(w, "archive", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toDTO(p))
+}
+
+// checkGate asks the approval Gate whether actionKind may proceed inline for the pinned payload.
+// It returns (requestID, gated, ok): ok=false means an error response was already written (500);
+// gated=true means the caller must answer 202 {approval_request_id}; gated=false means proceed
+// inline. The NopGate always returns (,"" , false, true) so a nil-Gate deployment is unchanged.
+func (h *handlers) checkGate(w http.ResponseWriter, r *http.Request, actionKind string, payload []byte) (string, bool, bool) {
+	if h.gate == nil {
+		return "", false, true // no gate wired => proceed inline (unchanged behavior)
+	}
+	proceed, reqID, err := h.gate.Check(r.Context(), actionKind, payload)
+	if err != nil {
+		h.log.Error("approval gate check failed", "action_kind", actionKind, "err", err)
+		writeError(w, http.StatusInternalServerError, codeInternal, "approval gate error")
+		return "", false, false
+	}
+	return reqID, !proceed, true
+}
+
+// gatePayload marshals a single-key pinned payload, e.g. {"id":"acme"}.
+func gatePayload(key, val string) []byte {
+	b, _ := json.Marshal(map[string]string{key: val})
+	return b
 }
 
 func (h *handlers) opAction(action string) http.HandlerFunc {

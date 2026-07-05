@@ -20,14 +20,17 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
@@ -573,4 +576,226 @@ func TestDashFeatureWiring(t *testing.T) {
 	if st != 201 && st != 200 {
 		t.Fatalf("feature POST with valid CSRF = %d %v, want create success", st, body)
 	}
+}
+
+// --- P4 approval-gate wiring E2E ---
+
+// gateHdrAuth resolves the Principal from X-Test-* headers, so the gate-wiring test can act as
+// distinct operators without the full session/CSRF machinery (this isolates the gate wiring; the
+// shared FeatureChain protections are proven by TestDashFeatureWiring).
+type gateHdrAuth struct{}
+
+func (gateHdrAuth) Authenticate(r *http.Request) (tenant.Principal, error) {
+	return tenant.Principal{
+		TenantID: r.Header.Get("X-Test-Tenant"),
+		UserID:   r.Header.Get("X-Test-User"),
+		Scopes:   []string{"role:" + r.Header.Get("X-Test-Role")},
+	}, nil
+}
+
+// gateStepUp accepts exactly one X-MFA-Code, so the decision path proves the step-up header is
+// threaded without needing a live TOTP seed (matches the approvals package's own harness).
+type gateStepUp struct{}
+
+func (gateStepUp) VerifyStepUp(_ context.Context, code string) error {
+	if code == "111111" {
+		return nil
+	}
+	return errors.New("bad mfa code")
+}
+
+// setupGateSchema rebuilds migrations 0004 + 0005 + 0007 cleanly and grants the non-superuser
+// dash_app role, so the whole gate path (provider delete + approval quorum + audit chain) runs
+// under FORCE RLS as a non-superuser.
+func setupGateSchema(t *testing.T, admin *pg.Conn) {
+	t.Helper()
+	// Drop 0007 + 0005 objects first (they depend on 0004's secret_envelopes / providers).
+	tryExec(admin, "drop table if exists approval_decisions, approval_requests, approval_policies, "+
+		"alert_notifications, alert_events, alert_rules, alert_channels cascade")
+	tryExec(admin, "drop view if exists providers_catalog cascade")
+	tryExec(admin, "drop table if exists providers, key_pools, provider_keys, key_pool_members, "+
+		"key_budgets, key_import_batches, health_schedules, rotation_triggers cascade")
+
+	setupDashSchema(t, admin) // rebuilds 0004 + dash_app + grants on the 0004 tables
+
+	applyGateMigration(t, admin, "../../../migrations/0005_dash_providers_keys.sql")
+	mustExec(t, admin, "alter view providers_catalog set (security_invoker = true)")
+	const feat0005 = "providers, key_pools, provider_keys, key_pool_members, key_budgets, " +
+		"key_import_batches, health_schedules, rotation_triggers"
+	mustExec(t, admin, "grant select, insert, update, delete on "+feat0005+" to "+appRole)
+	mustExec(t, admin, "grant select on providers_catalog to "+appRole)
+
+	applyGateMigration(t, admin, "../../../migrations/0007_dash_alerts_approvals.sql")
+	mustExec(t, admin, "grant select, insert, update, delete on "+
+		"approval_policies, approval_requests, approval_decisions to "+appRole)
+}
+
+func applyGateMigration(t *testing.T, admin *pg.Conn, path string) {
+	t.Helper()
+	ddl, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if err := admin.Exec(string(ddl)); err != nil {
+		t.Fatalf("apply %s: %v", path, err)
+	}
+}
+
+// gateReq issues a header-authenticated JSON request and returns (status, decoded body).
+func gateReq(t *testing.T, base, method, path, user, role, mfa, idem, body string) (int, map[string]any) {
+	t.Helper()
+	var r io.Reader
+	if body != "" {
+		r = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, base+path, r)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Test-Tenant", "platform")
+	req.Header.Set("X-Test-User", user)
+	req.Header.Set("X-Test-Role", role)
+	if mfa != "" {
+		req.Header.Set("X-MFA-Code", mfa)
+	}
+	if idem != "" {
+		req.Header.Set("Idempotency-Key", idem)
+	}
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var m map[string]any
+	if len(bytes.TrimSpace(raw)) > 0 {
+		_ = json.Unmarshal(raw, &m)
+	}
+	return resp.StatusCode, m
+}
+
+// TestDashApprovalGateWiring proves the P4 gate wiring end-to-end (doc 04 §5.3, OI-IP-2): a provider
+// DELETE with an approval policy present returns 202 {approval_request_id} instead of an inline
+// delete; a distinct operator (four-eyes) approving with X-MFA-Code drives the request to executed,
+// the registered Executor runs EXACTLY ONCE, and the provider is then actually deleted. A replayed
+// final approval performs no second delete.
+func TestDashApprovalGateWiring(t *testing.T) {
+	cfg := adminCfg(t)
+	admin, err := pg.Connect(cfg)
+	if err != nil {
+		t.Fatalf("connect admin: %v", err)
+	}
+	defer admin.Close()
+	setupGateSchema(t, admin)
+
+	// Two DISTINCT platform operators: the requester (issues the delete) and the four-eyes approver.
+	requester := newUUID()
+	approver := newUUID()
+	mustExec(t, admin, `insert into users (id, tenant_id, email, password_hash, role, status) values
+		($1,'platform','req@op.example','x','operator','active'),
+		($2,'platform','apr@op.example','x','operator','active')`, requester, approver)
+	// An explicit provider_delete policy: required=1, approver_role=operator (matches the fail-closed
+	// platform default, made explicit so "an approval policy is present").
+	mustExec(t, admin, `insert into approval_policies (tenant_id, action_kind, required_approvals, approver_role, expires_after_s)
+		values ('platform','provider_delete',1,'operator',86400)`)
+
+	appCfg := cfg
+	appCfg.User = appRole
+	pool := pg.NewPool(appCfg, 8)
+	defer pool.Close()
+	store := db.New(pool)
+	auditLog := audit.New(store)
+
+	// The real service the Executor drives, plus an invocation counter to assert exactly-once.
+	provSvc := providers.NewService(providers.Deps{Store: store, Audit: auditLog, Now: time.Now})
+	var execCount atomic.Int64
+	apprSvc := approvals.NewService(approvals.Config{
+		Store: store, Audit: auditLog, Roster: approvals.NewRoster(store), Now: time.Now,
+	})
+	apprSvc.RegisterExecutor(approvals.ActionProviderDelete, func(ctx context.Context, payload json.RawMessage) error {
+		var p struct {
+			ID string `json:"id"`
+		}
+		if uerr := json.Unmarshal(payload, &p); uerr != nil {
+			return uerr
+		}
+		execCount.Add(1)
+		return provSvc.Delete(ctx, p.ID)
+	})
+
+	// Mount exactly as cmd/dashboardd composes them: providers with the Gate wired, approvals surface
+	// with the step-up verifier. (Direct mount, not behind FeatureChain, to isolate the gate wiring.)
+	mux := http.NewServeMux()
+	providers.Routes(mux, providers.Deps{
+		Store: store, Audit: auditLog, Auth: gateHdrAuth{}, Gate: apprSvc, Now: time.Now,
+	})
+	approvals.Routes(mux, approvals.Deps{Service: apprSvc, Auth: gateHdrAuth{}, StepUp: gateStepUp{}})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	// Create a provider to delete (operator write).
+	const provID = "gated-prov"
+	if st, body := gateReq(t, ts.URL, "POST", "/v1/admin/providers", requester, "operator", "", "idem-create",
+		`{"id":"`+provID+`","display_name":"Gated","status":"ACTIVE-CANDIDATE"}`); st != http.StatusCreated {
+		t.Fatalf("create provider = %d %v, want 201", st, body)
+	}
+
+	// (1) Gated DELETE: returns 202 {approval_request_id}, NOT an inline delete.
+	st, body := gateReq(t, ts.URL, "DELETE", "/v1/admin/providers/"+provID, requester, "operator", "", "idem-del", "")
+	if st != http.StatusAccepted {
+		t.Fatalf("gated DELETE = %d %v, want 202 (approval required, not inline)", st, body)
+	}
+	reqID, _ := body["approval_request_id"].(string)
+	if reqID == "" {
+		t.Fatalf("gated DELETE 202 body missing approval_request_id: %v", body)
+	}
+	if execCount.Load() != 0 {
+		t.Fatalf("Executor ran %d times before quorum, want 0", execCount.Load())
+	}
+	// Provider still exists (the delete did NOT happen inline).
+	if st, _ := gateReq(t, ts.URL, "GET", "/v1/admin/providers/"+provID, requester, "operator", "", "", ""); st != http.StatusOK {
+		t.Fatalf("provider GET after 202 = %d, want 200 (must NOT be deleted before quorum)", st)
+	}
+
+	// (2) Four-eyes approval by a DISTINCT operator with X-MFA-Code drives it to executed.
+	st, body = gateReq(t, ts.URL, "POST", "/v1/admin/approvals/"+reqID+"/approve", approver, "operator", "111111", "idem-appr",
+		`{"comment":"approved for deletion"}`)
+	if st != http.StatusOK {
+		t.Fatalf("approve = %d %v, want 200", st, body)
+	}
+	if body["status"] != approvals.StatusExecuted {
+		t.Fatalf("request status after approval = %v, want executed", body["status"])
+	}
+	if execCount.Load() != 1 {
+		t.Fatalf("Executor ran %d times, want EXACTLY 1", execCount.Load())
+	}
+
+	// (3) The provider is now actually deleted (the Executor performed the real delete).
+	if st, _ := gateReq(t, ts.URL, "GET", "/v1/admin/providers/"+provID, requester, "operator", "", "", ""); st != http.StatusNotFound {
+		t.Fatalf("provider GET after execution = %d, want 404 (executor deleted it)", st)
+	}
+
+	// (4) Replay: a further final approval returns the stored result with NO second delete.
+	st, _ = gateReq(t, ts.URL, "POST", "/v1/admin/approvals/"+reqID+"/approve", newUUID(), "operator", "111111", "idem-appr2",
+		`{"comment":"late approve"}`)
+	if st != http.StatusOK {
+		t.Fatalf("replay approve = %d, want 200 (terminal, no error)", st)
+	}
+	if execCount.Load() != 1 {
+		t.Fatalf("Executor ran %d times after replay, want still 1", execCount.Load())
+	}
+
+	// The platform audit chain (provider create + delete, approval create/execute/approve) is intact.
+	ctxPlatform := tenant.WithPrincipal(context.Background(), tenant.Principal{
+		TenantID: "platform", UserID: requester, Scopes: []string{"role:operator"},
+	})
+	if ok, brokenSeq, verr := auditLog.Verify(ctxPlatform, "platform"); verr != nil || !ok {
+		t.Fatalf("platform audit chain verify: ok=%v brokenSeq=%d err=%v", ok, brokenSeq, verr)
+	}
+
+	t.Log("PASS: gated provider DELETE -> 202 {approval_request_id}; four-eyes operator + X-MFA-Code -> executed; " +
+		"executor ran exactly once; provider actually deleted; replay no-op; audit chain intact")
 }

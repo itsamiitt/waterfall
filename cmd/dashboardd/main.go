@@ -25,9 +25,11 @@ import (
 
 	"github.com/enrichment/waterfall/internal/auth"
 	"github.com/enrichment/waterfall/internal/bandit"
+	"github.com/enrichment/waterfall/internal/dash/alerts"
 	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/configver"
+	"github.com/enrichment/waterfall/internal/dash/cost"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/health"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
@@ -356,6 +358,28 @@ func main() {
 	}()
 	defer close(queueFoldStop)
 
+	// P6 cost analytics + alerts (modules 10+12; doc 12 §P6). Cost is read-only over the rollups;
+	// alerts run two leader-elected loops (evaluator 30s, notifier 5s) with their own advisory
+	// locks. Channel configs are sealed envelopes; webhook/SMTP delivery goes through the
+	// SSRF-guarded egress path. Doctrine: budgets alert, the G4 Cost Ceiling enforces.
+	costSvc := cost.NewService(store, time.Now)
+	cost.Routes(fmux, cost.Deps{Service: costSvc, Auth: httpx.CtxAuthenticator{}, Audit: auditLog, Logger: logger})
+
+	alertStore := alerts.NewStore(store, time.Now)
+	alertEval := alerts.NewEvaluator(alertStore, auditLog, time.Now, reg, logger)
+	alertNotif := alerts.NewNotifier(alertStore, backend, nil /* SSRF-guarded default egress */, time.Now, reg, logger)
+	alertSvc := alerts.NewService(alerts.Config{
+		Store: alertStore, Secrets: backend, Audit: auditLog,
+		Eval: alertEval, Notifier: alertNotif, Now: time.Now,
+	})
+	alerts.Routes(fmux, alerts.Deps{
+		Service: alertSvc, Auth: httpx.CtxAuthenticator{},
+		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
+	})
+	alertLoops := alerts.NewLoops(store, alertEval, alertNotif, alerts.LoopConfig{})
+	alertLoops.Start(context.Background())
+	defer alertLoops.Stop()
+
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -365,7 +389,7 @@ func main() {
 	admin.Handle("/", srv.Handler())
 	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
 		"routing", "workflows", "config", "health", "approvals", "change-history",
-		"queues", "dead-letters", "jobs", "workers"} {
+		"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
@@ -598,6 +622,22 @@ grant select, insert, update, delete on
 -- job_outbox: the queues read model + the pgoutbox redrive verbs only (select, update under
 -- FORCE RLS) — inserts stay with the enrichment API's role (one-owner-per-table, doc 06 §2.4).
 grant select, update on job_outbox to dash_app;
+-- P1 providers + keys (0005).
+grant select, insert, update, delete on
+  providers, key_pools, provider_keys, key_pool_members, key_budgets,
+  key_import_batches, health_schedules, rotation_triggers to dash_app;
+grant select on providers_catalog to dash_app;
+-- P3 config versioning (0006, incl. budgets per D-2).
+grant select, insert, update, delete on
+  config_versions, config_active, config_epochs, workflow_index, budgets to dash_app;
+-- P4 alerts/approvals (0007) + telemetry (0009).
+grant select, insert, update, delete on
+  alert_channels, alert_rules, alert_events, alert_notifications,
+  approval_policies, approval_requests, approval_decisions to dash_app;
+grant select, insert, update, delete on
+  usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d,
+  key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d,
+  cost_rollup_1d, provider_health_checks, provider_health_1d to dash_app;
 `
 
 // startupSelfCheck refuses to run as a role that bypasses RLS (which would silently defeat G1) and

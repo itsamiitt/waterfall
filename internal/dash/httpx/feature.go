@@ -40,6 +40,9 @@ var featureLabels = map[string]string{
 	"dead-letters":   "dead-letters",
 	"jobs":           "jobs",
 	"workers":        "workers",
+	"cost":           "cost",
+	"budgets":        "budgets",
+	"alerts":         "alerts",
 }
 
 // featureLabel derives the bounded metric label from the request path's segment after /v1/admin/.

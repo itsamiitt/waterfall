@@ -58,62 +58,78 @@ func (l *Log) Append(ctx context.Context, e Entry) error {
 	if err != nil {
 		return err // fail-closed
 	}
-	tenantID := p.TenantID
-	created := l.now().UTC().Truncate(time.Microsecond)
-
 	return l.store.Tx(ctx, func(c *pg.Conn) error {
-		res, err := c.QueryParams(
-			`select last_seq, last_hash from audit_chain_heads where tenant_id = $1 for update`,
-			tenantID)
-		if err != nil {
-			return err
-		}
-		var lastSeq int64
-		prevHash := make([]byte, 32) // genesis
-		haveHead := false
-		if len(res.Rows) > 0 {
-			haveHead = true
-			row := res.Rows[0]
-			if row[0] != nil {
-				lastSeq, _ = strconv.ParseInt(*row[0], 10, 64)
-			}
-			if row[1] != nil {
-				if prevHash, err = decodeBytea(*row[1]); err != nil {
-					return err
-				}
-			}
-		}
-		seq := lastSeq + 1
-
-		canon, err := canonicalize(record{TenantID: tenantID, Seq: seq, CreatedAt: created, Entry: e})
-		if err != nil {
-			return err
-		}
-		hash := computeHash(prevHash, canon)
-
-		if err := c.ExecParams(
-			`insert into audit_log
-			   (tenant_id, seq, actor_user_id, actor_role, action, object_kind, object_id,
-			    before, after, ip, prev_hash, hash, created_at)
-			 values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11::bytea,$12::bytea,$13)`,
-			tenantID, seq,
-			nullIf(e.ActorUserID), nullIf(e.ActorRole), e.Action,
-			nullIf(e.ObjectKind), nullIf(e.ObjectID),
-			jsonbOrNull(e.Before), jsonbOrNull(e.After), nullIf(e.IP),
-			encodeBytea(prevHash), encodeBytea(hash), created,
-		); err != nil {
-			return err
-		}
-
-		if haveHead {
-			return c.ExecParams(
-				`update audit_chain_heads set last_seq = $2, last_hash = $3::bytea where tenant_id = $1`,
-				tenantID, seq, encodeBytea(hash))
-		}
-		return c.ExecParams(
-			`insert into audit_chain_heads (tenant_id, last_seq, last_hash) values ($1,$2,$3::bytea)`,
-			tenantID, seq, encodeBytea(hash))
+		return l.appendOn(c, p.TenantID, e)
 	})
+}
+
+// AppendConn writes one chained audit row on an ALREADY-OPEN dual-GUC connection, so a
+// business write and its audit row commit or roll back together (doc 05 §8.1's
+// same-transaction guarantee — the resolution of Deviation D-P0-3 for callers that thread a
+// *pg.Conn, e.g. configver's publish tx). The caller owns the transaction; tenant_id comes
+// from ctx, never from e, and MUST equal the tenant bound on c.
+func (l *Log) AppendConn(ctx context.Context, c *pg.Conn, e Entry) error {
+	p, err := tenant.FromContext(ctx)
+	if err != nil {
+		return err // fail-closed
+	}
+	return l.appendOn(c, p.TenantID, e)
+}
+
+// appendOn performs the chain-head lock, hash computation, row insert, and head upsert on c.
+func (l *Log) appendOn(c *pg.Conn, tenantID string, e Entry) error {
+	created := l.now().UTC().Truncate(time.Microsecond)
+	res, err := c.QueryParams(
+		`select last_seq, last_hash from audit_chain_heads where tenant_id = $1 for update`,
+		tenantID)
+	if err != nil {
+		return err
+	}
+	var lastSeq int64
+	prevHash := make([]byte, 32) // genesis
+	haveHead := false
+	if len(res.Rows) > 0 {
+		haveHead = true
+		row := res.Rows[0]
+		if row[0] != nil {
+			lastSeq, _ = strconv.ParseInt(*row[0], 10, 64)
+		}
+		if row[1] != nil {
+			if prevHash, err = decodeBytea(*row[1]); err != nil {
+				return err
+			}
+		}
+	}
+	seq := lastSeq + 1
+
+	canon, err := canonicalize(record{TenantID: tenantID, Seq: seq, CreatedAt: created, Entry: e})
+	if err != nil {
+		return err
+	}
+	hash := computeHash(prevHash, canon)
+
+	if err := c.ExecParams(
+		`insert into audit_log
+		   (tenant_id, seq, actor_user_id, actor_role, action, object_kind, object_id,
+		    before, after, ip, prev_hash, hash, created_at)
+		 values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11::bytea,$12::bytea,$13)`,
+		tenantID, seq,
+		nullIf(e.ActorUserID), nullIf(e.ActorRole), e.Action,
+		nullIf(e.ObjectKind), nullIf(e.ObjectID),
+		jsonbOrNull(e.Before), jsonbOrNull(e.After), nullIf(e.IP),
+		encodeBytea(prevHash), encodeBytea(hash), created,
+	); err != nil {
+		return err
+	}
+
+	if haveHead {
+		return c.ExecParams(
+			`update audit_chain_heads set last_seq = $2, last_hash = $3::bytea where tenant_id = $1`,
+			tenantID, seq, encodeBytea(hash))
+	}
+	return c.ExecParams(
+		`insert into audit_chain_heads (tenant_id, last_seq, last_hash) values ($1,$2,$3::bytea)`,
+		tenantID, seq, encodeBytea(hash))
 }
 
 // Verify walks tenantID's chain in seq order, recomputing every hash, and returns ok=false

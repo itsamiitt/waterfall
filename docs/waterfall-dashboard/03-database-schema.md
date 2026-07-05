@@ -647,11 +647,25 @@ CREATE TABLE workflow_index (
     PRIMARY KEY (tenant_id, scope_key)
 );
 
+-- budgets — Deviation D-2 (doc 12 P3): moved here from 0008 so P3's VR-7 validator can
+-- cross-check max_cost_credits against a real Tenant budget row. Class T (0001-style
+-- isolation). Doctrine: budgets alert, G4 Cost Ceilings enforce — this table never gates
+-- execution. Owned by internal/dash/cost once it lands (P6); read-only in P3's validator.
+CREATE TABLE budgets (
+    tenant_id     text NOT NULL,
+    scope         text NOT NULL CHECK (scope IN ('tenant', 'provider', 'workflow')),
+    scope_key     text NOT NULL DEFAULT '',
+    period        text NOT NULL CHECK (period IN ('day', 'month')),
+    limit_credits bigint NOT NULL,
+    alert_pct     int[],
+    PRIMARY KEY (tenant_id, scope, scope_key, period)
+);
+
 DO $$
 DECLARE t text;
 BEGIN
     FOREACH t IN ARRAY ARRAY['config_versions', 'config_active', 'config_epochs',
-                             'workflow_index'] LOOP
+                             'workflow_index', 'budgets'] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
         EXECUTE format($f$
@@ -663,7 +677,7 @@ BEGIN
 END $$;
 
 -- Operator cross-tenant READ (enumerated, ADR-0020): config review + the sunset sweep
--- (every serving handler writes an audit_log row).
+-- (every serving handler writes an audit_log row). budgets is NOT on the operator-read list.
 CREATE POLICY config_versions_operator_read ON config_versions
     FOR SELECT USING (app_current_role() = 'operator');
 CREATE POLICY config_active_operator_read ON config_active
@@ -833,7 +847,7 @@ CREATE POLICY alert_events_operator_read ON alert_events
 
 ### 2.5 `migrations/0008_dash_workers_queues.sql`
 
-Worker registry (desired-state convergence, doc 06), queue definitions (carrying the doc 06 OI-QW-3 scale-intent columns), Tenant budgets, and the shared `bulk_jobs` progress store behind every 202 `{job_id}` bulk operation (doc 04 §1.7/§4). Doctrine reminder embedded in the file: **budgets alert, G4 Cost Ceilings enforce** — `budgets` rows never gate execution.
+Worker registry (desired-state convergence, doc 06), queue definitions (carrying the doc 06 OI-QW-3 scale-intent columns), and the shared `bulk_jobs` progress store behind every 202 `{job_id}` bulk operation (doc 04 §1.7/§4). **Tenant `budgets` moved to migration 0006 (Deviation D-2, doc 12 P3)** so P3's routing/Waterfall validator can cross-check `max_cost_credits` against a real budget row. Doctrine reminder embedded in the file: **budgets alert, G4 Cost Ceilings enforce** — `budgets` rows never gate execution.
 
 ```sql
 -- Migration 0008 — worker registry, queue definitions, Tenant budgets, bulk jobs
@@ -900,15 +914,9 @@ CREATE TABLE queue_defs (
     replicas_updated_by uuid
 );
 
-CREATE TABLE budgets (
-    tenant_id     text NOT NULL,
-    scope         text NOT NULL CHECK (scope IN ('tenant', 'provider', 'workflow')),
-    scope_key     text NOT NULL DEFAULT '',
-    period        text NOT NULL CHECK (period IN ('day', 'month')),
-    limit_credits bigint NOT NULL,
-    alert_pct     int[],
-    PRIMARY KEY (tenant_id, scope, scope_key, period)
-);
+-- budgets: moved to 0006 per Deviation D-2 (doc 12 P3). The CREATE + its Class-T RLS ship in
+-- migration 0006 (§2.3) because P3's routing/Waterfall validator (VR-7) cross-checks
+-- max_cost_credits against a real Tenant budget row. 0008 no longer creates it.
 
 -- ---------------------------------------------------------------------------
 -- bulk_jobs — durable progress record for every 202 {job_id} bulk operation (doc 04 §1.7/§4):
@@ -976,12 +984,12 @@ BEGIN
     END LOOP;
 END $$;
 
--- Class T: budgets + bulk_jobs (0001-style isolation; not on the operator-read list —
--- platform-scoped bulk jobs are simply rows with tenant_id = 'platform').
+-- Class T: bulk_jobs (0001-style isolation; not on the operator-read list — platform-scoped
+-- bulk jobs are simply rows with tenant_id = 'platform'). budgets moved to 0006 (D-2).
 DO $$
 DECLARE t text;
 BEGIN
-    FOREACH t IN ARRAY ARRAY['budgets', 'bulk_jobs'] LOOP
+    FOREACH t IN ARRAY ARRAY['bulk_jobs'] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
         EXECUTE format($f$

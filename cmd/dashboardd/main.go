@@ -25,13 +25,16 @@ import (
 	"github.com/enrichment/waterfall/internal/auth"
 	"github.com/enrichment/waterfall/internal/bandit"
 	"github.com/enrichment/waterfall/internal/dash/audit"
+	"github.com/enrichment/waterfall/internal/dash/configver"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/providers"
 	"github.com/enrichment/waterfall/internal/dash/rotation"
+	"github.com/enrichment/waterfall/internal/dash/routing"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
+	"github.com/enrichment/waterfall/internal/dash/workflows"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
 	"github.com/enrichment/waterfall/internal/pgmigrate"
@@ -156,6 +159,37 @@ func main() {
 	// Rotation's key-pools/{id}/selection-state + key-pools/{id}/simulate coexist with keys'
 	// key-pools routes on the SAME fmux — net/http 1.22 disambiguates by full pattern.
 	rotation.Routes(fmux, rotation.Deps{Engine: rotEngine, Auth: httpx.CtxAuthenticator{}, Logger: logger})
+
+	// P3 config versioning (modules 6+7): ONE shared configver lifecycle engine services both the
+	// routing_policy and waterfall_workflow kinds via their injected validators. BumpEpoch is wired
+	// to rotation.Engine.Invalidate for the pool-affecting sentinel kinds — closing OI-KEYS-4: the
+	// P3 config-epoch watcher hook the P2 rotation engine documented. The routing/workflows Routes
+	// coexist with the other features on the SAME fmux (distinct full patterns, no dup registration).
+	provSrc := provLookup{store: providers.NewPGStore(store)}
+	budgetSrc := configver.NewBudgetReader(store)
+	cfgSvc := configver.New(configver.Config{
+		Store: configver.NewPGStore(store),
+		Audit: auditLog,
+		Validators: map[string]configver.Validator{
+			configver.KindRoutingPolicy:     routing.NewValidator(provSrc, budgetSrc, time.Now),
+			configver.KindWaterfallWorkflow: workflows.NewValidator(provSrc, budgetSrc, time.Now),
+		},
+		OnBump: func(tenantID, kind, scopeKey string) {
+			// Only the pool-affecting sentinel kinds invalidate in-memory PoolState (doc 07 §10);
+			// routing/workflow publishes bump their own epoch (resolver caches land in later phases).
+			switch kind {
+			case "key_pool", "provider_catalog":
+				rotEngine.Invalidate(scopeKey)
+			}
+		},
+		Now: time.Now,
+	})
+	routing.Routes(fmux, routing.Deps{
+		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Logger: logger,
+	})
+	workflows.Routes(fmux, workflows.Deps{
+		Service: cfgSvc, Providers: provSrc, Auth: httpx.CtxAuthenticator{}, Logger: logger,
+	})
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -163,7 +197,8 @@ func main() {
 	// precedence over "/", so /v1/admin/providers/{id} lands on featureHandler.
 	admin := http.NewServeMux()
 	admin.Handle("/", srv.Handler())
-	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation"} {
+	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
+		"routing", "workflows", "config"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
@@ -229,6 +264,41 @@ func (v *totpStepUp) VerifyStepUp(ctx context.Context, code string) error {
 		return errStepUpFailed
 	}
 	return nil
+}
+
+// provLookup adapts the providers PGStore into a configver.ProviderSource for the routing/workflow
+// validators + dry-run. It reads the FULL provider row (via PlatformTx, so it works regardless of
+// the caller's Principal — validators need op_state / compliance / sunset which the tenant catalog
+// projection omits) and maps only non-secret catalog metadata + capabilities. A missing provider is
+// (false, nil), never an error, so VR-1 (provider_unknown) reports it as a rule finding.
+type provLookup struct {
+	store *providers.PGStore
+}
+
+var _ configver.ProviderSource = provLookup{}
+
+func (p provLookup) Lookup(ctx context.Context, id string) (configver.ProviderInfo, bool, error) {
+	pr, err := p.store.GetFull(ctx, id)
+	if errors.Is(err, providers.ErrNotFound) {
+		return configver.ProviderInfo{}, false, nil
+	}
+	if err != nil {
+		return configver.ProviderInfo{}, false, err
+	}
+	caps := make([]configver.Capability, 0, len(pr.Capabilities))
+	for _, c := range pr.Capabilities {
+		caps = append(caps, configver.Capability{
+			Field: c.Field, Cost: c.CostCredits, ExpectedConfidence: c.ExpectedConfidence,
+		})
+	}
+	return configver.ProviderInfo{
+		ID:           pr.ID,
+		Status:       pr.Status,
+		OpState:      pr.OpState,
+		Compliance:   pr.ComplianceReviewStatus,
+		SunsetAt:     pr.SunsetAt,
+		Capabilities: caps,
+	}, true, nil
 }
 
 // readyCheck returns a /readyz probe: PG reachable + master key present (doc 12 P0).

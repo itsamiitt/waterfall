@@ -32,6 +32,8 @@ func TestApply_OrderedAndIdempotent(t *testing.T) {
 		// clean-slate re-apply does not hit "relation already exists".
 		"drop view if exists providers_catalog cascade",
 		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
+		// Migration 0006 (config versioning) tables + budgets (moved here per Deviation D-2).
+		"drop table if exists config_versions, config_active, config_epochs, workflow_index, budgets cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",
@@ -103,6 +105,8 @@ func TestPending_ReportsUnapplied(t *testing.T) {
 		// clean-slate re-apply does not hit "relation already exists".
 		"drop view if exists providers_catalog cascade",
 		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
+		// Migration 0006 (config versioning) tables + budgets (moved here per Deviation D-2).
+		"drop table if exists config_versions, config_active, config_epochs, workflow_index, budgets cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",

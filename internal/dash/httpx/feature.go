@@ -30,6 +30,9 @@ var featureLabels = map[string]string{
 	"key-imports": "key-imports",
 	"bulk-jobs":   "bulk-jobs",
 	"rotation":    "rotation",
+	"routing":     "routing",
+	"workflows":   "workflows",
+	"config":      "config",
 }
 
 // featureLabel derives the bounded metric label from the request path's segment after /v1/admin/.

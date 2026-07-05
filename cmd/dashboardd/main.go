@@ -33,17 +33,25 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/httpx"
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/providers"
+	"github.com/enrichment/waterfall/internal/dash/queues"
 	"github.com/enrichment/waterfall/internal/dash/rotation"
 	"github.com/enrichment/waterfall/internal/dash/routing"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
 	"github.com/enrichment/waterfall/internal/dash/telemetry"
+	"github.com/enrichment/waterfall/internal/dash/workers"
 	"github.com/enrichment/waterfall/internal/dash/workflows"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
 	"github.com/enrichment/waterfall/internal/pgmigrate"
+	"github.com/enrichment/waterfall/internal/pgoutbox"
 	"github.com/enrichment/waterfall/internal/tenant"
 )
+
+// defaultQueueName is the ONE logical queue name the single pgoutbox outbox maps to (OI-QW-8):
+// the queue_stats fold and the queue list attribute the aggregate state vector to this
+// queue_defs row; multi-queue topology arrives with the target engines (doc 06 §1.3).
+const defaultQueueName = "enrich-default"
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -287,6 +295,67 @@ func main() {
 		go react.Start(reactCtx, time.Minute)
 	}
 
+	// P5 queues + workers (modules 8+9, doc 04 §2.8/§2.9, doc 06). Order matters: queues FIRST —
+	// its Service is the queue_defs.desired_replicas single writer (doc 06 §5, OI-QW-3) that the
+	// workers scale endpoints delegate to. The Outbox is a pgoutbox.Store opened over the SAME
+	// non-BYPASSRLS app DSN (exactly how the P5 queues integration tests construct it): redrive
+	// is a tenant-scoped guarded UPDATE under the caller's Principal, so no relay privilege is
+	// needed — or wanted — on this path.
+	outbox, err := pgoutbox.Open(appCfg, 4)
+	if err != nil {
+		logger.Error("open job outbox", "err", err)
+		os.Exit(1)
+	}
+	defer outbox.Close()
+	queueDeps := queues.Deps{
+		Store: store, Outbox: outbox, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		Metrics: reg, Logger: logger,
+	}
+	qsvc := queues.Routes(fmux, queueDeps)
+	// GET /bulk-jobs/{id} single owner (OI-KEYS-1b): queues' DURABLE bulk_jobs reader. The keys
+	// package's P1 in-process registration was retired with this wiring — net/http 1.22 panics
+	// on a duplicate pattern, and the durable row is the one poller for every 202 bulk job.
+	queues.BulkJobsRoute(fmux, queueDeps, qsvc)
+	workers.Routes(fmux, workers.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		Scaler: qsvc, Now: time.Now, Logger: logger,
+	})
+
+	// Worker-lost detector loop (doc 06 §4): server-derived status='lost' after 3 missed 10s
+	// heartbeats, 2-pass hysteresis. workers is Class P (platform-only RLS), so the loop runs
+	// under the platform system Principal — the same shape the telemetry folds bind.
+	detector := workers.NewDetector(workers.DetectorConfig{
+		Store: workers.NewStore(store), Logger: logger, Metrics: reg,
+	})
+	detector.Start(tenant.WithPrincipal(context.Background(), tenant.Principal{
+		TenantID: "platform", Scopes: []string{"role:operator"},
+	}))
+	defer detector.Stop()
+
+	// P5 queue_stats sampler (doc 06 §6, OI-QW-7/8/9): a leader-guarded 15s tick drives the
+	// aggregator's QueueStatsFold for the single logical pgoutbox queue. Gating on the telemetry
+	// Loops leadership keeps ONE sampler across N instances without a second advisory lock, and
+	// the fold is idempotent (last-sample-wins REPLACE), so a handover double-sample is harmless.
+	queueFoldStop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-queueFoldStop:
+				return
+			case <-t.C:
+				if !telemLoops.Leader() {
+					continue
+				}
+				if err := telemLoops.Aggregator().QueueStatsFold(context.Background(), defaultQueueName, time.Now()); err != nil {
+					logger.Warn("queue stats fold", "err", err)
+				}
+			}
+		}
+	}()
+	defer close(queueFoldStop)
+
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -295,7 +364,8 @@ func main() {
 	admin := http.NewServeMux()
 	admin.Handle("/", srv.Handler())
 	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
-		"routing", "workflows", "config", "health", "approvals", "change-history"} {
+		"routing", "workflows", "config", "health", "approvals", "change-history",
+		"queues", "dead-letters", "jobs", "workers"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
@@ -520,6 +590,14 @@ grant select, insert, update, delete on
   tenants, users, mfa_recovery_codes, sessions, ip_allowlists,
   audit_log, audit_chain_heads, api_access_log, secret_envelopes to dash_app;
 grant usage on sequence audit_log_id_seq, api_access_log_id_seq to dash_app;
+-- P5 queues + workers (doc 06): worker registry + heartbeats, queue registry/scale intent,
+-- durable bulk jobs, and the folded queue/worker stats.
+grant select, insert, update, delete on
+  workers, queue_defs, bulk_jobs, queue_stats_1m, queue_stats_1h,
+  worker_heartbeats, worker_stats_5m to dash_app;
+-- job_outbox: the queues read model + the pgoutbox redrive verbs only (select, update under
+-- FORCE RLS) — inserts stay with the enrichment API's role (one-owner-per-table, doc 06 §2.4).
+grant select, update on job_outbox to dash_app;
 `
 
 // startupSelfCheck refuses to run as a role that bypasses RLS (which would silently defeat G1) and

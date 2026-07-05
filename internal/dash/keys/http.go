@@ -116,7 +116,11 @@ func (rt *router) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/providers/{id}/keys/import", rt.writeStepUp(rbac.KeysBulk, rt.importKeys))
 	mux.HandleFunc("GET "+basePath+"/key-imports/{job_id}", rt.read(rbac.KeysRead, rt.importStatus))
 	mux.HandleFunc("POST "+basePath+"/keys/bulk", rt.write(rbac.KeysBulk, rt.bulkOp))
-	mux.HandleFunc("GET "+basePath+"/bulk-jobs/{id}", rt.read(rbac.KeysRead, rt.bulkStatus))
+	// GET /bulk-jobs/{id} is owned by the queues package's DURABLE bulk_jobs reader
+	// (queues.BulkJobsRoute) since P5 — the orchestrator mounts exactly ONE owner, so this
+	// package's P1 in-process registration is retired (OI-KEYS-1b; net/http 1.22 panics on a
+	// duplicate pattern). The in-process registry stays behind Service.BulkStatus until the
+	// keys bulk-op executor migrates onto bulk_jobs (the OI-KEYS-1 tail).
 
 	// Key Pools.
 	mux.HandleFunc("GET "+basePath+"/key-pools", rt.read(rbac.KeysRead, rt.listPools))

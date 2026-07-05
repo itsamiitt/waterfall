@@ -35,7 +35,8 @@ fi
 #
 # -p 1 is REQUIRED: every package's tests drop/recreate the SAME schema in ONE shared database,
 # so running package test binaries in parallel would race (e.g. pgmigrate's drop vs pgoutbox's
-# setup). Serialize them.
+# setup). Serialize them. The dashboard suite (internal/dash/e2e) runs LAST and rebuilds only the
+# migration-0004 tables it owns, so it is independent of the sibling packages' schema state.
 go test -tags integration -v -p 1 \
-  -run 'TestConn_SimpleAndExtended|TestRolePrivileges|TestRLS_TenantIsolation|TestPG_IdempotencyLedger|TestPG_CostLedger|TestPGOutbox_DurableDeliveryAndCrashSafety|TestPGOutbox_DeadLetterAfterMaxAttempts|TestPGOutbox_RedriveReplaysParkedJob|TestApply_OrderedAndIdempotent|TestPending_ReportsUnapplied|TestE2E_FullStack' \
-  ./internal/pg/ ./internal/pgstore/ ./internal/pgoutbox/ ./internal/pgmigrate/ ./internal/e2e/
+  -run 'TestConn_SimpleAndExtended|TestRolePrivileges|TestRLS_TenantIsolation|TestPG_IdempotencyLedger|TestPG_CostLedger|TestPGOutbox_DurableDeliveryAndCrashSafety|TestPGOutbox_DeadLetterAfterMaxAttempts|TestPGOutbox_RedriveReplaysParkedJob|TestApply_OrderedAndIdempotent|TestPending_ReportsUnapplied|TestE2E_FullStack|TestDashRLSZeroRows|TestDashLoginMFAAndSecurity' \
+  ./internal/pg/ ./internal/pgstore/ ./internal/pgoutbox/ ./internal/pgmigrate/ ./internal/e2e/ ./internal/dash/e2e/

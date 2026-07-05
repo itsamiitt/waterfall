@@ -88,6 +88,13 @@ taxonomy: sentinel `platform` Tenant + `app.current_role` GUC), and the audit ha
   ip_allowlists CRUD, api_access_log async batch writer.
 - `internal/dash/audit` — hash-chain `Append` (chain-head row lock), cursor reader, `Verify` walker
   endpoint + nightly job.
+- `internal/dash/secrets` — AES-256-GCM envelope `Backend{Seal, Open, Rotate}` + `Secret` redacting
+  wrapper. **Deviation D-1 (2026-07-04):** `secret_envelopes` and the secrets backend are pulled
+  forward from P1 into P0 because P0's MFA enroll/verify (acceptance #3) must seal/open the
+  `totp_seed` (doc 05 §5.2). `secret_envelopes` is therefore created in `0004` (alongside `users`,
+  so `users_mfa_envelope_fk` is inline instead of the deferred `0005` add); `0005` no longer creates
+  it. Only the P0-needed surface ships here (Seal/Open/Rotate, master keyring, keyed fingerprint);
+  P1 reuses the backend for `provider_key` material and adds the KEK-rotation background loop.
 - `cmd/dashboardd/main.go` skeleton — env config → pg pool → `pgmigrate.Apply` → feature Routes
   under `/v1/admin` → `/healthz` `/readyz` `/metrics` → session reaper loop; startup self-check
   refuses superuser/BYPASSRLS roles (extends Slice 20 pattern).

@@ -237,6 +237,36 @@ CREATE POLICY users_operator_read ON users
 CREATE POLICY audit_log_operator_read ON audit_log
     FOR SELECT USING (app_current_role() = 'operator');
 
+-- ---------------------------------------------------------------------------
+-- secret_envelopes — Deviation D-1 (doc 12 P0): pulled forward from 0005 into 0004 because P0's
+-- MFA enroll/verify must seal/open totp_seed envelopes (doc 05 §5.2). Class P (platform-only RLS,
+-- no tenant policy ever); only internal/dash/secrets reads it (one-owner-per-table). No plaintext
+-- column exists anywhere. AAD on Open = envelope_id || kind; aad_fingerprint is a KEYED
+-- HMAC-SHA256(fingerprint_pepper, plaintext) used for provider_key duplicate detection (P1).
+-- ---------------------------------------------------------------------------
+CREATE TABLE secret_envelopes (
+    id              uuid PRIMARY KEY,
+    kind            text NOT NULL CHECK (kind IN
+                    ('provider_key', 'totp_seed', 'webhook_secret', 'channel_config')),
+    master_key_id   text  NOT NULL,     -- keyring entry that wraps this DEK (KEK rotation)
+    dek_wrapped     bytea NOT NULL,
+    nonce           bytea NOT NULL,
+    ciphertext      bytea NOT NULL,
+    aad_fingerprint bytea,              -- HMAC-SHA256(fingerprint_pepper, plaintext); KEYED
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    rotated_from    uuid REFERENCES secret_envelopes(id)
+);
+CREATE INDEX secret_envelopes_fingerprint_idx ON secret_envelopes (aad_fingerprint);
+ALTER TABLE secret_envelopes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secret_envelopes FORCE ROW LEVEL SECURITY;
+CREATE POLICY secret_envelopes_platform_only ON secret_envelopes
+    USING (app_current_tenant() = 'platform')
+    WITH CHECK (app_current_tenant() = 'platform');
+
+-- users.mfa_totp_envelope_id FK, inline now that secret_envelopes lives in this migration.
+ALTER TABLE users ADD CONSTRAINT users_mfa_envelope_fk
+    FOREIGN KEY (mfa_totp_envelope_id) REFERENCES secret_envelopes(id);
+
 -- Release-blocker test (docs/21 §1 pattern, CI against real Postgres): for EVERY table in
 -- this file — insert as tenant A, select as tenant B, count MUST be 0.
 ```
@@ -331,27 +361,9 @@ CREATE TABLE providers (
 -- secret_envelopes — AES-256-GCM envelope store (ADR-0017). Created before its consumers
 -- so their FKs can reference it. Operator-only; ONLY internal/dash/secrets reads it.
 -- ---------------------------------------------------------------------------
-CREATE TABLE secret_envelopes (
-    id              uuid PRIMARY KEY,
-    kind            text NOT NULL CHECK (kind IN
-                    ('provider_key', 'totp_seed', 'webhook_secret', 'channel_config')),
-    master_key_id   text  NOT NULL,     -- keyring entry that wraps this DEK (KEK rotation)
-    dek_wrapped     bytea NOT NULL,
-    nonce           bytea NOT NULL,
-    ciphertext      bytea NOT NULL,
-    aad_fingerprint bytea,              -- HMAC-SHA256(fingerprint_pepper, plaintext); KEYED
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    rotated_from    uuid REFERENCES secret_envelopes(id)
-);
-CREATE INDEX secret_envelopes_fingerprint_idx ON secret_envelopes (aad_fingerprint);
-
--- Deferred FK from 0004 (users.mfa_totp_envelope_id). A plain (validating) FK add is safe
--- here WITHOUT the §7 rule-6 NOT VALID → VALIDATE discipline: migrations 0004–0009 apply as
--- one pre-traffic batch (dashboardd runs pgmigrate.Apply before serving), so at 0005 apply
--- time users is empty and cold — the validation scan is trivial and there is no live load to
--- block. Rule 6 governs ALTERs against live tables, i.e. everything from 0010 onward.
-ALTER TABLE users ADD CONSTRAINT users_mfa_envelope_fk
-    FOREIGN KEY (mfa_totp_envelope_id) REFERENCES secret_envelopes(id);
+-- secret_envelopes + the users.mfa_totp_envelope_id FK were moved to migration 0004 by
+-- Deviation D-1 (doc 12 P0): P0's MFA enroll/verify must seal/open totp_seed envelopes, so the
+-- sealed store and its FK ship in 0004 alongside users. This migration assumes it already exists.
 
 -- ---------------------------------------------------------------------------
 -- key_import_batches — audited async bulk import provenance (25MB/50k caps enforced in code).
@@ -530,7 +542,8 @@ CREATE TABLE rotation_triggers (
 DO $$
 DECLARE t text;
 BEGIN
-    FOREACH t IN ARRAY ARRAY['providers', 'secret_envelopes', 'key_import_batches',
+    -- secret_envelopes is omitted here: it and its platform-only policy moved to 0004 (Deviation D-1).
+    FOREACH t IN ARRAY ARRAY['providers', 'key_import_batches',
                              'key_pools', 'provider_keys', 'key_pool_members', 'key_budgets',
                              'health_schedules', 'rotation_triggers'] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);

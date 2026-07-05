@@ -25,7 +25,12 @@ func TestApply_OrderedAndIdempotent(t *testing.T) {
 	// Clean slate.
 	for _, s := range []string{
 		"drop table if exists schema_migrations, job_outbox, field_versions, idempotency_ledger, cost_ledger cascade",
+		// Migration 0004 (dashboard identity/RBAC) tables + sequences + role GUC helper, so a
+		// forced full re-apply starts from a genuine clean slate.
+		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists, audit_log, audit_chain_heads, api_access_log, secret_envelopes cascade",
+		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
+		"drop function if exists app_current_role() cascade",
 	} {
 		_ = c.Exec(s)
 	}
@@ -87,7 +92,12 @@ func TestPending_ReportsUnapplied(t *testing.T) {
 	defer c.Close()
 	for _, s := range []string{
 		"drop table if exists schema_migrations, job_outbox, field_versions, idempotency_ledger, cost_ledger cascade",
+		// Migration 0004 (dashboard identity/RBAC) tables + sequences + role GUC helper, so a
+		// forced full re-apply starts from a genuine clean slate.
+		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists, audit_log, audit_chain_heads, api_access_log, secret_envelopes cascade",
+		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
+		"drop function if exists app_current_role() cascade",
 	} {
 		_ = c.Exec(s)
 	}

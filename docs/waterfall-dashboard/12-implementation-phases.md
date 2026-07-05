@@ -122,9 +122,10 @@ encryption (ADR-0017), bulk import. Providers carry the ADR-0009 inclusion trich
 
 **Deliverables.**
 - `migrations/0005_dash_providers_keys.sql` — providers, key_pools, provider_keys,
-  key_pool_members, key_budgets, secret_envelopes (no plaintext column exists anywhere),
-  key_import_batches; Class P RLS + the two enumerated tenant read-projections (providers
-  `visibility='tenant_readable'`; BYO `owner_tenant_id = app_current_tenant()`).
+  key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers
+  (`secret_envelopes` already created in 0004 per Deviation D-1); Class P RLS + the two enumerated
+  tenant read-projections (providers `visibility='tenant_readable'`; BYO
+  `owner_tenant_id = app_current_tenant()`).
 - `internal/dash/secrets` — `Backend{Seal, Open, Rotate}`; AES-256-GCM envelope implementation;
   `DASH_MASTER_KEY` keyring (master_key_id → 32-byte key); AAD = envelope id ‖ kind; keyed
   HMAC-SHA256 fingerprint with server-side pepper; `Secret` wrapper redacting
@@ -627,3 +628,9 @@ phase requires P8 plus its backend phase; P12 is last and gates release.
 | OI-IP-2 | Approval gating of P1 destructive actions (provider delete/archive, key bulk delete) is audited-inline until the approvals engine lands in P4, then wired through `approvals.Gate` in the P4 commit | DECISION RECORDED | Solutions Architect |
 | OI-IP-3 | P8 acceptance E2E (login→overview) requires P7 merged although P8 may start in parallel from P4 — sequencing note carried in §2 P8 and §3 | DECISION RECORDED | Solutions Architect |
 | OI-IP-4 | All numeric performance criteria (10k selections/s, ≤2s SSE deltas, import/fold/API thresholds) are UNVERIFIED design targets until P12 records measurements via doc 13 §6 | OPEN (closes in P12) | Senior Backend Engineer |
+| OI-KEYS-1 | P1 bulk-op + key-import execution is in-process (goroutine tracked by `key_import_batches`); it migrates to the durable `bulk_jobs` lease/janitor model in P5. `op=delete` executes inline-audited (approval-gated in P4 per OI-IP-2). | OPEN (closes in P5) | Senior Backend Engineer |
+| OI-KEYS-2 | Provider/key `test`/`health-check`/`refresh-credits` stamp timestamps + audit intent in P1; the live `provider.Call` / credit-sync egress (via the resolved key) lands in P2 with the rotation engine. | OPEN (closes in P2) | Senior Backend Engineer |
+| OI-KEYS-3 | `GET /keys/{id}/usage` returns live `provider_keys` counters + an empty time-series in P1; the `key_usage_1m/1h/1d` rollups that populate the series arrive with P4 telemetry. | OPEN (closes in P4) | Senior Backend Engineer |
+| OI-KEYS-4 | Key-pool strategy/membership writes persist + audit in P1; the doc 07 §10 `key_pool` config-epoch bump (`configver.BumpEpoch`) that invalidates in-memory `PoolState` is deferred to P3 (config versioning) — until then rotation reads the row directly. | OPEN (closes in P3) | Senior Backend Engineer |
+| OI-SEC-9 | Step-up (`X-MFA-Code`) on keys create/import/rotate/bulk verifies TOTP against the caller's sealed seed (`cmd/dashboardd.totpStepUp`); accepting a one-time recovery code on the step-up path (as login-verify does) is deferred. | OPEN | Senior Backend Engineer |
+| OI-M2-1 | `providers_catalog` (migration 0005) omits `op_state`, so a tenant-scope `effective_available` is computed from the inclusion-status conjunct only (op_state assumed enabled); operators get the full status×op_state conjunction. `stats` is an empty-series stub until observability (P4); `benchmark` runs inline (no async job in P1); `List` keyset-orders on `id`. | DECISION RECORDED | Enterprise UX Architect |

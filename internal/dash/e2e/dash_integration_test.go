@@ -31,6 +31,8 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
+	"github.com/enrichment/waterfall/internal/dash/keys"
+	"github.com/enrichment/waterfall/internal/dash/providers"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
 	"github.com/enrichment/waterfall/internal/pg"
@@ -432,4 +434,143 @@ func newUUID() string {
 		j += 2
 	}
 	return string(out)
+}
+
+// TestDashFeatureWiring proves the P1 route integration: providers/keys feature routes mounted
+// behind httpx.Server.FeatureChain get single authentication plus the shared CSRF / MFA / IP
+// enforcement, exactly as cmd/dashboardd composes them. The security-critical assertion is that a
+// mutating feature request without X-CSRF-Token is rejected by the shared chain (403 csrf_required)
+// before reaching the feature handler.
+func TestDashFeatureWiring(t *testing.T) {
+	cfg := adminCfg(t)
+	admin, err := pg.Connect(cfg)
+	if err != nil {
+		t.Fatalf("connect admin: %v", err)
+	}
+	defer admin.Close()
+	// This test exercises the feature (providers/keys) routes, which need migration 0005 in addition
+	// to 0004. Drop 0005 objects first so setupDashSchema's 0004 rebuild is clean, then re-apply 0005
+	// and grant the app role on its tables (mirrors the providers package's setup).
+	tryExec(admin, "drop view if exists providers_catalog cascade")
+	tryExec(admin, "drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade")
+	setupDashSchema(t, admin)
+	ddl5, err := os.ReadFile("../../../migrations/0005_dash_providers_keys.sql")
+	if err != nil {
+		t.Fatalf("read migration 0005: %v", err)
+	}
+	if err := admin.Exec(string(ddl5)); err != nil {
+		t.Fatalf("apply migration 0005: %v", err)
+	}
+	mustExec(t, admin, "alter view providers_catalog set (security_invoker = true)")
+	const feat0005 = "providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers"
+	mustExec(t, admin, "grant select, insert, update, delete on "+feat0005+" to "+appRole)
+	mustExec(t, admin, "grant select on providers_catalog to "+appRole)
+
+	appCfg := cfg
+	appCfg.User = appRole
+	pool := pg.NewPool(appCfg, 8)
+	defer pool.Close()
+	store := db.New(pool)
+
+	key := make([]byte, 32)
+	_, _ = rand.Read(key)
+	kr, err := secrets.NewKeyring(base64.StdEncoding.EncodeToString(key))
+	if err != nil {
+		t.Fatalf("keyring: %v", err)
+	}
+	backend := secrets.NewPGBackend(store, kr, []byte("test-pepper"))
+
+	users := security.NewUsers(store, backend, "Waterfall")
+	sessions := security.NewSessions(store)
+	ipallow := security.NewIPAllow(store)
+	access := security.NewAccessLog(store, 1024)
+	access.Start(100 * time.Millisecond)
+	defer access.Stop()
+	auditLog := audit.New(store)
+
+	// Seed an operator user in the platform Tenant (operators manage the Provider catalog).
+	opCtx := tenant.WithPrincipal(context.Background(), tenant.Principal{
+		TenantID: "platform", UserID: "seed", Scopes: []string{"role:operator"},
+	})
+	pwHash, err := security.HashPassword("correct horse battery staple")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	uid, err := users.Create(opCtx, "op@platform.example", pwHash, "operator")
+	if err != nil {
+		t.Fatalf("create operator: %v", err)
+	}
+	seed, _, err := users.EnrollMFA(opCtx, uid, "op@platform.example")
+	if err != nil {
+		t.Fatalf("enroll mfa: %v", err)
+	}
+	if _, err := users.ConfirmMFA(opCtx, uid, security.GenerateTOTP(seed, time.Now()), time.Now()); err != nil {
+		t.Fatalf("confirm mfa: %v", err)
+	}
+
+	srv := httpx.NewServer(httpx.Deps{
+		Store: store, Auth: httpx.NewSessionOrJWT(sessions, nil),
+		Users: users, Sessions: sessions, IPAllow: ipallow, Access: access,
+		Secrets: backend, Audit: auditLog, Issuer: "Waterfall",
+	})
+
+	// Compose the admin handler exactly as cmd/dashboardd does: feature routes behind FeatureChain,
+	// everything else on the P0 handler.
+	fmux := http.NewServeMux()
+	providers.Routes(fmux, providers.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{}, Secrets: backend,
+	})
+	keys.Routes(fmux, keys.Deps{
+		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+	})
+	featureHandler := srv.FeatureChain(fmux)
+	adminMux := http.NewServeMux()
+	adminMux.Handle("/", srv.Handler())
+	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs"} {
+		adminMux.Handle("/v1/admin/"+p, featureHandler)
+		adminMux.Handle("/v1/admin/"+p+"/", featureHandler)
+	}
+
+	ts := httptest.NewServer(adminMux)
+	defer ts.Close()
+	cl := &client{t: t, base: ts.URL}
+
+	// login + mfa -> authenticated operator session with a CSRF token.
+	if st, _ := cl.do("POST", "/v1/admin/auth/login", "", `{"email":"op@platform.example","password":"correct horse battery staple"}`); st != 200 {
+		t.Fatalf("login = %d, want 200", st)
+	}
+	st, body := cl.do("POST", "/v1/admin/auth/mfa/verify", "", `{"code":"`+security.GenerateTOTP(seed, time.Now())+`"}`)
+	if st != 200 {
+		t.Fatalf("mfa/verify = %d %v, want 200", st, body)
+	}
+	cl.csrf, _ = body["csrf_token"].(string)
+	if cl.csrf == "" {
+		t.Fatal("mfa/verify did not return csrf_token")
+	}
+
+	// (1) Reachability + single-auth: a feature GET routes through FeatureChain to the providers
+	// handler and returns the (empty) catalog list, not 401/404.
+	st, list := cl.do("GET", "/v1/admin/providers", "", "")
+	if st != 200 {
+		t.Fatalf("GET /v1/admin/providers = %d %v, want 200 (feature route reachable + authenticated)", st, list)
+	}
+
+	// (2) CSRF enforcement on a feature route: mutating request WITHOUT X-CSRF-Token => 403
+	// csrf_required, enforced by the shared FeatureChain before the feature handler.
+	st, body = cl.doRaw("POST", "/v1/admin/providers", cl.cookie, "" /*no csrf*/, "idem-fw-1",
+		`{"id":"hunter","display_name":"Hunter","status":"ACTIVE-CANDIDATE"}`)
+	if st != 403 || errCode(body) != "csrf_required" {
+		t.Fatalf("feature POST without CSRF = %d %v, want 403 csrf_required", st, body)
+	}
+
+	// (3) With a valid CSRF token the same request passes the shared chain (no csrf_required);
+	// it reaches the feature handler (create succeeds or a validation/RBAC verdict, never a CSRF block).
+	st, body = cl.doRaw("POST", "/v1/admin/providers", cl.cookie, cl.csrf, "idem-fw-2",
+		`{"id":"hunter","display_name":"Hunter","status":"ACTIVE-CANDIDATE"}`)
+	if st == 403 && errCode(body) == "csrf_required" {
+		t.Fatalf("feature POST with valid CSRF still blocked as csrf_required: %v", body)
+	}
+	if st != 201 && st != 200 {
+		t.Fatalf("feature POST with valid CSRF = %d %v, want create success", st, body)
+	}
 }

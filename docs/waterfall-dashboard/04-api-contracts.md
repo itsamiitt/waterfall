@@ -267,6 +267,15 @@ projection (identity, capabilities, `health_score`) — never breaker/limit inte
 from runtime `op_state` (`enabled`/`disabled`/`paused`/`maintenance`); `effective_available` is
 **computed server-side** (one function) and returned — clients never derive it.
 
+> **Open item OI-M2-1 (P1, `internal/dash/providers`):** the `providers_catalog` view (migration
+> 0005) does not project `op_state`, so a Tenant-scope response computes `effective_available` from
+> the **inclusion-status conjunct only** (op_state treated as `enabled`); the full status × op_state
+> conjunction is returned to Operators (full-row) and drives all engine routing. Projecting
+> `op_state` into `providers_catalog` would let Tenants receive the full conjunction — a schema
+> follow-up for the view owner. P1 also serves `GET /providers/{id}/stats` as an empty-series stub
+> and runs `POST /providers/{id}/benchmark` inline (no async `job_id`) until the observability
+> rollups / job queue land; `List` keyset-orders on `id` (the documented sort menu is deferred).
+
 | Method | Path | Purpose | RBAC | Notes |
 |---|---|---|---|---|
 | GET | `/providers` | List catalog | TU+ (projection) / O (full) | filters: `status`, `op_state`, `category`, `region`, `tag`, `q` (name prefix); sort: `priority`, `health_score`, `credits_remaining`, `-created_at` (`credits_remaining` backs the doc 09 §1.2 overview-tile drill-down) |

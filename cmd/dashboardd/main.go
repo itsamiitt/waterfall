@@ -26,11 +26,14 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
+	"github.com/enrichment/waterfall/internal/dash/keys"
+	"github.com/enrichment/waterfall/internal/dash/providers"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
 	"github.com/enrichment/waterfall/internal/dash/security"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
 	"github.com/enrichment/waterfall/internal/pgmigrate"
+	"github.com/enrichment/waterfall/internal/tenant"
 )
 
 func main() {
@@ -120,7 +123,32 @@ func main() {
 	}()
 	defer close(reaperStop)
 
-	handler := srv.Handler()
+	// P1 feature routes (providers, keys/pools). Each package owns its RBAC + idempotency + audit
+	// and reads the Principal from ctx via httpx.CtxAuthenticator; the shared FeatureChain supplies
+	// the single authentication plus IP-allowlist, CSRF, and MFA-gate enforcement so feature routes
+	// get the same protections as the P0 surface without re-authenticating (doc 12 P1).
+	fmux := http.NewServeMux()
+	providers.Routes(fmux, providers.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		Secrets: backend, Resolver: nil, Now: time.Now, Logger: logger,
+	})
+	keys.Routes(fmux, keys.Deps{
+		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
+	})
+	featureHandler := srv.FeatureChain(fmux)
+
+	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
+	// /healthz /readyz /metrics) routes to the P0 handler. net/http 1.22 subtree patterns take
+	// precedence over "/", so /v1/admin/providers/{id} lands on featureHandler.
+	admin := http.NewServeMux()
+	admin.Handle("/", srv.Handler())
+	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs"} {
+		admin.Handle("/v1/admin/"+p, featureHandler)
+		admin.Handle("/v1/admin/"+p+"/", featureHandler)
+	}
+
+	var handler http.Handler = admin
 	// Serve the built SPA if present (P8 adds web/dist); skipped when absent.
 	if st, err := os.Stat("web/dist"); err == nil && st.IsDir() {
 		mux := http.NewServeMux()
@@ -154,6 +182,33 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(ctx)
+}
+
+// totpStepUp verifies a per-request X-MFA-Code against the caller's TOTP seed for step-up-gated
+// actions (doc 05 §5.4). The keys package calls VerifyStepUp before its create/import/rotate/bulk
+// handlers; a non-nil error becomes 403 mfa_required. The seed is opened from the caller's sealed
+// envelope via the secrets backend inside security.Users.TOTPSeed; recovery-code acceptance on the
+// step-up path is deferred (OI-SEC-9).
+type totpStepUp struct {
+	users *security.Users
+	now   func() time.Time
+}
+
+var errStepUpFailed = errors.New("step-up verification failed")
+
+func (v *totpStepUp) VerifyStepUp(ctx context.Context, code string) error {
+	p, err := tenant.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	seed, err := v.users.TOTPSeed(ctx, p.UserID)
+	if err != nil {
+		return err
+	}
+	if !security.VerifyTOTP(seed, code, v.now()) {
+		return errStepUpFailed
+	}
+	return nil
 }
 
 // readyCheck returns a /readyz probe: PG reachable + master key present (doc 12 P0).

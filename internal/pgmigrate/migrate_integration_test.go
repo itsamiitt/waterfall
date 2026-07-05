@@ -28,6 +28,10 @@ func TestApply_OrderedAndIdempotent(t *testing.T) {
 		// Migration 0004 (dashboard identity/RBAC) tables + sequences + role GUC helper, so a
 		// forced full re-apply starts from a genuine clean slate.
 		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists, audit_log, audit_chain_heads, api_access_log, secret_envelopes cascade",
+		// Migration 0005 (dashboard providers/keys) tables + the catalog view, so a forced
+		// clean-slate re-apply does not hit "relation already exists".
+		"drop view if exists providers_catalog cascade",
+		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",
@@ -95,6 +99,10 @@ func TestPending_ReportsUnapplied(t *testing.T) {
 		// Migration 0004 (dashboard identity/RBAC) tables + sequences + role GUC helper, so a
 		// forced full re-apply starts from a genuine clean slate.
 		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists, audit_log, audit_chain_heads, api_access_log, secret_envelopes cascade",
+		// Migration 0005 (dashboard providers/keys) tables + the catalog view, so a forced
+		// clean-slate re-apply does not hit "relation already exists".
+		"drop view if exists providers_catalog cascade",
+		"drop table if exists providers, key_pools, provider_keys, key_pool_members, key_budgets, key_import_batches, health_schedules, rotation_triggers cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",

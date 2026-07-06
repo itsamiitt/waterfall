@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -474,16 +475,29 @@ func main() {
 	}
 
 	var handler http.Handler = admin
-	// Serve the built SPA if present (P8 adds web/dist); skipped when absent.
+	// Serve the built SPA if present (P8 adds web/dist); skipped when absent. The SPA is a
+	// client-routed single page, so any path that isn't an API route or a real asset file must
+	// fall back to index.html — otherwise a deep link or refresh to /providers, /login, etc. 404s
+	// (caught by the live Playwright E2E, OI-P12-2). Real files (hashed JS/CSS) are still served
+	// directly; only non-existent paths fall through to index.html.
 	if st, err := os.Stat("web/dist"); err == nil && st.IsDir() {
+		fs := http.FileServer(http.Dir("web/dist"))
+		spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p := filepath.Clean(r.URL.Path)
+			if fi, err := os.Stat(filepath.Join("web/dist", p)); err == nil && !fi.IsDir() {
+				fs.ServeHTTP(w, r) // a real asset (e.g. /assets/index-*.js)
+				return
+			}
+			http.ServeFile(w, r, "web/dist/index.html") // client route -> SPA shell
+		})
 		mux := http.NewServeMux()
 		mux.Handle("/v1/", handler)
 		mux.Handle("/healthz", handler)
 		mux.Handle("/readyz", handler)
 		mux.Handle("/metrics", handler)
-		mux.Handle("/", http.FileServer(http.Dir("web/dist")))
+		mux.Handle("/", spa)
 		handler = mux
-		logger.Info("serving web/dist statically")
+		logger.Info("serving web/dist statically (SPA history fallback enabled)")
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.port)

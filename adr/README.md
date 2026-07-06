@@ -30,6 +30,8 @@ Decision section in place.
 | [0018](0018-dashboard-session-model.md) | Dashboard session model: cookie sessions for the SPA, JWT for machines, mandatory TOTP MFA | Accepted |
 | [0019](0019-dashboard-realtime-sse.md) | Dashboard realtime: one multiplexed SSE stream per tab over a Postgres read-poller | Accepted |
 | [0020](0020-platform-tenant-table-taxonomy.md) | Platform/tenant table taxonomy: Class P/T/R, sentinel platform tenant, dual GUC, FORCE RLS everywhere | Accepted |
+| [0021](0021-tenant-provisioning-path.md) | Operator Tenant provisioning via target-Tenant-bound INSERT (no BYPASSRLS) | Accepted |
+| [0022](0022-store-adapter-dependency-policy.md) | Per-store adapter dependency policy: hand-roll Redis/S3/ClickHouse-HTTP; ADR-0016 exception only for Kafka/Temporal | Accepted |
 
 > All architecture decisions are recorded. **Resolved:** datastore (ADR-0011), API protocols (ADR-0012),
 > queue transport (ADR-0013), orchestration (ADR-0014, cost-gated), cloud/topology (ADR-0015), secrets

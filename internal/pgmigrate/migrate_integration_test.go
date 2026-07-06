@@ -43,6 +43,8 @@ func TestApply_OrderedAndIdempotent(t *testing.T) {
 		"drop table if exists usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d, key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d, cost_rollup_1d, queue_stats_1m, queue_stats_1h, worker_heartbeats, worker_stats_5m, provider_health_checks, provider_health_1d cascade",
 		// Migration 0011 (hardening closeout).
 		"drop table if exists mfa_used_steps, dash_admin_idempotency cascade",
+		// Migration 0012 (provisioning + MFA knob).
+		"drop table if exists tenant_invites cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",
@@ -125,6 +127,8 @@ func TestPending_ReportsUnapplied(t *testing.T) {
 		"drop table if exists usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d, key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d, cost_rollup_1d, queue_stats_1m, queue_stats_1h, worker_heartbeats, worker_stats_5m, provider_health_checks, provider_health_1d cascade",
 		// Migration 0011 (hardening closeout).
 		"drop table if exists mfa_used_steps, dash_admin_idempotency cascade",
+		// Migration 0012 (provisioning + MFA knob).
+		"drop table if exists tenant_invites cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_tenant() cascade",
 		"drop function if exists app_current_role() cascade",

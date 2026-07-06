@@ -207,6 +207,11 @@ func gatherRouteFiles(t *testing.T, root string) []string {
 	if sse := filepath.Join(root, "internal", "dash", "realtime", "sse.go"); fileExists(sse) {
 		files = append(files, sse)
 	}
+	// Bulk-job cancellation (OI-API-4) registers its route in queues/cancel.go beside the handler,
+	// also outside the convention — include it explicitly.
+	if cancel := filepath.Join(root, "internal", "dash", "queues", "cancel.go"); fileExists(cancel) {
+		files = append(files, cancel)
+	}
 	// Exclude test files defensively (globs above already do, but be explicit).
 	out := files[:0]
 	for _, f := range files {

@@ -119,6 +119,9 @@ func setupTelemetrySchema(t *testing.T, admin *pg.Conn) {
 
 	applyMigration(t, admin, "../../../migrations/0004_dash_identity_rbac.sql")
 	applyMigration(t, admin, "../../../migrations/0009_dash_telemetry.sql")
+	// T4/RF-3 (migration 0012, cost portion only — the rest of 0012 needs tables this cost/telemetry
+	// schema does not build): widen cost_rollup_1d with key_id so the fold writes the key-scoped grain.
+	applyCostKeyID(t, admin)
 
 	mustExec(t, admin, "create role "+telRole+" login nosuperuser")
 	for _, tbl := range telTables {
@@ -131,6 +134,16 @@ func setupTelemetrySchema(t *testing.T, admin *pg.Conn) {
 	for _, tid := range []string{"acme", "globex", "initech"} {
 		mustExec(t, admin, `insert into tenants (id, name, kind, status) values ($1,$1,'customer','active')`, tid)
 	}
+}
+
+// applyCostKeyID applies migration 0012's cost_rollup_1d changes: add key_id to the grain and widen
+// the PK to include it. Kept as a focused helper (not a full-0012 apply) because 0012 also touches
+// tenants/tenant_invites/bulk_jobs that this schema does not create.
+func applyCostKeyID(t *testing.T, admin *pg.Conn) {
+	t.Helper()
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d ADD COLUMN key_id text NOT NULL DEFAULT ''")
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d DROP CONSTRAINT cost_rollup_1d_pkey")
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d ADD PRIMARY KEY (tenant_id, provider_id, workflow_key, country, key_id, day)")
 }
 
 func appStore(t *testing.T, cfg pg.Config) (*db.Store, func()) {
@@ -231,6 +244,11 @@ func TestTelemetryFoldRefoldIdentical(t *testing.T) {
 	snapA := snapshotRollups(t, admin)
 	if ps := scalar(t, admin, "select count(*) from provider_stats_1m"); ps == "0" || ps == "" {
 		t.Fatalf("provider_stats_1m empty after fold")
+	}
+	// T4/RF-3: cost_rollup_1d is folded at the key_id grain. The seed spreads 10 keys, so the fold
+	// must produce more than one distinct (non-empty) key_id — proving key_id rides the fold key.
+	if nk := scalar(t, admin, "select count(distinct key_id) from cost_rollup_1d where key_id <> ''"); nk == "0" || nk == "1" || nk == "" {
+		t.Fatalf("cost_rollup_1d distinct non-empty key_id = %q, want >1 (key_id must be folded into the grain)", nk)
 	}
 
 	// Truncate and refold — must reproduce byte-identical rollups.

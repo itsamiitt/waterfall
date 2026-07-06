@@ -5,12 +5,14 @@
 // `import` for live progress with per-row errors. xlsx: see OI note below.
 import { useMemo, useState } from "react";
 import { useSseTopics } from "../../api/sse";
-import { Button, EmptyState, Input, Select, type SelectOption } from "../../design/primitives";
+import { Badge, Button, ConfirmDialog, EmptyState, Input, Select, type SelectOption } from "../../design/primitives";
 import { isApiError } from "../../api/client";
 import { flattenPages } from "../../lib/cursors";
 import { formatCount } from "../../lib/format";
+import { JOB_TERMINAL, resolveJobStatus } from "../../lib/status";
+import { toast } from "../../app/toast";
 import { useProviders } from "../providers/api";
-import { useImportKeys, useImportProgress } from "./api";
+import { useCancelBulkJob, useImportKeys, useImportProgress } from "./api";
 import {
   KEY_FIELDS,
   buildCanonicalCsv,
@@ -226,15 +228,24 @@ export default function ImportWizard() {
 
 function ImportProgress({ jobId }: { jobId: string | null }) {
   const q = useImportProgress(jobId);
+  const cancel = useCancelBulkJob();
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const p = q.data;
   if (!p) return <div className="skeleton" style={{ height: 120 }} aria-busy="true" />;
   const done = p.succeeded + p.failed;
   const pct = p.total > 0 ? Math.min(100, (done / p.total) * 100) : 0;
+  const info = resolveJobStatus(p.status);
+  const cancellable = !JOB_TERMINAL.has(p.status);
   return (
     <div className="section" style={{ maxWidth: 640 }}>
       <div className="detail-meta">
         <span>batch <code>{p.job_id.slice(0, 12)}</code></span>
-        <span>status <strong>{p.status}</strong></span>
+        <span>status <Badge status={info.token} label={info.label} icon={info.icon} /></span>
+        {cancellable ? (
+          <Button size="sm" variant="danger" loading={cancel.isPending} onClick={() => setConfirmCancel(true)}>
+            Cancel import
+          </Button>
+        ) : null}
       </div>
       <div className="progress-track" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={p.total} aria-label="Import progress">
         <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -244,6 +255,29 @@ function ImportProgress({ jobId }: { jobId: string | null }) {
         <span>succeeded {formatCount(p.succeeded)}</span>
         <span>failed {formatCount(p.failed)}</span>
       </div>
+      <ConfirmDialog
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          setConfirmCancel(false);
+          cancel.mutate(p.job_id, {
+            onSuccess: () => toast.success("Cancellation requested — the import will stop at a clean terminal state"),
+            onError: (e) => {
+              if (isApiError(e) && (e.status === 409 || e.status === 404)) {
+                toast.info("Import already finished — nothing to cancel");
+              } else {
+                toast.error(isApiError(e) ? e.message : "cancel failed");
+              }
+            },
+          });
+        }}
+        title="Cancel this import?"
+        body="Stops importing further rows and drives the batch to a terminal 'cancelled' state. Rows already imported are retained (re-running later is safe via the idempotency ledger)."
+        consequences={[`${formatCount(done)} of ${formatCount(p.total)} rows already imported will be kept`]}
+        confirmLabel="Cancel import"
+        danger
+        busy={cancel.isPending}
+      />
       {p.errors && p.errors.length > 0 ? (
         <table className="p-table">
           <thead><tr><th scope="col">Row</th><th scope="col">Code</th><th scope="col">Message</th></tr></thead>

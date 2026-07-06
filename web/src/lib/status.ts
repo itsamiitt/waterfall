@@ -125,6 +125,31 @@ const approvalStatus: Record<ApprovalStatus, StatusDescriptor> = {
   failed: { token: "error", icon: "triangle", label: "Failed" },
 };
 
+// --- Bulk / import job status (bulk_jobs CHECK, migration 0012; §4.3 progress schema) ---
+// Terminal set: succeeded | partial | failed | cancelled. `cancelled` is the doc 15 §T3 addition
+// (POST /bulk-jobs/{id}/cancel drives a running job to this clean terminal state).
+export const JOB_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "partial",
+  "failed",
+  "cancelled",
+] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+const jobStatus: Record<JobStatus, StatusDescriptor> = {
+  queued: { token: "info", icon: "clock", label: "Queued" },
+  running: { token: "info", icon: "refresh", label: "Running" },
+  succeeded: { token: "ok", icon: "check", label: "Succeeded" },
+  partial: { token: "warn", icon: "triangle", label: "Partial" },
+  failed: { token: "error", icon: "x", label: "Failed" },
+  cancelled: { token: "neutral", icon: "slash", label: "Cancelled" },
+};
+
+/** Terminal job states — no further progress and, in the UI, no longer cancellable. */
+export const JOB_TERMINAL: ReadonlySet<string> = new Set(["succeeded", "partial", "failed", "cancelled"]);
+
 // --- Config version lifecycle (migration 0006 CHECK; doc 03 §9.3) ---
 export const CONFIG_VERSION_STATUSES = ["draft", "validated", "published", "archived"] as const;
 export type ConfigVersionStatus = (typeof CONFIG_VERSION_STATUSES)[number];
@@ -167,6 +192,7 @@ export const statusMaps = {
   workerStatus,
   alertState,
   approvalStatus,
+  jobStatus,
   configVersionStatus,
   errorClass,
 } as const;
@@ -177,6 +203,12 @@ export const inclusionStatusInfo = (s: InclusionStatus): StatusDescriptor => inc
 export const workerStatusInfo = (s: WorkerStatus): StatusDescriptor => workerStatus[s];
 export const alertStateInfo = (s: AlertState): StatusDescriptor => alertState[s];
 export const approvalStatusInfo = (s: ApprovalStatus): StatusDescriptor => approvalStatus[s];
+export const jobStatusInfo = (s: JobStatus): StatusDescriptor => jobStatus[s];
+
+/** Resolve a raw job status string to a descriptor: a known member maps exactly, an unknown
+ * (additive server) value degrades to a neutral labelled badge. Used by the progress surfaces. */
+export const resolveJobStatus = (raw: string): StatusDescriptor =>
+  (JOB_STATUSES as readonly string[]).includes(raw) ? jobStatus[raw as JobStatus] : unknownStatus(raw);
 export const configVersionStatusInfo = (s: ConfigVersionStatus): StatusDescriptor =>
   configVersionStatus[s];
 export const errorClassInfo = (s: ErrorClass): StatusDescriptor => errorClass[s];

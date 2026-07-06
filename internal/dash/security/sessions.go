@@ -91,8 +91,9 @@ func (s *Sessions) Resolve(ctx context.Context, cookie string) (Session, error) 
 	err := s.store.Tx(rctx, func(c *pg.Conn) error {
 		res, err := c.QueryParams(
 			`select s.tenant_id, s.user_id, s.csrf_token, s.mfa_verified_at, s.idle_expires_at,
-			        s.absolute_expires_at, s.revoked_at, s.last_seen_at, u.role, u.status, u.mfa_enrolled_at
-			 from sessions s join users u on u.id = s.user_id
+			        s.absolute_expires_at, s.revoked_at, s.last_seen_at, u.role, u.status, u.mfa_enrolled_at,
+			        t.require_mfa
+			 from sessions s join users u on u.id = s.user_id join tenants t on t.id = s.tenant_id
 			 where s.id = $1`, id)
 		if err != nil {
 			return err
@@ -122,7 +123,12 @@ func (s *Sessions) Resolve(ctx context.Context, cookie string) (Session, error) 
 			IdleExpiresAt:     idleExp,
 			AbsoluteExpiresAt: absExp,
 		}
-		sess.MFARequired = RequiresMFA(sess.Role) || row[10] != nil
+		// MFA is required for this session when the role mandates it (operator/tenant_admin), when the
+		// user has enrolled a TOTP seed (mfa_enrolled_at set), OR when the Tenant's require_mfa knob is
+		// on (SEC-5) — the last case gates an unenrolled tenant_user in a require-MFA Tenant until they
+		// enroll+verify, so mfaOK stays false and every route but the MFA-exempt enrollment endpoints
+		// returns 401 mfa_required.
+		sess.MFARequired = RequiresMFA(sess.Role) || row[10] != nil || boolText(row[11])
 		found = true
 		// Slide the idle window, throttled to once per minute.
 		if now.Sub(parseTS(str(row[7]))) > slideInterval {

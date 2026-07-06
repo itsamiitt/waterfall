@@ -206,8 +206,13 @@ func main() {
 	// DASH_HEARTBEAT_URL is set, so default enrichapi behavior is unchanged. The endpoint is
 	// RBAC-gated, so the beat carries a machine JWT — either a pre-minted DASH_HEARTBEAT_JWT or one
 	// minted here from DASH_HEARTBEAT_JWT_SECRET (HS256, role:operator + admin:write, short-lived).
+	// The returned client also drives drain-gating (T5a/OI-P5-2): srv.ShouldClaim is wired to it
+	// below, so a dashboard-set desired_state of draining/stopped makes this worker refuse NEW
+	// submissions (503 draining + Retry-After) while in-flight jobs finish.
+	var hbClient *heartbeat.Client
 	if cfg.HeartbeatURL != "" {
-		hbStop := startHeartbeat(logger, cfg)
+		hb, hbStop := startHeartbeat(logger, cfg)
+		hbClient = hb
 		defer hbStop()
 	}
 
@@ -245,6 +250,10 @@ func main() {
 		WriteScope:  writeScope,
 		ReadyCheck:  readyCheck,
 		Logger:      logger,
+	}
+	if hbClient != nil {
+		// Drain-gating (T5a/OI-P5-2): only the heartbeat-echoed running state admits new work.
+		srv.ShouldClaim = hbClient.ShouldClaim
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -396,12 +405,13 @@ func fnv1a(s string) uint32 {
 }
 
 // startHeartbeat wires the opt-in worker heartbeat client (OI-P5-1). It posts to the dashboard's
-// RBAC-gated /v1/admin/workers/{id}/heartbeat and converges on the echoed desired_state. Returns a
+// RBAC-gated /v1/admin/workers/{id}/heartbeat and converges on the echoed desired_state. Returns
+// the client (whose ShouldClaim drives the T5a drain gate on api.Server) and a
 // stop func. The bearer is a pre-minted DASH_HEARTBEAT_JWT, or one minted here from
 // DASH_HEARTBEAT_JWT_SECRET. jobs_active drain-gating of the dispatcher is a documented follow-up
 // (OI-P5-2): this loop conveys liveness + desired_state; the client's ShouldClaim()/DesiredState()
 // expose the drain signal for a future dispatcher gate.
-func startHeartbeat(logger *slog.Logger, cfg *config.Config) func() {
+func startHeartbeat(logger *slog.Logger, cfg *config.Config) (*heartbeat.Client, func()) {
 	workerID := cfg.HeartbeatWorkerID
 	if workerID == "" {
 		host, _ := os.Hostname()
@@ -432,7 +442,7 @@ func startHeartbeat(logger *slog.Logger, cfg *config.Config) func() {
 		}
 	}()
 	logger.Info("worker heartbeat enabled", "url", cfg.HeartbeatURL, "worker_id", workerID, "interval", interval)
-	return cancel
+	return hb, cancel
 }
 
 func orDefault(v, d string) string {

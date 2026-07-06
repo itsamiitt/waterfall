@@ -70,6 +70,7 @@ function EnrollFlow() {
   const confirm = useMfaConfirm();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [params] = useSearchParams();
   const navigate = useNavigate();
 
   const otpauthUrl = enroll.data?.otpauth_url;
@@ -96,7 +97,10 @@ function EnrollFlow() {
           Store these somewhere safe. <strong>You will not see them again.</strong>
         </p>
         <CodeBlock code={confirm.data.recovery_codes.join("\n")} copyable />
-        <Button variant="primary" onClick={() => void navigate("/", { replace: true })}>
+        <Button
+          variant="primary"
+          onClick={() => void navigate(safeNext(params.get("next")), { replace: true })}
+        >
           I have saved my recovery codes
         </Button>
       </div>

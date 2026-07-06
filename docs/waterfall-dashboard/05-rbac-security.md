@@ -161,8 +161,10 @@ runbook procedure through the owning Tenant's tenant_admin or the engine relay t
 ambient dashboard capability.
 ⁶ Operator writes are confined to the `platform` Tenant's own rows (`tenant_id = 'platform'`); the
 cross-Tenant policies of §3.3 are SELECT-only, so RLS `WITH CHECK` blocks cross-Tenant writes even
-for operators. The first `tenant_admin` User of a customer Tenant is provisioned at Tenant signup,
-outside this surface (open item SEC-3).
+for operators. The first `tenant_admin` User of a customer Tenant is provisioned through the
+operator provisioning API (`POST /v1/admin/tenants` + invite accept; SEC-3 resolved, ADR-0021):
+the handler checks operator RBAC + step-up, then binds the tx to the NEW Tenant's id so the
+standard `WITH CHECK` policies pass for exactly that Tenant — no BYPASSRLS.
 
 Deny is the default: any route absent from the matrix fails closed with 403 `forbidden` (or 404
 where existence must not be disclosed, §3.4).
@@ -405,7 +407,10 @@ single-use guarantee is already transactional (`used_at`, §5.2).
 **MFA is REQUIRED for `operator` and `tenant_admin`.** An unenrolled User holding either role
 completes login and is then confined to the `auth/mfa/enroll*` endpoints — every other route
 returns 401 `mfa_required` — until enrollment is confirmed. `tenant_user` enrollment is
-self-service and optional in v1 (a per-Tenant requirement knob is open item SEC-5).
+self-service and optional by default; a `tenant_admin` may require it Tenant-wide via the
+`require_mfa` knob (`PATCH /v1/admin/settings/mfa-policy`, SEC-5 resolved) — an unenrolled User
+then gets the `mfa_enrollment_required` login status (with the CSRF token, so the enroll write is
+reachable) and stays confined to the enrollment endpoints until enrolled + verified.
 
 ### 5.4 Step-up re-verification (closed catalog)
 
@@ -618,7 +623,7 @@ built-in default the same roster check runs at **request creation**: if no eligi
 other than the requester exists, the gated endpoint returns 422 `validation_failed` with a
 message naming the remedy (add a second `tenant_admin`; for platform actions, a second operator)
 instead of parking a request that can only expire. Recovery is the doc 14 deadlock runbook;
-first-admin provisioning remains SEC-3.
+first-admin provisioning is the SEC-3 operator API (ADR-0021).
 
 ### 9.2 Semantics (normative)
 
@@ -691,9 +696,9 @@ which records intent and outcome of privileged actions.
 |---|---|---|---|
 | SEC-1 | TOTP replay guard: persisted `mfa_used_steps` `(user_id, time_step)` table (Class T, migration 0004 DDL addendum) written in the acceptance transaction (§5.1); no per-instance replay state remains, so doc 02 §5's cache inventory is unaffected. Remaining action: doc 03 absorbs the addendum into its §2.1 DDL and §3 registry | RESOLVED (§5.1) | Senior Backend Engineer |
 | SEC-2 | WORM anchor sink: **DECIDED** — reference is **AWS S3 Object Lock (compliance mode)** with per-cloud equivalents (Azure Blob immutability policy / GCP Bucket Lock), anchor cadence **nightly** (tail-truncation exposure ≤ 24h; the in-DB per-Tenant hash chain plus `GET /audit-log/verify` remain the primary tamper-evidence, so the WORM anchor is a defense-in-depth backstop, not the sole control). The anchor writer is a deployment-time ops job (a bucket + a nightly export of `audit_chain_heads` + the day's `audit_log` range), **not application code** — it activates when the platform is deployed to a cloud with an object-lock store, which this dev build does not have. | DECISION RECORDED (activate at deploy) | Solutions Architect |
-| SEC-3 | First `tenant_admin` provisioning at Tenant signup is outside this surface; operator cross-Tenant User **writes** are deliberately not enumerated — revisit if support workflows demand an audited, approval-gated path | OPEN | Principal Product Architect |
+| SEC-3 | First `tenant_admin` provisioning at Tenant signup is outside this surface; operator cross-Tenant User **writes** are deliberately not enumerated — revisit if support workflows demand an audited, approval-gated path | RESOLVED (doc 15 §T1/ADR-0021: operator `POST /v1/admin/tenants` — target-Tenant-bound tx, no BYPASSRLS — + one-time invite token and public `POST /auth/accept-invite`; migration 0012 `tenant_invites`; `cmd/dashseed` demoted to dev-only) | Principal Product Architect |
 | SEC-4 | Fingerprint pepper rotation: re-fingerprinting requires plaintext, so it can only occur at rotate/import; document the limitation and procedure in ADR-0017 | RESOLVED (closeout: RefingerprintOnRotate at rotate/import) | Senior Backend Engineer |
-| SEC-5 | Per-Tenant knob requiring MFA for `tenant_user` (v1 ships optional/self-service, §5.3) | OPEN | Principal Product Architect |
+| SEC-5 | Per-Tenant knob requiring MFA for `tenant_user` (v1 ships optional/self-service, §5.3) | RESOLVED (doc 15 §T2: `tenants.require_mfa` (0012, default off) + `GET/PATCH /v1/admin/settings/mfa-policy` (tenant_admin, step-up, audited); login returns `mfa_enrollment_required` with the CSRF token and the session stays gated until enrolled+verified) | Principal Product Architect |
 | SEC-6 | **Deviation D-P0-1: `dash_session` cookie value is `<tenant_id>\|<session_id>`, not the bare session id (§4.1).** The tenant is a non-secret routing hint that lets the resolver bind `app.current_tenant` *before* RLS will disclose the `sessions` row, keeping the app role non-BYPASSRLS (G1 self-check) with no privileged session-lookup path. The 256-bit id remains the sole authenticator; tampering with the prefix fails closed (RLS returns zero rows — a mismatched tenant sees no session). Implemented in `internal/dash/security.Sessions`. | RESOLVED (P0) | Senior Backend Engineer |
-| SEC-7 | **Deviation D-P0-3: the generic `audited(action, kind, handler)` wrapper appends its audit row in a follow-up transaction, not the business write's transaction (§8.1).** Chain integrity and `verify` still hold (each `Append` is atomic and per-Tenant serialized by the chain-head lock); only the write+audit atomicity of §8.1 is deferred to the phase that threads a `*pg.Conn` into handlers. The security-critical login/MFA audit rows are written inline on their own paths. | OPEN — same-tx wrapper in a later phase | Senior Backend Engineer |
+| SEC-7 | **Deviation D-P0-3: the generic `audited(action, kind, handler)` wrapper appends its audit row in a follow-up transaction, not the business write's transaction (§8.1).** Chain integrity and `verify` still hold (each `Append` is atomic and per-Tenant serialized by the chain-head lock). | RESOLVED for the high-value writes (doc 15 §T5d): same-tx audit via `audit.AppendConn` now covers configver publish/rollback, approvals, alert episodes, provisioning, and the keys KM-3 lifecycle (enable/disable/archive via `setStatus`, rotate via `rotateKey` — audit failure aborts the write). The `httpx.WithAuditConn` seam exists for the remaining handlers; the follow-up-tx wrapper stays the documented fallback for low-risk metadata writes. | Senior Backend Engineer |
 | SEC-8 | **TOTP replay guard (`mfa_used_steps`, SEC-1) not yet wired in P0.** RFC 6238 verification with the ±1-step window ships (`internal/dash/security.VerifyTOTP`) and recovery-code single-use is transactional, but the persisted `(user_id, time_step)` single-use guard from §5.1 is deferred (its table is not among the 9 that migration 0004 created). Add with the migration that introduces `mfa_used_steps`; the verify path is structured to take the INSERT in the accepting transaction. | RESOLVED (closeout: mfa_used_steps single-use guard, migration 0011) | Senior Backend Engineer |

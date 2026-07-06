@@ -73,8 +73,14 @@ export function setUnauthorizedHandler(h: UnauthorizedHandler | null): void {
 
 // ---- Idempotency ----
 
-/** Pre-session writes exempt from Idempotency-Key (doc 04 §1.3, closed list). */
-const IDEMPOTENCY_EXEMPT = new Set(["/auth/login", "/auth/mfa/verify", "/auth/logout"]);
+/** Pre-session writes exempt from Idempotency-Key (doc 04 §1.3, closed list). accept-invite is
+ * token-authenticated and pre-session, so it joins the exemption like login/mfa-verify (ADR-0021). */
+const IDEMPOTENCY_EXEMPT = new Set([
+  "/auth/login",
+  "/auth/mfa/verify",
+  "/auth/logout",
+  "/auth/accept-invite",
+]);
 
 /** One UUID per logical mutation: create it once (e.g. in useMutation state) and pass it on
  * every retry of the same user action so the server replays instead of double-applying (G2). */

@@ -279,7 +279,12 @@ func joinComma(parts []string) string {
 
 // setStatus applies a status transition (optionally recording a disable_reason) and returns the
 // refreshed row.
-func (st *pgStore) setStatus(ctx context.Context, id, to, reason string) (Key, bool, error) {
+// setStatus flips a key's KM-3 status. When inTx is non-nil it runs INSIDE the same transaction
+// after the update, with the fresh row — the SEC-7 same-tx audit hook (T5d): the service appends
+// the audit row through it via audit.AppendConn, so the state flip and its audit row commit or
+// roll back atomically (an audit failure aborts the write, strictly stronger than the logged
+// follow-up fallback).
+func (st *pgStore) setStatus(ctx context.Context, id, to, reason string, inTx func(*pg.Conn, Key) error) (Key, bool, error) {
 	var k Key
 	found := false
 	err := st.db.PlatformTx(ctx, func(c *pg.Conn) error {
@@ -297,6 +302,9 @@ func (st *pgStore) setStatus(ctx context.Context, id, to, reason string) (Key, b
 		}
 		k = scanKey(res.Rows[0])
 		found = true
+		if inTx != nil {
+			return inTx(c, k)
+		}
 		return nil
 	})
 	return k, found, err
@@ -305,22 +313,31 @@ func (st *pgStore) setStatus(ctx context.Context, id, to, reason string) (Key, b
 // rotateKey inserts the successor Key and, in the SAME transaction, marks the predecessor
 // status='rotating' with the overlap deadline + rotation lineage (rotated_to). overlapUntil is a
 // timestamptz text value, or "" for the compromise path (immediate archive of the old key).
-func (st *pgStore) rotateKey(ctx context.Context, oldID string, successor Key, overlapUntil string) error {
+// A non-nil inTx hook runs last inside the transaction — the SEC-7 same-tx audit seam (T5d), so
+// the successor insert, predecessor flip, and audit row are one atomic unit.
+func (st *pgStore) rotateKey(ctx context.Context, oldID string, successor Key, overlapUntil string, inTx func(*pg.Conn) error) error {
 	return st.db.PlatformTx(ctx, func(c *pg.Conn) error {
 		if err := insertKeyTx(c, successor); err != nil {
 			return err
 		}
 		if overlapUntil == "" {
 			// Compromise mode: old key archived immediately, successor already active.
-			return c.ExecParams(
+			if err := c.ExecParams(
 				`update provider_keys set status = $2, rotated_to = $3::uuid, last_rotated_at = now(),
 				   updated_at = now() where id = $1`,
-				oldID, StatusArchived, successor.ID)
-		}
-		return c.ExecParams(
+				oldID, StatusArchived, successor.ID); err != nil {
+				return err
+			}
+		} else if err := c.ExecParams(
 			`update provider_keys set status = $2, rotated_to = $3::uuid, rotate_overlap_until = $4::timestamptz,
 			   last_rotated_at = now(), updated_at = now() where id = $1`,
-			oldID, StatusRotating, successor.ID, overlapUntil)
+			oldID, StatusRotating, successor.ID, overlapUntil); err != nil {
+			return err
+		}
+		if inTx != nil {
+			return inTx(c)
+		}
+		return nil
 	})
 }
 
@@ -373,6 +390,35 @@ func (st *pgStore) fingerprintDup(ctx context.Context, providerID, envelopeID st
 		return nil
 	})
 	return dup, found, err
+}
+
+// fingerprintDupDetail is fingerprintDup plus the duplicate key's imported_batch_id. A bulk-job
+// RESUME re-processes rows past the last committed cursor (OI-KEYS-1c); a row that this SAME import
+// batch already committed reappears as a fingerprint duplicate whose imported_batch_id equals the
+// running batch — sameBatch=true. The executor treats that as an idempotent skip (already imported,
+// not a conflict and not a second insert), so a re-attempt neither double-inserts nor mis-counts a
+// committed row as failed. A dup owned by a DIFFERENT batch/key is a genuine conflict.
+func (st *pgStore) fingerprintDupDetail(ctx context.Context, providerID, envelopeID, batchID string) (dupID string, sameBatch, found bool, err error) {
+	err = st.db.PlatformTx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(
+			`select pk.id, coalesce(pk.imported_batch_id::text,'') from provider_keys pk
+			   join secret_envelopes se on se.id = pk.secret_envelope_id
+			  where pk.provider_id = $1
+			    and se.aad_fingerprint is not null
+			    and se.aad_fingerprint = (select aad_fingerprint from secret_envelopes where id = $2)
+			  limit 1`,
+			providerID, envelopeID)
+		if e != nil {
+			return e
+		}
+		if len(res.Rows) > 0 {
+			dupID = s(res.Rows[0][0])
+			sameBatch = batchID != "" && s(res.Rows[0][1]) == batchID
+			found = true
+		}
+		return nil
+	})
+	return dupID, sameBatch, found, err
 }
 
 // fingerprintPrefix returns the first 8 hex chars of an envelope's keyed fingerprint (the

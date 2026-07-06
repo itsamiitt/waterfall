@@ -139,6 +139,16 @@ func (e *Engine) Run(ctx context.Context, req domain.EnrichmentRequest, plan rou
 		return Outcome{}, err
 	}
 
+	// T5c/OI-P4-1b: thread this job's workflow/country attribution onto the rotation lease
+	// context so every leased provider call in this run emits a fully-attributed usage row.
+	// Request-carried attribution (the /v1/enrichments workflow_key/country fields) takes
+	// precedence; otherwise whatever the caller tagged via WithAttribution flows through. A
+	// no-op when neither is set (dashboard-initiated / platform leases stay empty).
+	if req.WorkflowKey != "" || req.Country != "" {
+		ctx = WithAttribution(ctx, req.WorkflowKey, req.Country)
+	}
+	ctx = withLeaseAttribution(ctx)
+
 	stops := map[domain.Field]StopReason{}
 	for _, field := range plan.Order {
 		reason, err := e.fillField(ctx, tenantID, req, field, plan.ByField[field])

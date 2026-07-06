@@ -68,6 +68,41 @@ func TestLeaseRecordUsage(t *testing.T) {
 	t.Logf("PASS OI-P4-1: completed lease emitted UsageSample %+v", got[0])
 }
 
+// TestWithAttributionRecordsOnUsage is the T5c/OI-P4-1b unit acceptance: a lease drawn under the
+// single combined WithAttribution seam records BOTH workflow_key and country on the emitted
+// UsageSample, and AttributionFromContext reads the same pair back.
+func TestWithAttributionRecordsOnUsage(t *testing.T) {
+	var got UsageSample
+	e := New(Config{
+		Secrets:     fakeOpener{},
+		RecordUsage: func(ev UsageSample) { got = ev },
+	})
+	seedPool(e, "hunter:default", "key-attr", 4)
+
+	ctx := tenant.WithPrincipal(context.Background(),
+		tenant.Principal{TenantID: "tenant-acme", Scopes: []string{"role:tenant_admin"}})
+	ctx = WithAttribution(ctx, "enrich_company", "DE")
+
+	// The symmetric read side returns the same pair.
+	if wf, country := AttributionFromContext(ctx); wf != "enrich_company" || country != "DE" {
+		t.Fatalf("AttributionFromContext = (%q,%q), want (enrich_company,DE)", wf, country)
+	}
+
+	lease, err := e.Lease(ctx, "hunter:default")
+	if err != nil {
+		t.Fatalf("Lease: %v", err)
+	}
+	lease.Done(provider.Outcome{Class: domain.ClassUnknown, LatencyMs: 12, OK: true})
+
+	if got.WorkflowKey != "enrich_company" || got.Country != "DE" {
+		t.Fatalf("usage attribution = (%q,%q), want (enrich_company,DE)", got.WorkflowKey, got.Country)
+	}
+	if got.KeyID != "key-attr" || got.ProviderID != "hunter" || got.Credits != 4 || got.OutcomeClass != "ok" {
+		t.Fatalf("usage dims wrong: %+v", got)
+	}
+	t.Logf("PASS T5c: lease under WithAttribution recorded workflow/country on the usage row: %+v", got)
+}
+
 // TestLeaseRecordUsage_PlatformDefaultAndFailure pins two behaviors: a lease with NO authenticated
 // principal (a dashboard-initiated health/test/bench call) attributes to the platform Tenant, and a
 // failed Outcome maps to its taxonomy class string. ClassNotFound drives no KM-3 transition, so the

@@ -30,6 +30,42 @@ func authDescriptorFrom(ctx context.Context) (AuthDescriptor, bool) {
 	return d, ok
 }
 
+// --- usage attribution ctx (T5c / OI-P4-1b) ---
+//
+// The enrichment engine tags the outbound call context with the job's workflow_key and subject
+// country; when the egress AuthInjector draws a rotation lease for that call, the lease captures
+// these and emits them on the usage row. The ctx contract lives HERE, in internal/provider (a
+// dependency-free leaf both the engine and internal/dash/rotation already import), so neither the
+// engine nor its binaries take a compile-time dependency on the dashboard rotation stack to set
+// attribution. rotation.WithAttribution delegates to these; the engine writes them before the call.
+// Both dimensions are optional and default to "" (unattributed / platform), so this is backward
+// compatible with every existing call site.
+
+type workflowCtxKey struct{}
+type countryCtxKey struct{}
+
+// WithWorkflowKey tags ctx with the workflow_key attribution carried into a leased call.
+func WithWorkflowKey(ctx context.Context, workflowKey string) context.Context {
+	return context.WithValue(ctx, workflowCtxKey{}, workflowKey)
+}
+
+// WithCountry tags ctx with the subject country attribution carried into a leased call.
+func WithCountry(ctx context.Context, country string) context.Context {
+	return context.WithValue(ctx, countryCtxKey{}, country)
+}
+
+// WithAttribution tags ctx with BOTH the workflow_key and subject country in one call.
+func WithAttribution(ctx context.Context, workflowKey, country string) context.Context {
+	return WithCountry(WithWorkflowKey(ctx, workflowKey), country)
+}
+
+// AttributionFromContext reads back the workflow_key/country pair; both default to "" when unset.
+func AttributionFromContext(ctx context.Context) (workflowKey, country string) {
+	workflowKey, _ = ctx.Value(workflowCtxKey{}).(string)
+	country, _ = ctx.Value(countryCtxKey{}).(string)
+	return workflowKey, country
+}
+
 // KeyResolver leases the secret for a key-pool selector. In production this is backed by
 // the secrets manager / Vault at the egress-proxy; adapters never see it.
 type KeyResolver interface {

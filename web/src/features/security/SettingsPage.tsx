@@ -3,11 +3,14 @@
 // IP falls outside the new set the server returns 422 validation_failed — shown verbatim.
 import { useEffect, useState } from "react";
 import { isApiError } from "../../api/client";
+import { useAuth } from "../../app/guards";
 import { toast } from "../../app/toast";
 import { Button, EmptyState, Input } from "../../design/primitives";
+import { MfaPolicyPanel } from "./MfaPolicyPanel";
 import { useIpAllowlists, useUpdateIpAllowlists } from "./api";
 
 export default function SettingsPage() {
+  const { role } = useAuth();
   const allowlists = useIpAllowlists();
   const update = useUpdateIpAllowlists();
   const [entries, setEntries] = useState<string[]>([]);
@@ -74,6 +77,8 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {role === "tenant_admin" ? <MfaPolicyPanel /> : null}
     </>
   );
 }

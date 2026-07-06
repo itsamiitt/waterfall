@@ -360,6 +360,7 @@ type costKey struct {
 	provider string
 	workflow string
 	country  string
+	keyID    string // RF-3 (T4): key-scoped cost grain; "" for events without a leased key (unattributed)
 	day      time.Time
 }
 
@@ -388,7 +389,7 @@ func (ts *tenantState) add(e foldEvent) {
 		a.fieldsFilled += ok
 		a.credits += e.credits
 	}
-	ck := costKey{provider: e.provider, workflow: e.workflow, country: e.country, day: bucketStart(e.ts, Res1d)}
+	ck := costKey{provider: e.provider, workflow: e.workflow, country: e.country, keyID: e.keyID, day: bucketStart(e.ts, Res1d)}
 	ca := ts.cost[ck]
 	if ca == nil {
 		ca = &costAgg{}
@@ -483,10 +484,14 @@ func upsertTenantUsage(c *pg.Conn, table, tenantID string, k tuKey, a *tuAgg, mo
 var costRollupScalars = []string{"credits", "calls", "successful_results"}
 
 func upsertCostRollup(c *pg.Conn, tenantID string, k costKey, a *costAgg, mode mergeMode) error {
-	sql := `insert into cost_rollup_1d (tenant_id, provider_id, workflow_key, country, day, credits, calls, successful_results)
-		values ($1,$2,$3,$4,$5,$6,$7,$8)
-		on conflict (tenant_id, provider_id, workflow_key, country, day) do update set ` +
+	// RF-3 (T4, doc 15 §T4): key_id is part of the fold grain and the ON CONFLICT target, matching
+	// the widened cost_rollup_1d PK (tenant_id, provider_id, workflow_key, country, key_id, day) in
+	// migration 0012. It is derived deterministically from usage_events.key_id, so the refold stays
+	// byte-identical WITH the new dim (P4 acceptance #1). Days folded before T4 keep key_id=''.
+	sql := `insert into cost_rollup_1d (tenant_id, provider_id, workflow_key, country, key_id, day, credits, calls, successful_results)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		on conflict (tenant_id, provider_id, workflow_key, country, key_id, day) do update set ` +
 		setScalars("cost_rollup_1d", costRollupScalars, mode)
-	return c.ExecParams(sql, tenantID, k.provider, k.workflow, k.country, k.day.Format("2006-01-02"),
+	return c.ExecParams(sql, tenantID, k.provider, k.workflow, k.country, k.keyID, k.day.Format("2006-01-02"),
 		a.credits, a.calls, a.successful)
 }

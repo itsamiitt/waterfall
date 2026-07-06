@@ -27,6 +27,11 @@ export default function LoginPage() {
           const next = safeNext(params.get("next"));
           if (res.status === "mfa_required") {
             void navigate(`/mfa?next=${encodeURIComponent(next)}`);
+          } else if (res.status === "mfa_enrollment_required") {
+            // Tenant require_mfa policy is on and this user has no authenticator yet (doc 15 §T2):
+            // route into enrollment. The app shell stays closed until enrolled + verified — we do
+            // NOT navigate to `next` here; EnrollFlow lands there only after confirmation.
+            void navigate(`/mfa?enroll=1&next=${encodeURIComponent(next)}`);
           } else {
             void navigate(next, { replace: true });
           }

@@ -158,7 +158,11 @@ as a unit and licenses the 48h refold-recovery property).
 ## 5. E2E Playwright flows
 
 Run against a dashboardd serving `web/dist` with a seeded live PG. Each flow is a named spec in
-`web/tests/e2e/`; all must pass in CI from P11 onward.
+`web/tests/e2e/`; all must pass in CI from P11 onward. **Browser matrix (OI-TS-4, closed):**
+`playwright.config.ts` defines chromium, firefox, and webkit projects (`npm run e2e:all` runs all
+three); screenshot assertions carry a cross-engine anti-aliasing tolerance
+(`threshold: 0.2`, `maxDiffPixelRatio: 0.02`). Seeding uses the SEC-3 provisioning API (or
+`cmd/dashseed` in dev, which it supersedes — ADR-0021).
 
 | Flow | Steps asserted |
 |---|---|
@@ -277,5 +281,5 @@ These are single-instance proofs; the full multi-instance drills (leader kill mi
 | OI-TS-1 | NIST CAVP GCM vector subset selection (AES-256, 96-bit nonce; encrypt + decrypt/tag-fail files) to vendor into `internal/dash/secrets/testdata/` | RESOLVED (closeout: NIST SP800-38D AES-256-GCM KATs TC13-16) | Senior Backend Engineer |
 | OI-TS-2 | PBKDF2-HMAC-SHA256 public vector source pinned (RFC 6070 is SHA-1; use the widely mirrored SHA-256 vector set + repo golden vectors) | RESOLVED (closeout: PBKDF2-HMAC-SHA256 KATs c=1/2/4096) | Senior Backend Engineer |
 | OI-TS-3 | L3/L4/L5 absolute thresholds (RSS budget, fold duration, rps target) are set at first measurement in P12 and written back here | **PARTIAL (2026-07-06):** L3 50k-import (15m30s / ~54 rows/s) and L4 1M-fold (4.45s / ~225k ev/s) first single-instance dev measurements recorded (§6, via `TestImportLoad50k` / `TestFold1M`). Still OPEN: L5 api rps target (`api_load.go` not built), RSS budget, and all staging-scale / multi-instance thresholds (OI-P12-1). | Senior Backend Engineer |
-| OI-TS-4 | Playwright browser matrix (Chromium-only in CI vs +Firefox/WebKit) and screenshot-diff tolerance | OPEN (P8) | Enterprise UX Architect |
+| OI-TS-4 | Playwright browser matrix (Chromium-only in CI vs +Firefox/WebKit) and screenshot-diff tolerance | RESOLVED (doc 15 §T6: chromium/firefox/webkit projects in `playwright.config.ts`, `npm run e2e:all`, screenshot tolerance threshold 0.2 / maxDiffPixelRatio 0.02; §5 note) | Enterprise UX Architect |
 | OI-TS-5 | Fault-point hook mechanism for the publish-crash drill (env-gated test hook vs debug endpoint) — must not exist in production builds | **RESOLVED (P12, 2026-07-06):** env-gated test-only package var `configver.PublishFaultAfterPointer` (nil default, test-assigned only, no debug endpoint / env / route) fired after the pointer flip before commit; proven by `TestPublishCrashFaultPointInvariant` (§7.1). Inert in production builds. | Senior Backend Engineer |

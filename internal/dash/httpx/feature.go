@@ -47,6 +47,7 @@ var featureLabels = map[string]string{
 	"overview":       "overview",
 	"search":         "search",
 	"meta":           "meta",
+	"tenants":        "tenants",
 }
 
 // featureLabel derives the bounded metric label from the request path's segment after /v1/admin/.

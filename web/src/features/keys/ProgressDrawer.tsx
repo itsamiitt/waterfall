@@ -1,12 +1,16 @@
 // features/keys — the shared bulk/import progress drawer (doc 09 §3.2/§3.3). Subscribes to the
 // `import` SSE topic (import.batch.progress → invalidates the imports query root), so the bar and
 // per-row error table live-update without polling. Screen → endpoint: GET /key-imports/{job_id}
-// or GET /bulk-jobs/{id} (§4.3 progress schema; per-row errors capped at 1,000 + error_summary).
-import { Drawer, EmptyState } from "../../design/primitives";
+// or GET /bulk-jobs/{id} (§4.3 progress schema; per-row errors capped at 1,000 + error_summary);
+// POST /bulk-jobs/{id}/cancel for the Cancel action (doc 15 §T3), non-terminal jobs only.
+import { useState } from "react";
+import { Badge, Button, ConfirmDialog, Drawer, EmptyState } from "../../design/primitives";
 import { useSseTopics } from "../../api/sse";
 import { isApiError } from "../../api/client";
 import { formatCount } from "../../lib/format";
-import { useBulkProgress, useImportProgress } from "./api";
+import { JOB_TERMINAL, resolveJobStatus } from "../../lib/status";
+import { toast } from "../../app/toast";
+import { useBulkProgress, useCancelBulkJob, useImportProgress } from "./api";
 import type { JobProgress } from "./types";
 
 export interface ProgressDrawerProps {
@@ -16,12 +20,21 @@ export interface ProgressDrawerProps {
   kind: "import" | "bulk";
 }
 
+function statusBadge(status: string) {
+  const info = resolveJobStatus(status);
+  return <Badge status={info.token} label={info.label} icon={info.icon} />;
+}
+
 export function ProgressDrawer({ open, onClose, jobId, kind }: ProgressDrawerProps) {
   useSseTopics(["import"]);
   const importQ = useImportProgress(kind === "import" ? jobId : null);
   const bulkQ = useBulkProgress(kind === "bulk" ? jobId : null);
   const q = kind === "import" ? importQ : bulkQ;
   const p: JobProgress | undefined = q.data;
+  const cancel = useCancelBulkJob();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const cancellable = p !== undefined && !JOB_TERMINAL.has(p.status);
 
   return (
     <Drawer open={open} onClose={onClose} title={kind === "import" ? "Import progress" : "Bulk job progress"}>
@@ -38,7 +51,7 @@ export function ProgressDrawer({ open, onClose, jobId, kind }: ProgressDrawerPro
         <div className="section">
           <div className="detail-meta">
             <span>job <code>{p.job_id.slice(0, 12)}</code></span>
-            <span>status <strong>{p.status}</strong></span>
+            <span>status {statusBadge(p.status)}</span>
           </div>
           <ProgressBar done={p.succeeded + p.failed} total={p.total} />
           <div className="detail-meta">
@@ -47,6 +60,13 @@ export function ProgressDrawer({ open, onClose, jobId, kind }: ProgressDrawerPro
             <span>total {formatCount(p.total)}</span>
             {p.matched_at_execution != null ? <span>matched {formatCount(p.matched_at_execution)}</span> : null}
           </div>
+          {cancellable ? (
+            <div className="action-bar">
+              <Button size="sm" variant="danger" loading={cancel.isPending} onClick={() => setConfirmCancel(true)}>
+                Cancel job
+              </Button>
+            </div>
+          ) : null}
           {p.errors && p.errors.length > 0 ? (
             <div className="section">
               <div className="section-title">Per-row errors{p.errors_truncated ? " (truncated at 1,000)" : ""}</div>
@@ -68,6 +88,33 @@ export function ProgressDrawer({ open, onClose, jobId, kind }: ProgressDrawerPro
           ) : null}
         </div>
       )}
+
+      {p ? (
+        <ConfirmDialog
+          open={confirmCancel}
+          onClose={() => setConfirmCancel(false)}
+          onConfirm={() => {
+            setConfirmCancel(false);
+            cancel.mutate(p.job_id, {
+              onSuccess: () => toast.success("Cancellation requested — the job will stop at a clean terminal state"),
+              onError: (e) => {
+                // A finished job cancelled → 409/no-op; surface it as info, not a hard error.
+                if (isApiError(e) && (e.status === 409 || e.status === 404)) {
+                  toast.info("Job already finished — nothing to cancel");
+                } else {
+                  toast.error(isApiError(e) ? e.message : "cancel failed");
+                }
+              },
+            });
+          }}
+          title="Cancel this job?"
+          body="Stops claiming further work and drives the job to a terminal 'cancelled' state. Rows already committed are retained (re-running later is safe via the idempotency ledger)."
+          consequences={[`${formatCount(p.succeeded + p.failed)} of ${formatCount(p.total)} items already processed will be kept`]}
+          confirmLabel="Cancel job"
+          danger
+          busy={cancel.isPending}
+        />
+      ) : null}
     </Drawer>
   );
 }

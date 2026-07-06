@@ -9,21 +9,31 @@ import (
 	"github.com/enrichment/waterfall/internal/tenant"
 )
 
-// The bulk-jobs janitor closes OI-KEYS-1b: a dashboardd instance that dies mid-run leaves its
-// bulk_jobs row in 'running' with an expired lease. The claim query only picks up 'queued' rows, so
+// The bulk-jobs janitor closes OI-KEYS-1b/1c: a dashboardd instance that dies mid-run leaves its
+// bulk_jobs row 'running' with an expired lease. The claim query only picks up 'queued' rows, so
 // without a sweeper the row (and its one-in-flight-per-(tenant,kind,scope) index slot) would be
-// wedged forever. The janitor transitions expired-lease running rows to a terminal 'failed' with a
-// clear reason, releasing the index so the operator can resubmit — the "park for humans" doctrine
-// used across the dashboard (never silently resume a partially-applied bulk mutation). Automatic
-// re-execution/resume of a crashed bulk job is the documented residual OI-KEYS-1c.
+// wedged forever. For RESUMABLE kinds (key_import / key_bulk / replay — rows commit independently)
+// the janitor RE-QUEUES the row (status→'queued', claim/lease cleared) so a survivor's BulkJobRunner
+// re-claims and resumes from the last committed cursor (OI-KEYS-1c auto-resume). Non-resumable kinds,
+// a cancel that outraced its executor, or a resumable job whose attempts are exhausted are parked
+// terminally ('partial' when some rows committed, else 'failed'; 'cancelled' on a pending cancel) —
+// the "park for humans" doctrine. Either transition releases the one-in-flight index.
 //
 // bulk_jobs is Class T (tenant-scoped RLS), so the sweep enumerates Tenants under the platform
 // system Principal (like the session/mfa reapers) and reclaims per-Tenant under that Tenant's GUC.
 
 const janitorAdvisoryLock = int64(0x6b65796a616e) // "keyjan" — one leader sweeps across instances
 
-// ReclaimExpired fails every expired-lease running bulk_job across all Tenants and returns the count
-// reclaimed. Safe to call from any instance; the caller gates on the advisory lock for single-sweep.
+// maxBulkAttempts caps re-queue retries before a resumable job is parked terminally, so a
+// crash-looping payload cannot wedge the one-in-flight index indefinitely (doc 15 §T5b).
+const maxBulkAttempts = 5
+
+// resumableKindsSQL is the SQL list literal of kinds the janitor re-queues instead of failing.
+const resumableKindsSQL = `'key_import','key_bulk','replay'`
+
+// ReclaimExpired sweeps every expired-lease running bulk_job across all Tenants: resumable kinds go
+// back to 'queued' for a runner to resume; everything else is parked terminally. Returns the count
+// swept. Safe to call from any instance; the caller gates on the advisory lock for a single sweep.
 func (s *Service) ReclaimExpired(ctx context.Context) (int, error) {
 	sysCtx := tenant.WithPrincipal(ctx, tenant.Principal{TenantID: "platform", Scopes: []string{"role:operator"}})
 	var tenants []string
@@ -45,11 +55,27 @@ func (s *Service) ReclaimExpired(ctx context.Context) (int, error) {
 	for _, tid := range tenants {
 		tctx := tenant.WithPrincipal(ctx, tenant.Principal{TenantID: tid})
 		_ = s.store.Tx(tctx, func(c *pg.Conn) error {
-			res, err := c.QueryParams(`update bulk_jobs
-				set status='failed', finished_at=now(), lease_expires_at=null,
-				    error_summary=jsonb_build_object('reason','reclaimed: executing instance lease expired; resubmit')
+			// A single CASE'd UPDATE so the whole sweep for a Tenant is one statement. `resume` is the
+			// re-queue predicate: a resumable kind, not cancelled, with attempts left.
+			res, err := c.QueryParams(`update bulk_jobs set
+				status = case
+				  when cancel_requested then 'cancelled'
+				  when kind in (`+resumableKindsSQL+`) and attempts < $1 then 'queued'
+				  when succeeded + failed > 0 then 'partial'
+				  else 'failed' end,
+				claimed_by = case
+				  when not cancel_requested and kind in (`+resumableKindsSQL+`) and attempts < $1 then null
+				  else claimed_by end,
+				lease_expires_at = null,
+				finished_at = case
+				  when not cancel_requested and kind in (`+resumableKindsSQL+`) and attempts < $1 then finished_at
+				  else now() end,
+				error_summary = case
+				  when cancel_requested then jsonb_build_object('reason','cancelled: reclaimed after cancel request')
+				  when kind in (`+resumableKindsSQL+`) and attempts < $1 then error_summary
+				  else jsonb_build_object('reason','reclaimed: executing instance lease expired; resubmit','attempts',attempts) end
 				where status='running' and lease_expires_at is not null and lease_expires_at < now()
-				returning id`)
+				returning id`, int64(maxBulkAttempts))
 			if err != nil {
 				return err
 			}

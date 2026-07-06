@@ -71,3 +71,10 @@ export interface ChangeHistoryResponse {
 export interface IpAllowlistResponse {
   entries: string[];
 }
+
+/** GET/PATCH /settings/mfa-policy (doc 15 §T2 / SEC-5): the per-Tenant require_mfa knob. When on,
+ * every User of the Tenant must be MFA-enrolled — a not-yet-enrolled login gets
+ * `status:"mfa_enrollment_required"` and is routed into enrollment. */
+export interface MfaPolicy {
+  require_mfa: boolean;
+}

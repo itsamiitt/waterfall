@@ -1,6 +1,19 @@
 # 15 — Pending-Completion Plan
 
-> **Status:** DRAFT · **Owner:** Solutions Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED — Part 1 SHIPPED 2026-07-06 · **Owner:** Solutions Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
+
+**Part-1 completion record (2026-07-06).** All build-now tasks landed: migration 0012 +
+ADR-0021/0022; T1 provisioning (`internal/dash/provisioning`, feature + public mounts); T2
+`require_mfa` knob + the `mfa_enrollment_required` login status (returned WITH the CSRF token so
+first-login enrollment is reachable); T3 bulk-cancel (`queues.CancelRoute`); T4 cost `key_id`
+(fold + `group_by=key`); T5a drain-gating (`api.Server.ShouldClaim` ← heartbeat client); T5b
+auto-resume (janitor re-queue + `keys`/`queues` BulkJobRunners); T5c attribution
+(`workflow_key`/`country` request fields → engine → lease ctx → usage rows); T5d same-tx audit
+(keys KM-3 transitions + rotate via `AppendConn`; configver/approvals/alerts/provisioning already
+same-tx); T5e recovery-code step-up (`Users.VerifyStepUp`); T6 Playwright chromium+firefox+webkit.
+Gates: build/vet/gofmt clean · full unit suite green · `-race` green (8 packages) · live-PG
+integration 53/53 PASS · apispec parity 150==150 · web `check:ci` green (193 tests, 0 orphans).
+Parts 2–3 remain design/runbook + staging work by decision (no code until backends exist).
 
 Detailed implementation plan for every task still pending after the P0–P12 build and the post-P12
 closeout. Decisions taken (2026-07-06): deferred infra = **plan + deploy-steps only** (no backend
@@ -296,6 +309,6 @@ Each writes measured numbers back into doc 13 §6 and flips the corresponding UN
 
 | ID | Item | Status | Owner |
 |----|------|--------|-------|
-| PC-1 | ADR-0022 must decide, per backend, whether the adapter is hand-rolled stdlib (Redis, S3) or takes an ADR-0016 dependency exception (ClickHouse HTTP, Kafka, Temporal) | OPEN — decide at ADR | Solutions Architect |
-| PC-2 | T4 `cost_rollup_1d.key_id` cardinality vs retention — confirm the monthly-partition drop keeps row counts bounded at the new grain before shipping | OPEN — verify in T4 | Senior Backend Engineer |
+| PC-1 | ADR-0022 must decide, per backend, whether the adapter is hand-rolled stdlib (Redis, S3) or takes an ADR-0016 dependency exception (ClickHouse HTTP, Kafka, Temporal) | RESOLVED (ADR-0022 accepted: hand-roll Redis/S3/ClickHouse-HTTP; exception reserved for Kafka + Temporal, decided at adoption) | Solutions Architect |
+| PC-2 | T4 `cost_rollup_1d.key_id` cardinality vs retention — confirm the monthly-partition drop keeps row counts bounded at the new grain before shipping | RESOLVED (T4: grain multiplies rows by active-keys-per-(provider,workflow); bounded by the unchanged 2y retention + monthly partition drops, noted in doc 03 §2.9 and doc 01 RF-3) | Senior Backend Engineer |
 | PC-3 | T1 invite delivery: return-token-once vs SMTP email (reuse the alert-notifier SMTP path) — pick per deployment | OPEN — T1 | GTM Infrastructure Engineer |

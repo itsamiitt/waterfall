@@ -19,6 +19,10 @@ type submitRequest struct {
 	CostCeiling      int64    `json:"cost_ceiling"`
 	ConfigVersion    string   `json:"config_version"`
 	Priority         string   `json:"priority"` // "premium" | "bulk" (default bulk)
+	// Optional usage-attribution metadata (T5c/OI-P4-1b): carried onto every leased provider
+	// call's usage row. Never part of the G2 idempotency key; both default to "" (unattributed).
+	WorkflowKey string `json:"workflow_key"`
+	Country     string `json:"country"`
 }
 
 // toDomain validates the body and builds an EnrichmentRequest, returning a human-readable
@@ -62,6 +66,8 @@ func (b submitRequest) toDomain() (domain.EnrichmentRequest, string) {
 		ConfidenceTarget: domain.Confidence(b.ConfidenceTarget),
 		CostCeiling:      domain.Credits(b.CostCeiling),
 		ConfigVersion:    cfg,
+		WorkflowKey:      strings.TrimSpace(b.WorkflowKey),
+		Country:          strings.TrimSpace(b.Country),
 	}, ""
 }
 

@@ -48,15 +48,20 @@ import (
 
 const appRole = "dash_app"
 
-// tables created by migrations 0004 + 0005 that this suite rebuilds.
+// tables this suite rebuilds. The durable bulk-import lifecycle (OI-KEYS-1c) records key_import jobs
+// on bulk_jobs (0008) + its cancel_requested column (0012), so the keys suite now spans 0004, 0005,
+// 0008, 0009 (cost_rollup_1d, which 0012 alters), and 0012.
 var (
 	tables0004 = []string{"tenants", "users", "mfa_recovery_codes", "sessions", "ip_allowlists",
 		"audit_log", "audit_chain_heads", "api_access_log", "secret_envelopes"}
 	tables0005 = []string{"providers", "key_import_batches", "key_pools", "provider_keys",
 		"key_pool_members", "key_budgets", "health_schedules", "rotation_triggers"}
-	grantTables = []string{"tenants", "users", "audit_log", "audit_chain_heads", "api_access_log",
-		"secret_envelopes", "providers", "key_import_batches", "key_pools", "provider_keys",
-		"key_pool_members", "key_budgets"}
+	tables0008 = []string{"bulk_jobs", "workers", "queue_defs"}
+	tables0009 = []string{"usage_events", "provider_stats_1m", "provider_stats_1h", "provider_stats_1d",
+		"key_usage_1m", "key_usage_1h", "key_usage_1d", "tenant_usage_1h", "tenant_usage_1d",
+		"cost_rollup_1d", "queue_stats_1m", "queue_stats_1h", "worker_heartbeats", "worker_stats_5m",
+		"provider_health_checks", "provider_health_1d"}
+	tables0012 = []string{"tenant_invites"}
 )
 
 func adminCfg(t *testing.T) pg.Config {
@@ -95,14 +100,22 @@ func setupSchema(t *testing.T, admin *pg.Conn) {
 	tryExec(admin, "drop owned by "+appRole+" cascade")
 	tryExec(admin, "drop role if exists "+appRole)
 	tryExec(admin, "drop view if exists providers_catalog cascade")
-	tryExec(admin, "drop table if exists "+strings.Join(append(append([]string{}, tables0005...), tables0004...), ", ")+" cascade")
+	allTables := append([]string{}, tables0005...)
+	allTables = append(allTables, tables0004...)
+	allTables = append(allTables, tables0008...)
+	allTables = append(allTables, tables0009...)
+	allTables = append(allTables, tables0012...)
+	tryExec(admin, "drop table if exists "+strings.Join(allTables, ", ")+" cascade")
 	tryExec(admin, "drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade")
 	tryExec(admin, "drop function if exists app_current_role() cascade")
 
 	mustExec(t, admin, `create or replace function app_current_tenant() returns text
 		language sql stable as $$ select current_setting('app.current_tenant', true) $$`)
 
-	for _, mig := range []string{"0004_dash_identity_rbac.sql", "0005_dash_providers_keys.sql"} {
+	for _, mig := range []string{
+		"0004_dash_identity_rbac.sql", "0005_dash_providers_keys.sql",
+		"0008_dash_workers_queues.sql", "0009_dash_telemetry.sql", "0012_dash_provisioning_mfa.sql",
+	} {
 		ddl, err := os.ReadFile("../../../migrations/" + mig)
 		if err != nil {
 			t.Fatalf("read migration %s: %v", mig, err)
@@ -113,8 +126,8 @@ func setupSchema(t *testing.T, admin *pg.Conn) {
 	}
 
 	mustExec(t, admin, "create role "+appRole+" login nosuperuser")
-	mustExec(t, admin, "grant select, insert, update, delete on "+strings.Join(grantTables, ", ")+" to "+appRole)
-	mustExec(t, admin, "grant usage on sequence audit_log_id_seq, api_access_log_id_seq to "+appRole)
+	mustExec(t, admin, "grant select, insert, update, delete on all tables in schema public to "+appRole)
+	mustExec(t, admin, "grant usage, select on all sequences in schema public to "+appRole)
 
 	// Fixtures: platform tenant is seeded by 0004; add a customer tenant + a provider.
 	mustExec(t, admin, `insert into tenants (id, name, kind, status) values ('tenant-a','A','customer','active')`)

@@ -145,6 +145,15 @@ func (s *Server) Handler() http.Handler {
 	s.mount(mux, "GET", "/audit-log/verify", s.authedRead(rbac.AuditVerify, s.handleAuditVerify))
 	s.mount(mux, "GET", "/access-log", s.authedRead(rbac.AuditRead, s.handleAccessList))
 
+	// --- Settings: per-Tenant MFA-requirement knob (SEC-5/T2, doc 04 §2.2) ---
+	// The handlers are self-contained (own RBAC via rbac.MFAPolicyWrite, PATCH step-up via
+	// Users.VerifyStepUp, and single-row audit with MarkAuditDone), so they mount under just the
+	// cross-cutting chain — authenticate -> ip-allowlist -> [csrf on PATCH] -> require-MFA — and NOT
+	// authedWrite (which would double the RBAC/audit). "settings" stays off the feature-subtree list,
+	// so these fall through the admin "/" catch-all to this P0 handler.
+	s.mount(mux, "GET", "/settings/mfa-policy", s.authenticate(s.ipAllow(s.requireMFA(s.HandleMFAPolicyGet))))
+	s.mount(mux, "PATCH", "/settings/mfa-policy", s.authenticate(s.ipAllow(s.csrf(s.requireMFA(s.HandleMFAPolicy)))))
+
 	return s.recoverer(mux)
 }
 

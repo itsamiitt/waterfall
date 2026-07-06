@@ -88,7 +88,7 @@ func setupSchema(t *testing.T, admin *pg.Conn) {
 		"drop table if exists key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d cascade",
 		"drop table if exists cost_rollup_1d, provider_health_checks, provider_health_1d cascade",
 		"drop table if exists field_versions, idempotency_ledger, cost_ledger cascade",
-		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists cascade",
+		"drop table if exists tenants, users, mfa_recovery_codes, sessions, ip_allowlists, tenant_invites cascade",
 		"drop table if exists audit_log, audit_chain_heads, api_access_log, secret_envelopes cascade",
 		"drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade",
 		"drop function if exists app_current_role() cascade",
@@ -103,6 +103,7 @@ func setupSchema(t *testing.T, admin *pg.Conn) {
 		"../../../migrations/0004_dash_identity_rbac.sql",
 		"../../../migrations/0008_dash_workers_queues.sql",
 		"../../../migrations/0009_dash_telemetry.sql",
+		"../../../migrations/0012_dash_provisioning_mfa.sql",
 	} {
 		ddl, err := os.ReadFile(f)
 		if err != nil {

@@ -12,6 +12,7 @@ import type {
   AuditResponse,
   ChangeHistoryResponse,
   IpAllowlistResponse,
+  MfaPolicy,
   SessionsResponse,
   UserInput,
   UsersResponse,
@@ -26,6 +27,7 @@ export const sk = {
   verify: ["audit-log", "verify"] as const,
   changeHistory: (kind: string, id: string) => ["change-history", kind, id] as const,
   ipAllowlists: ["ip-allowlists"] as const,
+  mfaPolicy: ["settings", "mfa-policy"] as const,
 };
 
 // ---- users ----
@@ -146,5 +148,31 @@ export function useUpdateIpAllowlists() {
   return useMutation({
     mutationFn: (entries: string[]) => put<IpAllowlistResponse>("/ip-allowlists", { entries }),
     onSuccess: (data) => qc.setQueryData(sk.ipAllowlists, data),
+  });
+}
+
+// ---- MFA policy (doc 15 §T2 / SEC-5) ----
+
+/** GET /settings/mfa-policy — the current per-Tenant require_mfa knob. */
+export function useMfaPolicy() {
+  return useQuery({
+    queryKey: sk.mfaPolicy,
+    queryFn: () => get<MfaPolicy>("/settings/mfa-policy"),
+    staleTime: staleTimes.config,
+  });
+}
+
+/** PATCH /settings/mfa-policy — tenant_admin only, audited, MFA step-up (X-MFA-Code, §5.4, mirrors
+ * keys rotate/create). The response is the authoritative new policy. */
+export function useSetMfaPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { require_mfa: boolean; mfaCode?: string }) =>
+      patch<MfaPolicy>(
+        "/settings/mfa-policy",
+        { require_mfa: vars.require_mfa },
+        vars.mfaCode ? { headers: { "X-MFA-Code": vars.mfaCode } } : undefined,
+      ),
+    onSuccess: (data) => qc.setQueryData(sk.mfaPolicy, data),
   });
 }

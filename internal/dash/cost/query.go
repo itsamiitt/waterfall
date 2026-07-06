@@ -11,8 +11,10 @@
 //     operator SELECT policies (cost_rollup_1d / tenant_usage_1d). Reads NEVER scan raw
 //     usage_events (doc 04 §2.10) — the API serves exclusively from rollups.
 //   - Closed dimension set. group_by is validated against a fixed whitelist; anything else is a
-//     400. group_by=key serves the Class-P key_usage_1d rollup and is operator-only (doc 03 §2.6
-//     RF-3 boundary).
+//     400. As of T4 (doc 15 §T4) group_by=key serves cost_rollup_1d.key_id (Class T, tenant-scoped
+//     by RLS) — revising the original doc 03 §2.6 RF-3 boundary, which routed it to the operator-only
+//     key_usage_1d rollup. The `operator` spec flag + ErrKeyGroupByForbidden remain the general seam
+//     for any future operator-only group_by, but no dimension is operator-only today.
 //   - Bounded windows. Windows beyond a source's retention horizon are rejected
 //     (ErrWindowOutOfRange -> 400 window_out_of_range).
 package cost
@@ -60,8 +62,9 @@ type groupSpec struct {
 	retention time.Duration // window horizon (doc 03 §4)
 }
 
-// groupSpecs is the CLOSED group_by whitelist (doc 04 §2.10). provider/tenant/workflow/country
-// serve cost_rollup_1d; key serves the Class-P key_usage_1d rollup (operator-only, RF-3).
+// groupSpecs is the CLOSED group_by whitelist (doc 04 §2.10). All five dimensions
+// (provider/tenant/workflow/country/key) serve cost_rollup_1d; key uses the key_id column added in
+// migration 0012 (T4 / RF-3). Tenant/workflow/country/key are tenant-scoped by RLS.
 var groupSpecs = map[string]groupSpec{
 	"provider": {
 		source: "cost_rollup_1d", keyCol: "provider_id", timeCol: "day", timeIsDay: true,
@@ -92,12 +95,17 @@ var groupSpecs = map[string]groupSpec{
 		retention: 730 * day,
 	},
 	"key": {
-		source: "key_usage_1d", keyCol: "key_id", timeCol: "bucket_start", timeIsDay: false,
-		credits: "coalesce(sum(credits_spent),0)", calls: "coalesce(sum(req),0)",
-		success:   "coalesce(sum(ok),0)",
-		filters:   nil, // key_usage_1d carries only key_id (RF-3): no cross-dimension filters
-		operator:  true,
-		retention: 365 * day,
+		// RF-3 (T4, doc 15 §T4): key-scoped cost now serves cost_rollup_1d, which carries key_id as
+		// of migration 0012. Because cost_rollup_1d is Class T (tenant-isolated by RLS, with the
+		// enumerated operator cross-Tenant read policy), key drill-down is available to a Tenant for
+		// its OWN keys — no longer operator-only — and gains the cross-dimension filters the
+		// key_usage_1d source could not offer. Days folded before T4 land under key_id='' (rendered
+		// as the empty/"unattributed" bucket). 2y retention matches the other cost_rollup_1d grains.
+		source: "cost_rollup_1d", keyCol: "key_id", timeCol: "day", timeIsDay: true,
+		credits: "coalesce(sum(credits),0)", calls: "coalesce(sum(calls),0)",
+		success:   "coalesce(sum(successful_results),0)",
+		filters:   []string{"provider_id", "workflow_key", "country"},
+		retention: 730 * day,
 	},
 }
 

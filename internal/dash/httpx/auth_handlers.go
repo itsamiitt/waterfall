@@ -73,7 +73,34 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, cookie)
 
-	mfaRequired := security.RequiresMFA(usr.Role) || usr.MFAEnrolled
+	// SEC-5 (T2): a tenant_admin may require MFA for every User of the Tenant (tenants.require_mfa).
+	// Read it under the user's own Tenant binding. An unenrolled User in a require-MFA Tenant gets the
+	// documented mfa_enrollment_required status: the session is started (cookie set) but the Resolve
+	// MFA gate keeps it unusable for everything but the MFA-exempt enrollment endpoints until the User
+	// enrolls + verifies, so the SPA routes straight to enrollment.
+	tenantRequiresMFA, err := s.tenantPolicy().RequireMFA(uctx, usr.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, codeInternal, "login failed")
+		return
+	}
+
+	mfaRequired := security.RequiresMFA(usr.Role) || usr.MFAEnrolled || tenantRequiresMFA
+	// Enrollment gate: whenever MFA is needed (role-mandated, tenant-mandated via require_mfa, or the
+	// User already carries a seed) but the User has NOT yet enrolled a TOTP secret, return the
+	// documented mfa_enrollment_required status. The session is started but the Resolve MFA gate keeps
+	// it usable only for the MFA-exempt enrollment endpoints. The CSRF token is returned so the SPA can
+	// POST the (CSRF-protected, MFA-exempt) /auth/mfa/enroll — the first tenant_admin created by
+	// provisioning (T1) and every unenrolled User of a require_mfa Tenant (T2) onboard through exactly
+	// this path; without the token the enroll write would 403 csrf_required and onboarding would wedge.
+	if mfaRequired && usr.MFAEnvelopeID == "" {
+		s.appendAudit(uctx, audit.Entry{
+			Action: "login", ObjectKind: "session", ActorUserID: usr.ID, ActorRole: usr.Role,
+			IP: s.clientIP(r), After: jsonStr(map[string]string{"status": statusMFAEnrollmentRequired}),
+		})
+		writeJSON(w, http.StatusOK, sessionOK{Status: statusMFAEnrollmentRequired, CSRFToken: csrf, User: toUserSummary(usr)})
+		return
+	}
+
 	statusStr := "ok"
 	if mfaRequired {
 		statusStr = "mfa_required"
@@ -89,6 +116,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, sessionOK{Status: "ok", CSRFToken: csrf, User: toUserSummary(usr)})
 }
+
+// statusMFAEnrollmentRequired is the documented login status (T2/SEC-5) returned when the User's
+// Tenant requires MFA but the User has not yet enrolled a TOTP seed. The session is established but
+// gated; the SPA routes the User to POST /auth/mfa/enroll (which is MFA-exempt).
+const statusMFAEnrollmentRequired = "mfa_enrollment_required"
 
 // handleMFAVerify completes login with a TOTP or recovery code, rotates the session id (fixation
 // defense), stamps mfa_verified_at, and (re)issues the CSRF token (doc 05 §4.3/§5).

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/enrichment/waterfall/internal/pg"
@@ -33,6 +34,7 @@ type replayer struct {
 	svc        *Service
 	instanceID string
 	ratePerMin int
+	filters    *replayFilters // staged (queue, filter) by job id, for cooperative resume
 }
 
 func newReplayer(svc *Service, instanceID string, ratePerMin int) *replayer {
@@ -42,7 +44,42 @@ func newReplayer(svc *Service, instanceID string, ratePerMin int) *replayer {
 	if ratePerMin <= 0 {
 		ratePerMin = 600 // doc 06 §3.4 default
 	}
-	return &replayer{svc: svc, instanceID: instanceID, ratePerMin: ratePerMin}
+	return &replayer{svc: svc, instanceID: instanceID, ratePerMin: ratePerMin, filters: newReplayFilters()}
+}
+
+// stagedReplay is a replay's in-memory scope: the queue and the dead-letter filter. The filter is
+// not persisted on bulk_jobs (only the queue, as scope_fingerprint), so a resume that still holds
+// the staged filter re-applies it exactly; a survivor that lost it falls back to the queue's whole
+// remaining dead set (redrive is idempotent, so the broader scope over-redrives nothing live).
+type stagedReplay struct {
+	queue  string
+	filter DeadFilter
+}
+
+type replayFilters struct {
+	mu sync.Mutex
+	m  map[string]stagedReplay
+}
+
+func newReplayFilters() *replayFilters { return &replayFilters{m: map[string]stagedReplay{}} }
+
+func (f *replayFilters) stage(id string, v stagedReplay) {
+	f.mu.Lock()
+	f.m[id] = v
+	f.mu.Unlock()
+}
+
+func (f *replayFilters) get(id string) (stagedReplay, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v, ok := f.m[id]
+	return v, ok
+}
+
+func (f *replayFilters) evict(id string) {
+	f.mu.Lock()
+	delete(f.m, id)
+	f.mu.Unlock()
 }
 
 // submit inserts the queued bulk_jobs row (the one-in-flight unique index enforces the storm
@@ -68,22 +105,56 @@ func (r *replayer) submit(ctx context.Context, queue string, f DeadFilter) (stri
 	r.svc.appendAudit(ctx, "queue_replay", "bulk_jobs", id, map[string]any{
 		"queue": queue, "error_class": f.ErrorClass,
 	})
+	r.filters.stage(id, stagedReplay{queue: queue, filter: f})
 	bg := detach(ctx)
 	go r.execute(bg, id, queue, f)
 	return id, nil
 }
 
-// execute claims the row and drives the replay to a terminal state. It is crash-tolerant by the
-// bulk_jobs lease/janitor model (doc 04 §4.1): a dead instance's lease expires and a successor
-// re-claims and resumes (redrive is an idempotent per-row transition).
+// replayClaim is the durable state a runner needs to resume a claimed replay row.
+type replayClaim struct {
+	ID        string
+	Queue     string // scope_fingerprint
+	Matched   int
+	Succeeded int
+	Failed    int
+	Attempts  int
+}
+
+// execute is the submit-path executor: claim the freshly-queued row under this replayer's instance
+// id, then drive it to terminal from zero counters.
 func (r *replayer) execute(ctx context.Context, id, queue string, f DeadFilter) {
 	claimed, err := r.claim(ctx, id)
 	if err != nil || !claimed {
 		return
 	}
+	r.drive(ctx, id, r.instanceID, queue, f, 0, 0, 0)
+}
+
+// resumeClaimed drives an ALREADY-CLAIMED replay row (the BulkJobRunner path, OI-KEYS-1c). Counters
+// continue from the persisted cursor; redriven rows have already left the dead set, so re-scanning
+// from the start finds only the remainder — each dead row is thus redriven exactly once across the
+// original attempt and the resume (no double redrive, no double charge; G2).
+func (r *replayer) resumeClaimed(ctx context.Context, instanceID string, cl replayClaim) {
+	queue := cl.Queue
+	var f DeadFilter
+	if st, ok := r.filters.get(cl.ID); ok {
+		queue = st.queue
+		f = st.filter
+	}
+	r.drive(ctx, cl.ID, instanceID, queue, f, cl.Matched, cl.Succeeded, cl.Failed)
+}
+
+// drive is the shared page loop: it redrives the matching dead set under the rate cap, renewing the
+// lease and polling cancel_requested on each page (cooperative cancel, OI-API-4), and commits a
+// terminal status. All progress/finish writes are ownership-guarded (claimed_by=instanceID AND
+// status='running'): a superseded executor (its lease reclaimed and re-driven by a successor) stops
+// without clobbering the successor's row. `queue` is accepted for symmetry with keyset resume; the
+// pgoutbox dead set is a single outbox so the filter (not the queue) selects rows.
+func (r *replayer) drive(ctx context.Context, id, instanceID, queue string, f DeadFilter, matched, succeeded, failed int) {
+	_ = queue
 	bucket := newTokenBucket(r.ratePerMin, r.svc.now)
 	var results []ReplayItem
-	matched, succeeded, failed := 0, 0, 0
 	afterID := ""
 	for {
 		ids, err := r.deadPage(ctx, f, afterID)
@@ -113,21 +184,33 @@ func (r *replayer) execute(ctx context.Context, id, queue string, f DeadFilter) 
 				results = append(results, ReplayItem{JobID: jobID, Outcome: outcome})
 			}
 		}
-		if err := r.progress(ctx, id, matched, succeeded, failed, results); err != nil {
-			r.svc.log.Error("replay progress failed", "job_id", id, "err", err)
+		owned, cancel, perr := r.progress(ctx, id, instanceID, matched, succeeded, failed, results)
+		if perr != nil {
+			r.svc.log.Error("replay progress failed", "job_id", id, "err", perr)
+		}
+		if !owned {
+			return // superseded by a successor executor
+		}
+		if cancel {
+			if done, _ := r.finish(ctx, id, instanceID, "cancelled", matched, succeeded, failed, results); done {
+				r.filters.evict(id)
+			}
+			return
 		}
 	}
 	status := "succeeded"
 	if failed > 0 {
 		status = "partial"
 	}
-	if err := r.finish(ctx, id, status, matched, succeeded, failed, results); err != nil {
+	if done, err := r.finish(ctx, id, instanceID, status, matched, succeeded, failed, results); err != nil {
 		r.svc.log.Error("replay finish failed", "job_id", id, "err", err)
+	} else if done {
+		r.filters.evict(id)
 	}
 }
 
-// claim transitions the queued row to running under this instance's lease. ok=false when another
-// instance already claimed it.
+// claim transitions the freshly-queued row to running under this instance's lease (submit path).
+// ok=false when a runner already claimed it.
 func (r *replayer) claim(ctx context.Context, id string) (bool, error) {
 	ok := false
 	err := r.svc.store.Tx(ctx, func(c *pg.Conn) error {
@@ -141,6 +224,37 @@ func (r *replayer) claim(ctx context.Context, id string) (bool, error) {
 		return nil
 	})
 	return ok, err
+}
+
+// claimNext claims ONE queued replay row for instanceID under a fresh lease via FOR UPDATE SKIP
+// LOCKED (concurrent runners never double-claim). ok=false when none is visible for this Tenant.
+func (r *replayer) claimNext(ctx context.Context, instanceID string) (replayClaim, bool, error) {
+	var cl replayClaim
+	ok := false
+	err := r.svc.store.Tx(ctx, func(c *pg.Conn) error {
+		res, qerr := c.QueryParams(`with next as (
+			select id from bulk_jobs
+			  where status='queued' and kind='`+bulkKindReplay+`'
+			  order by created_at asc for update skip locked limit 1)
+			update bulk_jobs b set status='running', claimed_by=$1,
+			  lease_expires_at=now() + interval '`+leaseInterval()+`',
+			  started_at=coalesce(b.started_at, now()), attempts=b.attempts+1
+			from next where b.id=next.id
+			returning b.id, coalesce(b.scope_fingerprint,''), coalesce(b.matched_at_execution,0),
+			          b.succeeded, b.failed, b.attempts`, instanceID)
+		if qerr != nil {
+			return qerr
+		}
+		if len(res.Rows) == 0 || res.Rows[0][0] == nil {
+			return nil
+		}
+		row := res.Rows[0]
+		cl = replayClaim{ID: s0(row[0]), Queue: s0(row[1]), Matched: int(i64(row[2])),
+			Succeeded: int(i64(row[3])), Failed: int(i64(row[4])), Attempts: int(i64(row[5]))}
+		ok = true
+		return nil
+	})
+	return cl, ok, err
 }
 
 // deadPage returns the next keyset batch of matching dead job ids (job_id ascending). Redriven
@@ -168,22 +282,44 @@ func (r *replayer) deadPage(ctx context.Context, f DeadFilter, afterID string) (
 	return ids, err
 }
 
-func (r *replayer) progress(ctx context.Context, id string, matched, succeeded, failed int, results []ReplayItem) error {
+// progress flushes counters + renews the lease while this instance still owns the running row, and
+// reports whether a cancel was requested (polled in the same guarded write). owned=false => the
+// lease was reclaimed and a successor owns the row; the caller must stop.
+func (r *replayer) progress(ctx context.Context, id, instanceID string, matched, succeeded, failed int, results []ReplayItem) (owned, cancel bool, err error) {
 	payload, _ := json.Marshal(results)
-	return r.svc.store.Tx(ctx, func(c *pg.Conn) error {
-		return c.ExecParams(`update bulk_jobs set total=$2, succeeded=$3, failed=$4,
+	err = r.svc.store.Tx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(`update bulk_jobs set total=$2, succeeded=$3, failed=$4,
 			matched_at_execution=$2, results=$5::jsonb, lease_expires_at=now() + interval '`+leaseInterval()+`'
-		  where id=$1::uuid`, id, int64(matched), int64(succeeded), int64(failed), string(payload))
+		  where id=$1::uuid and claimed_by=$6 and status='running' returning cancel_requested`,
+			id, int64(matched), int64(succeeded), int64(failed), string(payload), instanceID)
+		if e != nil {
+			return e
+		}
+		if len(res.Rows) > 0 && res.Rows[0][0] != nil {
+			owned = true
+			cancel = *res.Rows[0][0] == "t"
+		}
+		return nil
 	})
+	return owned, cancel, err
 }
 
-func (r *replayer) finish(ctx context.Context, id, status string, matched, succeeded, failed int, results []ReplayItem) error {
+// finish commits the terminal status while this instance still owns the running row. done=false (a
+// superseded executor, or a row a successor already finished) leaves the row untouched.
+func (r *replayer) finish(ctx context.Context, id, instanceID, status string, matched, succeeded, failed int, results []ReplayItem) (done bool, err error) {
 	payload, _ := json.Marshal(results)
-	return r.svc.store.Tx(ctx, func(c *pg.Conn) error {
-		return c.ExecParams(`update bulk_jobs set status=$2, total=$3, succeeded=$4, failed=$5,
+	err = r.svc.store.Tx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(`update bulk_jobs set status=$2, total=$3, succeeded=$4, failed=$5,
 			matched_at_execution=$3, results=$6::jsonb, finished_at=now(), lease_expires_at=null
-		  where id=$1::uuid`, id, status, int64(matched), int64(succeeded), int64(failed), string(payload))
+		  where id=$1::uuid and claimed_by=$7 and status='running' returning id`,
+			id, status, int64(matched), int64(succeeded), int64(failed), string(payload), instanceID)
+		if e != nil {
+			return e
+		}
+		done = len(res.Rows) > 0 && res.Rows[0][0] != nil
+		return nil
 	})
+	return done, err
 }
 
 // status reads a replay bulk_jobs row (RLS-scoped: 404 across Tenants).

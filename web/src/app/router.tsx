@@ -60,6 +60,13 @@ export const router = createBrowserRouter([
     lazy: async () => ({ Component: (await import("../features/auth/MfaPage")).default }),
   },
   {
+    // Public / pre-session: the invite token is the credential (doc 15 §T1, ADR-0021).
+    path: "/accept-invite",
+    lazy: async () => ({
+      Component: (await import("../features/security/provisioning/AcceptInvitePage")).default,
+    }),
+  },
+  {
     Component: RequireAuth,
     children: [
       {
@@ -100,6 +107,7 @@ export const router = createBrowserRouter([
           { path: "security/users", lazy: feature("security") },
           { path: "security/sessions", lazy: feature("security") },
           { path: "security/audit", lazy: feature("security") },
+          { path: "security/provisioning", lazy: feature("security") },
           { path: "settings", lazy: feature("security") },
           { path: "approvals", lazy: feature("approvals") },
           { path: "*", Component: NotFound },

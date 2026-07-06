@@ -12,6 +12,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
+	"github.com/enrichment/waterfall/internal/pg"
 	"github.com/enrichment/waterfall/internal/tenant"
 )
 
@@ -43,12 +44,14 @@ func (e *DuplicateError) Error() string { return "keys: duplicate of key " + e.E
 // import pipeline. It seals every secret through secrets.Backend and audits every mutation with
 // redacted (string/enum only) snapshots.
 type Service struct {
-	store   *pgStore
-	secrets secrets.Backend
-	audit   *audit.Log
-	log     *slog.Logger
-	now     func() time.Time
-	bulk    *bulkRegistry
+	store      *pgStore
+	secrets    secrets.Backend
+	audit      *audit.Log
+	log        *slog.Logger
+	now        func() time.Time
+	bulk       *bulkRegistry
+	stage      *importStaging
+	instanceID string
 }
 
 // NewService wires the service over the shared db.Store, envelope backend, and audit chain.
@@ -57,12 +60,14 @@ func NewService(store *db.Store, backend secrets.Backend, auditLog *audit.Log, l
 		logger = slog.Default()
 	}
 	return &Service{
-		store:   newPGStore(store),
-		secrets: backend,
-		audit:   auditLog,
-		log:     logger,
-		now:     time.Now,
-		bulk:    newBulkRegistry(),
+		store:      newPGStore(store),
+		secrets:    backend,
+		audit:      auditLog,
+		log:        logger,
+		now:        time.Now,
+		bulk:       newBulkRegistry(),
+		stage:      newImportStaging(),
+		instanceID: "keys-" + newID(),
 	}
 }
 
@@ -195,14 +200,17 @@ func (svc *Service) transition(ctx context.Context, action, id, reason, auditAct
 	if !ok {
 		return Key{}, ErrInvalidTransition
 	}
-	k, ok, err := svc.store.setStatus(ctx, id, to, reason)
+	// SEC-7 same-tx audit (T5d): the status flip and its audit row commit atomically — the hook
+	// runs inside setStatus's transaction with the fresh row, so a failed append aborts the flip.
+	k, ok, err := svc.store.setStatus(ctx, id, to, reason, func(c *pg.Conn, after Key) error {
+		return svc.appendAuditConn(ctx, c, auditAction, "provider_keys", id, keySnapshot(before), keySnapshot(after))
+	})
 	if err != nil {
 		return Key{}, err
 	}
 	if !ok {
 		return Key{}, ErrKeyNotFound
 	}
-	svc.appendAudit(ctx, auditAction, "provider_keys", id, keySnapshot(before), keySnapshot(k))
 	return k, nil
 }
 
@@ -274,15 +282,16 @@ func (svc *Service) RotateKey(ctx context.Context, id, newSecret string, overlap
 		overlapUntil = svc.now().UTC().Add(time.Duration(overlapS) * time.Second).Format(time.RFC3339)
 		oldStatus = StatusRotating
 	}
-	if err := svc.store.rotateKey(ctx, id, successor, overlapUntil); err != nil {
+	// SEC-7 same-tx audit (T5d): successor insert + predecessor flip + audit row, one atomic unit.
+	if err := svc.store.rotateKey(ctx, id, successor, overlapUntil, func(c *pg.Conn) error {
+		return svc.appendAuditConn(ctx, c, "key_rotate", "provider_keys", id, keySnapshot(old), map[string]string{
+			"successor_key_id": successor.ID, "old_key_status": oldStatus, "overlap_until": overlapUntil,
+		})
+	}); err != nil {
 		_ = svc.store.deleteEnvelope(ctx, string(envID))
 		return RotateResult{}, err
 	}
-	res := RotateResult{SuccessorKeyID: successor.ID, OldKeyID: id, OldKeyStatus: oldStatus, OverlapUntil: overlapUntil}
-	svc.appendAudit(ctx, "key_rotate", "provider_keys", id, keySnapshot(old), map[string]string{
-		"successor_key_id": successor.ID, "old_key_status": oldStatus, "overlap_until": overlapUntil,
-	})
-	return res, nil
+	return RotateResult{SuccessorKeyID: successor.ID, OldKeyID: id, OldKeyStatus: oldStatus, OverlapUntil: overlapUntil}, nil
 }
 
 // TestKey / HealthCheckKey / RefreshCredits are metadata-touch actions for P1. Live provider
@@ -362,12 +371,32 @@ func (svc *Service) StartImport(ctx context.Context, providerID, source string, 
 	if err := svc.store.insertBatch(ctx, batch); err != nil {
 		return "", err
 	}
+	// Durable bulk_jobs record (kind=key_import): the lease/cancel/janitor-resume seam (OI-KEYS-1c /
+	// OI-API-4). scope_fingerprint is the batch id so imports never collide on the one-in-flight
+	// index (concurrent imports are independent). Parsed rows stage in-memory only (never persisted).
+	if err := svc.store.insertBulkJob(ctx, batchID, bulkKindKeyImport, batchID, len(rows), len(rows), actorFrom(ctx)); err != nil {
+		return "", err
+	}
 	svc.appendAudit(ctx, "key_import", "key_import_batches", batchID, nil, map[string]string{
 		"provider_id": providerID, "source": source, "total": fmt.Sprint(len(rows)),
 	})
 
 	bgCtx := detach(ctx)
-	go svc.runImport(bgCtx, batchID, providerID, ownerTenant, rows)
+	svc.stage.put(batchID, stagedImport{providerID: providerID, ownerTenant: ownerTenant, rows: rows})
+	inst := svc.instanceID
+	go func() {
+		// Claim our own queued row and drive it. If a concurrent BulkJobRunner claimed it first
+		// (ok=false), it drives — we exit; exactly one owner (atomic status='queued' → 'running').
+		ok, err := svc.store.claimBulkJob(bgCtx, batchID, inst)
+		if err != nil {
+			svc.log.Error("import: claim failed", "job", batchID, "err", err)
+			return
+		}
+		if !ok {
+			return
+		}
+		svc.driveClaimedImport(bgCtx, batchID, inst, 0, 0)
+	}()
 	return batchID, nil
 }
 
@@ -403,6 +432,25 @@ func (svc *Service) appendAudit(ctx context.Context, action, kind, objectID stri
 	if err := svc.audit.Append(ctx, e); err != nil {
 		svc.log.Error("audit append failed", "action", action, "kind", kind, "err", err)
 	}
+}
+
+// appendAuditConn is appendAudit's SEC-7 same-tx variant (T5d): it appends through the caller's
+// open, tenant-bound conn so the audit row commits (or rolls back) atomically with the business
+// write it describes. Unlike appendAudit, failure is returned — aborting the enclosing tx — since
+// atomicity is the point.
+func (svc *Service) appendAuditConn(ctx context.Context, c *pg.Conn, action, kind, objectID string, before, after any) error {
+	if svc.audit == nil {
+		return nil
+	}
+	e := audit.Entry{
+		Action: action, ObjectKind: kind, ObjectID: objectID,
+		Before: rawJSON(before), After: rawJSON(after),
+	}
+	if p, err := tenant.FromContext(ctx); err == nil {
+		e.ActorUserID = p.UserID
+		e.ActorRole = db.RoleFromPrincipal(p)
+	}
+	return svc.audit.AppendConn(ctx, c, e)
 }
 
 func rawJSON(v any) json.RawMessage {
@@ -493,6 +541,46 @@ type bulkRegistry struct {
 }
 
 func newBulkRegistry() *bulkRegistry { return &bulkRegistry{jobs: map[string]*BulkJob{}} }
+
+// stagedImport is one import's in-memory execution payload: the parsed rows (Secret held in memory
+// only, never persisted or logged) plus the provider/owner context needed to (re-)drive it. The
+// staging registry is the resume seam (OI-KEYS-1c): a re-queued key_import can only be resumed by an
+// instance that still holds its staged rows — plaintext key material is deliberately never written
+// to bulk_jobs (doc 05 §7.3), so cross-instance resume of a lost payload parks the job for resubmit.
+type stagedImport struct {
+	providerID  string
+	ownerTenant string
+	rows        []importRow
+}
+
+// importStaging holds staged import payloads keyed by job id until the job reaches a terminal state
+// (then evicted). Entries survive a lost-lease abort so a successor executor on THIS instance can
+// resume from the committed cursor.
+type importStaging struct {
+	mu sync.Mutex
+	m  map[string]stagedImport
+}
+
+func newImportStaging() *importStaging { return &importStaging{m: map[string]stagedImport{}} }
+
+func (s *importStaging) put(id string, v stagedImport) {
+	s.mu.Lock()
+	s.m[id] = v
+	s.mu.Unlock()
+}
+
+func (s *importStaging) get(id string) (stagedImport, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[id]
+	return v, ok
+}
+
+func (s *importStaging) evict(id string) {
+	s.mu.Lock()
+	delete(s.m, id)
+	s.mu.Unlock()
+}
 
 // BulkJob is a completed inline bulk operation's record.
 type BulkJob struct {

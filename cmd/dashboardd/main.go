@@ -37,6 +37,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/overview"
 	"github.com/enrichment/waterfall/internal/dash/providers"
+	"github.com/enrichment/waterfall/internal/dash/provisioning"
 	"github.com/enrichment/waterfall/internal/dash/queues"
 	"github.com/enrichment/waterfall/internal/dash/realtime"
 	"github.com/enrichment/waterfall/internal/dash/rotation"
@@ -237,6 +238,10 @@ func main() {
 	provSvc := providers.NewService(providers.Deps{
 		Store: store, Audit: auditLog, Resolver: rotEngine, Now: time.Now,
 	})
+	// keysSvc is reassigned to the Routes-owned Service below (one instance serves the HTTP
+	// surface, the approvals bulk-delete executor, and the T5b resume runner — the runner needs
+	// the same instance's in-memory staged import payloads). This initial value only lets the
+	// executor closures compile/register before the routes are mounted.
 	keysSvc := keys.NewService(store, backend, auditLog, logger)
 	apprSvc := approvals.NewService(approvals.Config{
 		Store:   store,
@@ -283,10 +288,18 @@ func main() {
 		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
 		Secrets: backend, Resolver: rotEngine, Gate: apprSvc, Now: time.Now, Logger: logger,
 	})
-	keys.Routes(fmux, keys.Deps{
+	keysSvc = keys.Routes(fmux, keys.Deps{
 		Store: store, Secrets: backend, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
 		StepUp: &totpStepUp{users: users, now: time.Now}, Gate: apprSvc, Logger: logger,
 	})
+	// Operator Tenant provisioning (SEC-3, ADR-0021): the operator-only create-Tenant write rides
+	// the FeatureChain like every feature surface; its public accept-invite counterpart mounts on
+	// the admin mux below (the invite token is the credential — FeatureChain would 401 it).
+	provisioningDeps := provisioning.Deps{
+		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
+		StepUp: &totpStepUp{users: users, now: time.Now}, Logger: logger,
+	}
+	provisioning.Routes(fmux, provisioningDeps)
 	// Rotation's key-pools/{id}/selection-state + key-pools/{id}/simulate coexist with keys'
 	// key-pools routes on the SAME fmux — net/http 1.22 disambiguates by full pattern.
 	rotation.Routes(fmux, rotation.Deps{Engine: rotEngine, Auth: httpx.CtxAuthenticator{}, Logger: logger})
@@ -344,6 +357,9 @@ func main() {
 	// package's P1 in-process registration was retired with this wiring — net/http 1.22 panics
 	// on a duplicate pattern, and the durable row is the one poller for every 202 bulk job.
 	queues.BulkJobsRoute(fmux, queueDeps, qsvc)
+	// Bulk-job cancellation (OI-API-4, doc 15 §T3): kind-agnostic cancel beside the kind-agnostic
+	// reader — same durable Service owns both verbs; per-kind RBAC is applied inside the handler.
+	queues.CancelRoute(fmux, queueDeps, qsvc)
 	workers.Routes(fmux, workers.Deps{
 		Store: store, Audit: auditLog, Auth: httpx.CtxAuthenticator{},
 		Scaler: qsvc, Now: time.Now, Logger: logger,
@@ -361,10 +377,21 @@ func main() {
 	defer detector.Stop()
 
 	// Bulk-jobs janitor (OI-KEYS-1b): one leader (advisory lock) sweeps expired-lease running
-	// bulk_jobs to terminal 'failed', releasing the one-in-flight index a dead instance would wedge.
+	// bulk_jobs; resumable kinds re-queue for the runners below (T5b), the rest park 'failed'.
 	bulkJanitor := qsvc.NewJanitor(0)
 	bulkJanitor.Start(context.Background())
 	defer bulkJanitor.Stop()
+
+	// Bulk-job auto-resume runners (OI-KEYS-1c, doc 15 §T5b): claim janitor-re-queued bulk_jobs
+	// (FOR UPDATE SKIP LOCKED under a fresh lease) and drive them to terminal. The keys runner
+	// hangs off the SAME Service the routes use — resume needs its in-memory staged import
+	// payloads; the queues runner re-executes replays, which are fully DB-backed.
+	keysRunner := keysSvc.NewBulkJobRunner(0)
+	keysRunner.Start(context.Background())
+	defer keysRunner.Stop()
+	queuesRunner := qsvc.NewBulkJobRunner(0)
+	queuesRunner.Start(context.Background())
+	defer queuesRunner.Stop()
 
 	// P7 realtime seam (ADR-0019): the per-instance SSE Hub + the SelfMon store — sole writer
 	// of the migration-0010 self_monitor row-set. Constructed before the samplers below so the
@@ -469,10 +496,13 @@ func main() {
 	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
 		"routing", "workflows", "config", "health", "approvals", "change-history",
 		"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts",
-		"streams", "overview", "search", "meta"} {
+		"streams", "overview", "search", "meta", "tenants"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
+	// Public accept-invite (SEC-3): mounted on the admin mux directly — its exact pattern beats the
+	// "/" catch-all, and it must NOT ride featureHandler (pre-session; the token is the credential).
+	provisioning.PublicRoutes(admin, provisioningDeps)
 
 	var handler http.Handler = admin
 	// Serve the built SPA if present (P8 adds web/dist); skipped when absent. The SPA is a
@@ -523,11 +553,11 @@ func main() {
 	_ = httpSrv.Shutdown(ctx)
 }
 
-// totpStepUp verifies a per-request X-MFA-Code against the caller's TOTP seed for step-up-gated
-// actions (doc 05 §5.4). The keys package calls VerifyStepUp before its create/import/rotate/bulk
-// handlers; a non-nil error becomes 403 mfa_required. The seed is opened from the caller's sealed
-// envelope via the secrets backend inside security.Users.TOTPSeed; recovery-code acceptance on the
-// step-up path is deferred (OI-SEC-9).
+// totpStepUp verifies a per-request X-MFA-Code for step-up-gated actions (doc 05 §5.4). The keys,
+// provisioning, and settings surfaces call VerifyStepUp before their sensitive writes; a non-nil
+// error becomes 403 mfa_required. Verification is security.Users.VerifyStepUp (T5e, closes
+// OI-SEC-9): a fresh TOTP code (single-use via mfa_used_steps, OI-SEC-8) OR a valid recovery code
+// (consumed on use) both pass, so a user whose device is lost can still clear step-up gates.
 type totpStepUp struct {
 	users *security.Users
 	now   func() time.Time
@@ -540,9 +570,7 @@ func (v *totpStepUp) VerifyStepUp(ctx context.Context, code string) error {
 	if err != nil {
 		return err
 	}
-	// VerifyAndConsume also records the (user, time_step) single-use marker, so a step-up code
-	// cannot be replayed within its window (OI-SEC-8), exactly like the login MFA path.
-	ok, err := v.users.VerifyAndConsume(ctx, p.UserID, code, v.now())
+	ok, err := v.users.VerifyStepUp(ctx, p.UserID, code, v.now())
 	if err != nil {
 		return err
 	}

@@ -107,6 +107,11 @@ func setupDashSchema(t *testing.T, admin *pg.Conn) {
 		t.Fatalf("apply migration 0004: %v", err)
 	}
 
+	// Migration 0012 (T2/SEC-5) adds the per-Tenant require_mfa knob. The session resolver joins
+	// tenants.require_mfa to gate an unenrolled User in a require-MFA Tenant, so every session-backed
+	// test needs the column present; applied inline (idempotent) so the 0004-based schema exercises it.
+	mustExec(t, admin, `alter table tenants add column if not exists require_mfa boolean not null default false`)
+
 	// Migration 0011 tables the hardened login/idempotency paths need (mfa_used_steps for the TOTP
 	// single-use guard, dash_admin_idempotency for the durable admin idempotency ledger). Both depend
 	// only on 0004; created inline so the 0004-only P0 schema exercises the hardened paths.

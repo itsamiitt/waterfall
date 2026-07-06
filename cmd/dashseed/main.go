@@ -2,6 +2,11 @@
 // Playwright E2E (OI-P12-2). It uses the SAME secrets backend + master key as dashboardd, so the
 // sealed TOTP seed round-trips; it prints the base32 seed the spec turns into TOTP codes. Dev-only
 // tooling — never part of a production deploy.
+//
+// PRODUCTION path (SEC-3, ADR-0021): dashseed is superseded by the audited operator provisioning
+// API — POST /v1/admin/tenants creates the Tenant + first tenant_admin + one-time invite token
+// under RBAC + MFA step-up, and the public POST /v1/admin/auth/accept-invite sets the first
+// password. Use this binary only for local dev/E2E seeding where no operator session exists yet.
 package main
 
 import (

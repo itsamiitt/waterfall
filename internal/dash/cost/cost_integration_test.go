@@ -1,14 +1,16 @@
 //go:build integration
 
 // Live-Postgres proof for the P6 cost-analytics surface (module 10, doc 12 §P6) over migrations
-// 0004 + 0006 (budgets) + 0009 (rollups) + a local cost_ledger, under FORCE ROW LEVEL SECURITY as a
-// NON-superuser role (superusers bypass RLS, proving nothing):
+// 0004 + 0006 (budgets) + 0009 (rollups) + 0012's cost_rollup_1d.key_id (T4/RF-3) + a local
+// cost_ledger, under FORCE ROW LEVEL SECURITY as a NON-superuser role (superusers bypass RLS,
+// proving nothing):
 //
 //   - TestCostGroupBysMatchLedgers (P6 gate #2): SUM(credits) from cost/summary equals the
 //     cost_ledger committed total for the same window, per Tenant (group_by=tenant) and summed
 //     across Providers (group_by=provider) — with consistently seeded cost_rollup_1d + cost_ledger.
 //   - TestCostRLSIsolation (P6 gate #5): a Tenant's cost query never sees another Tenant's rollup
-//     rows; budgets are Tenant-isolated; group_by=key is operator-only.
+//     rows; budgets are Tenant-isolated; group_by=key (now served from the Tenant-isolated
+//     cost_rollup_1d.key_id, T4/RF-3) drills into a Tenant's OWN keys and never another's.
 //
 // Invoke via scripts/run-rls-test.sh or with WATERFALL_PG_DSN set.
 package cost_test
@@ -88,6 +90,10 @@ func setupCostSchema(t *testing.T, admin *pg.Conn) {
 	applyMigration(t, admin, "../../../migrations/0004_dash_identity_rbac.sql")
 	applyMigration(t, admin, "../../../migrations/0006_dash_config_versions.sql")
 	applyMigration(t, admin, "../../../migrations/0009_dash_telemetry.sql")
+	// T4/RF-3 (migration 0012, cost portion): add key_id to cost_rollup_1d so group_by=key serves it.
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d ADD COLUMN key_id text NOT NULL DEFAULT ''")
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d DROP CONSTRAINT cost_rollup_1d_pkey")
+	mustExec(t, admin, "ALTER TABLE cost_rollup_1d ADD PRIMARY KEY (tenant_id, provider_id, workflow_key, country, key_id, day)")
 
 	// cost_ledger (migration 0001) — the G4 committed-spend ledger the P6 reconciliation compares to.
 	mustExec(t, admin, `create table cost_ledger (
@@ -126,30 +132,27 @@ func ctxFor(tid, role string) context.Context {
 
 // seedCostData writes consistent cost_rollup_1d + cost_ledger totals: acme=500 (hunter 300 +
 // clearbit 200), globex=700 (hunter). Ledger committed totals mirror the modeled rollup totals.
+// Since T4/RF-3, cost_rollup_1d carries key_id: acme's spend is split across two keys (k-acme-h=300,
+// k-acme-c=200), globex's across one (k-globex-h=700), so group_by=key drills down per key.
 func seedCostData(t *testing.T, admin *pg.Conn) {
 	t.Helper()
 	rows := []struct {
-		tenant, provider, workflow, country string
-		credits, calls, success             int64
+		tenant, provider, workflow, country, key string
+		credits, calls, success                  int64
 	}{
-		{"acme", "hunter", "email", "us", 300, 320, 300},
-		{"acme", "clearbit", "email", "us", 200, 210, 190},
-		{"globex", "hunter", "phone", "eu", 700, 720, 690},
+		{"acme", "hunter", "email", "us", "k-acme-h", 300, 320, 300},
+		{"acme", "clearbit", "email", "us", "k-acme-c", 200, 210, 190},
+		{"globex", "hunter", "phone", "eu", "k-globex-h", 700, 720, 690},
 	}
 	for _, r := range rows {
 		mustExec(t, admin, `insert into cost_rollup_1d
-			(tenant_id, provider_id, workflow_key, country, day, credits, calls, successful_results)
-			values ($1,$2,$3,$4, date '2026-07-01', $5,$6,$7)`,
-			r.tenant, r.provider, r.workflow, r.country, r.credits, r.calls, r.success)
+			(tenant_id, provider_id, workflow_key, country, key_id, day, credits, calls, successful_results)
+			values ($1,$2,$3,$4,$5, date '2026-07-01', $6,$7,$8)`,
+			r.tenant, r.provider, r.workflow, r.country, r.key, r.credits, r.calls, r.success)
 	}
 	// cost_ledger committed totals per Tenant (two jobs for acme summing to 500; one for globex).
 	mustExec(t, admin, `insert into cost_ledger (tenant_id, job_id, committed) values
 		('acme','j1',300), ('acme','j2',200), ('globex','j3',700)`)
-
-	// key_usage_1d for the operator-only group_by=key path.
-	mustExec(t, admin, `insert into key_usage_1d (key_id, bucket_start, req, ok, fail, credits_spent) values
-		('00000000-0000-4000-8000-000000000001'::uuid, timestamptz '2026-07-01 00:00:00+00', 100, 90, 10, 250),
-		('00000000-0000-4000-8000-000000000002'::uuid, timestamptz '2026-07-01 00:00:00+00', 50, 48, 2, 120)`)
 }
 
 func fixedNow() time.Time { return time.Date(2026, 7, 5, 0, 0, 0, 0, time.UTC) }
@@ -261,15 +264,24 @@ func TestCostRLSIsolation(t *testing.T) {
 		t.Fatalf("globex saw acme's budgets: %+v", gb)
 	}
 
-	// group_by=key is operator-only: a non-operator is refused; an operator reads key_usage_1d.
-	if _, _, err := svc.Summary(ctxFor("acme", "tenant_admin"), "key", from, to, nil, false, db.Cursor{}, 0); err == nil {
-		t.Fatalf("non-operator group_by=key must be forbidden")
-	}
-	keyRows, _, err := svc.Summary(ctxFor("platform", "operator"), "key", from, to, nil, true, db.Cursor{}, 0)
+	// group_by=key now serves cost_rollup_1d (T4/RF-3): tenant-scoped by RLS, so a Tenant drills
+	// into its OWN keys and never sees another Tenant's. acme has two keys summing to its ledger
+	// total (500); globex's key must be invisible.
+	keyRows, _, err := svc.Summary(ctxFor("acme", "tenant_admin"), "key", from, to, nil, false, db.Cursor{}, 0)
 	if err != nil {
-		t.Fatalf("operator group_by=key: %v", err)
+		t.Fatalf("acme group_by=key: %v", err)
 	}
-	if sumCredits(keyRows) != 370 {
-		t.Fatalf("operator key credits=%d, want 370", sumCredits(keyRows))
+	perKey := map[string]int64{}
+	for _, r := range keyRows {
+		if r.Key == "k-globex-h" {
+			t.Fatalf("acme saw globex's key row: %+v", keyRows)
+		}
+		perKey[r.Key] = r.Credits
+	}
+	if perKey["k-acme-h"] != 300 || perKey["k-acme-c"] != 200 {
+		t.Fatalf("acme per-key credits = %v, want k-acme-h=300 k-acme-c=200", perKey)
+	}
+	if got := sumCredits(keyRows); got != 500 {
+		t.Fatalf("acme group_by=key total=%d, want 500 (== ledger)", got)
 	}
 }

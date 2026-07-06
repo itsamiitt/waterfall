@@ -77,8 +77,10 @@ type router struct {
 }
 
 // Routes constructs the module's Service and mounts every endpoint on mux. It is the single entry
-// point the orchestrator wires.
-func Routes(mux *http.ServeMux, d Deps) {
+// point the orchestrator wires. The Service is returned (mirroring queues.Routes) so the
+// orchestrator can hang the T5b BulkJobRunner off the SAME instance — resume needs the in-memory
+// staged import payloads this Service holds, which a second NewService would not share.
+func Routes(mux *http.ServeMux, d Deps) *Service {
 	logger := d.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -95,6 +97,7 @@ func Routes(mux *http.ServeMux, d Deps) {
 		log:    logger,
 	}
 	rt.register(mux)
+	return rt.svc
 }
 
 func (rt *router) register(mux *http.ServeMux) {

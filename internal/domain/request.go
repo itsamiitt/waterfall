@@ -24,6 +24,13 @@ type EnrichmentRequest struct {
 	ConfidenceTarget Confidence // stop filling a Field once fused confidence reaches this
 	CostCeiling      Credits    // hard cap on committed provider spend for this record (G4)
 	ConfigVersion    string     // routing/config version — part of the idempotency key
+	// WorkflowKey/Country are OPTIONAL usage-attribution metadata (T5c/OI-P4-1b): the engine tags
+	// the rotation lease context with them so every leased provider call emits a fully-attributed
+	// usage row. Observability dimensions only — deliberately NOT part of the G2 idempotency key
+	// (IdempotencyKey hashes its enumerated fields, not this struct), so a replay with different
+	// attribution still reuses the same stored results.
+	WorkflowKey string // published waterfall workflow driving this request ("" = unattributed)
+	Country     string // Subject country for per-country usage/cost rollups ("" = unknown)
 }
 
 // IdempotencyKey derives the canonical G2 key for a single provider call within this

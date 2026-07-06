@@ -38,6 +38,7 @@ const (
 	codeForbidden      = "forbidden"
 	codeNotFound       = "not_found"
 	codeBulkConflict   = "bulk_job_conflict"
+	codeJobTerminal    = "job_terminal"
 	codeInternal       = "internal"
 )
 
@@ -359,6 +360,8 @@ func (rt *router) writeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, codeWindowRange, "requested window is out of range")
 	case errors.Is(err, ErrReplayInFlight):
 		writeError(w, http.StatusConflict, codeBulkConflict, "a replay is already in flight for this queue")
+	case errors.Is(err, ErrJobTerminal):
+		writeError(w, http.StatusConflict, codeJobTerminal, "bulk job is already in a terminal state")
 	default:
 		rt.log.Error("queues handler error", "err", err)
 		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")

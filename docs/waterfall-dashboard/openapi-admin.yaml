@@ -2435,6 +2435,61 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/tenants':
+    post:
+      summary: Provision a customer Tenant + first tenant_admin invite (operator-only, step-up; ADR-0021)
+      operationId: post_v1_admin_tenants
+      tags: [security]
+      responses:
+        "201":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/accept-invite':
+    post:
+      summary: Set the first password from a one-time invite token (public; token is the credential)
+      operationId: post_v1_admin_auth_accept_invite
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/settings/mfa-policy':
+    get:
+      summary: Read the Tenant's require_mfa knob (SEC-5)
+      operationId: get_v1_admin_settings_mfa_policy
+      tags: [security]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Set the Tenant's require_mfa knob (tenant_admin, step-up; SEC-5)
+      operationId: patch_v1_admin_settings_mfa_policy
+      tags: [security]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/bulk-jobs/{id}/cancel':
+    post:
+      summary: Request cooperative cancellation of an in-flight bulk job (OI-API-4)
+      operationId: post_v1_admin_bulk_jobs_cancel
+      tags: [queues]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
 components:
   responses:
     OK:

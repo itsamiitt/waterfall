@@ -52,6 +52,9 @@ const (
 	AuditRead        Action = "audit.read"
 	AuditVerify      Action = "audit.verify"
 	ApprovalsDecide  Action = "approvals.decide"
+	TenantsProvision Action = "tenants.provision" // operator-only Tenant creation (SEC-3, ADR-0021)
+	MFAPolicyWrite   Action = "settings.mfa_policy"
+	BulkJobsCancel   Action = "bulk_jobs.cancel"
 )
 
 // Decision is the outcome of an RBAC lookup. The zero value is DecisionDeny (fail closed).
@@ -126,6 +129,14 @@ var matrix = map[Action]map[string]Decision{
 	AuditVerify: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 
 	ApprovalsDecide: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
+
+	// Provisioning is operator-only; the handler binds the new Tenant per ADR-0021 (DecisionAllow,
+	// not OwnTenant — the operator is not acting on its own platform Tenant here). The MFA-policy
+	// knob is a tenant self-service setting (own-Tenant); operators may set it cross-Tenant for
+	// support (audited). Bulk-job cancel mirrors the create-side ownership (operator any, TA own).
+	TenantsProvision: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionDeny, RoleTenantUser: DecisionDeny},
+	MFAPolicyWrite:   {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
+	BulkJobsCancel:   {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 }
 
 // Can returns the Decision for role performing action. Unknown role or action fails closed to

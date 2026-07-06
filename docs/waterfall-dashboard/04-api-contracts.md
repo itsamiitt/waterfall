@@ -203,6 +203,7 @@ load-bearing endpoints.
 | POST | `/auth/mfa/verify` | Complete login with TOTP or recovery code | pre-session | Idempotency-Key exempt; returns `csrf_token` |
 | POST | `/auth/mfa/enroll` | Begin TOTP enrollment; returns provisioning URI + secret (once) | TU+ | seed sealed to `secret_envelopes` (`totp_seed`); re-enrollment (already enrolled) requires `X-MFA-Code` (doc 05 §5.4) |
 | POST | `/auth/mfa/enroll/confirm` | Confirm enrollment with first code; returns recovery codes (once) | TU+ | |
+| POST | `/auth/accept-invite` | Set first-admin password from a one-time invite token | public | Idempotency-Key exempt; pre-session (token is the credential); `{token,password}` → 200 `{status:"ok"}` (doc 15 §T1, ADR-0021) |
 | POST | `/auth/logout` | Revoke current session | TU+ | Idempotency-Key exempt |
 | GET | `/auth/me` | Current User, role, Tenant, ABAC attrs, session expiry | TU+ | SPA bootstrap call |
 | GET | `/auth/sessions` | List sessions (own; TA+ sees Tenant's) | TU+ | filters: `user_id` (TA+) |
@@ -258,6 +259,9 @@ load-bearing endpoints.
 | GET | `/roles` | Static role×action matrix (doc 05) | TU+ | drives SPA guards; server remains authority |
 | GET | `/ip-allowlists` | List Tenant CIDR allowlist | TA+ | |
 | PUT | `/ip-allowlists` | Replace the allowlist set | TA+ | full-replacement PUT; empty list disables enforcement; lockout guard: the caller's current IP must match the new set → else 422 `validation_failed` |
+| POST | `/tenants` | Provision a customer Tenant + first tenant_admin + one-time invite | O | operator-only; `X-MFA-Code` step-up; Idempotency-Key; 201 `{tenant_id, invite_token}` (invite returned once) (doc 15 §T1, ADR-0021) |
+| GET | `/settings/mfa-policy` | Read the Tenant require_mfa knob | TA+ | `{require_mfa}` (doc 15 §T2 / SEC-5) |
+| PATCH | `/settings/mfa-policy` | Set the Tenant require_mfa knob | TA+ | tenant_admin only; audited; `X-MFA-Code` step-up; `{require_mfa}` → `{require_mfa}` (doc 15 §T2 / SEC-5) |
 
 ### 2.3 Providers
 
@@ -398,6 +402,7 @@ No endpoint ever returns a secret: responses carry `secret_last4` and `fingerpri
 | GET | `/key-imports/{job_id}` | Import batch progress/results | O / TA (BYO) | §4 progress schema; `job_id` IS the `key_import_batches.id` uuid |
 | POST | `/keys/bulk` | Bulk op by ids or filter | O / TA (BYO) | 202 `{job_id}`; `op=delete` **approval-gated** (`key_bulk_delete`) → 202 `{approval_request_id}`; `"preview":true` → 200 `{"matched":N}` |
 | GET | `/bulk-jobs/{id}` | Bulk job progress/results | O / TA (BYO) | §4 |
+| POST | `/bulk-jobs/{id}/cancel` | Request cooperative cancellation of an in-flight bulk/import job | O / TA (BYO) | RBAC per kind (`bulk_jobs.cancel`); audited; drives the job to terminal `cancelled`; committed rows retained (G2); finished job → 409/no-op (doc 15 §T3, was OI-API-4) |
 | GET | `/keys/{id}/usage` | Per-Key usage time series (`key_usage_*`) | O / TA (BYO) | `?res=&from=&to=` per §1.8; **operator-only in v1 except BYO**: tenant_admin may read usage for Keys whose `owner_tenant_id` = caller's Tenant — `key_usage_*` is Class P (doc 03 §3), so the BYO read executes through a service method under the platform RLS context after the `owner_tenant_id` check (doc 05 §3.2 pattern) |
 | GET | `/key-pools` | List Key Pools | O / TA (BYO) | filters: `provider_id`, `strategy`, `owner_tenant_id` (O) |
 | POST | `/key-pools` | Create Key Pool | O / TA (BYO) | 201; selector = `provider_id:name` matches `AuthDescriptor.KeyPoolSelector` |
@@ -1122,7 +1127,9 @@ stateDiagram-v2
   per-object ops are idempotent state transitions), or — after the reclaim cap — terminally
   records `partial` with the per-row results accumulated so far. A dead instance can therefore
   never strand a job in `running`.
-- No cancellation endpoint in v1 (Open items OI-API-4); jobs run to completion under G3 bounds.
+- Cancellation: `POST /bulk-jobs/{id}/cancel` (OI-API-4, resolved) sets a cooperative
+  `cancel_requested` flag the executors poll on wave boundaries; terminal `cancelled` retains
+  already-committed rows (G2 makes a resubmit safe). A terminal job answers 409 `conflict`.
 
 ### 4.2 Submission semantics
 

@@ -55,10 +55,13 @@ export interface LoginRequest {
   password: string;
 }
 
-/** POST /auth/login | /auth/mfa/verify: "mfa_required" carries no token; "ok" starts the
- * CSRF-bearing session. */
+/** POST /auth/login | /auth/mfa/verify: "mfa_required" carries no token (enrolled user, TOTP
+ * step); "mfa_enrollment_required" (doc 15 §T2 / SEC-5) means the Tenant's `require_mfa` policy
+ * is on and this user has no authenticator yet — the SPA must route into enrollment and the app
+ * shell stays closed until enrolled + verified; "ok" starts the CSRF-bearing session. */
 export type SessionResponse =
   | { status: "mfa_required" }
+  | { status: "mfa_enrollment_required" }
   | { status: "ok"; csrf_token: string; user: UserSummary };
 
 export interface MfaVerifyRequest {

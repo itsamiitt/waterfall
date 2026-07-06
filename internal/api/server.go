@@ -27,6 +27,14 @@ type Server struct {
 	Metrics     *metrics.Registry           // optional; enables /metrics + RED instrumentation
 	WriteScope  string                      // optional; if set, write routes require this JWT scope (403 otherwise)
 	ReadyCheck  func(context.Context) error // optional; /readyz is 200 only when this returns nil
+	// ShouldClaim gates admission of NEW work (T5a / OI-P5-2 drain-gating). When set and it returns
+	// false, the worker is draining: job submissions (sync + async) and dead-letter redrives are
+	// refused with 503 {"error":{"code":"draining"}} + Retry-After, so the worker stops claiming new
+	// work while in-flight jobs — already admitted, holding leased keys + reserved credits — finish.
+	// Reads (GET job/records/dead-letters) are never gated. nil (default) always admits, so existing
+	// behavior is unchanged. The orchestrator wires the heartbeat client's ShouldClaim here
+	// (srv.ShouldClaim = heartbeatClient.ShouldClaim).
+	ShouldClaim func() bool
 	Now         func() time.Time
 	Logger      *slog.Logger
 
@@ -58,7 +66,7 @@ func (s *Server) Handler() http.Handler {
 			[]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}, "route")
 		mux.Handle("GET /metrics", s.Metrics.Handler())
 	}
-	submit := s.submit
+	submit := s.gateDrain(s.submit)
 	if s.WriteScope != "" {
 		submit = s.requireScope(s.WriteScope, submit)
 	}
@@ -72,8 +80,9 @@ func (s *Server) Handler() http.Handler {
 			s.redriveCount = s.Metrics.Counter("dlq_redrive_total", "Dead-letter redrive requests that reset a parked job.")
 		}
 		mux.Handle("GET /v1/dead-letters", s.instrument("/v1/dead-letters", s.protected(s.getDeadLetters)))
-		// Redrive is a write (re-executes a job): gate it on the same scope as submit.
-		redrive := s.redriveDeadLetter
+		// Redrive is a write (re-executes a job): gate it on the same scope as submit, and on the
+		// drain gate — a draining worker must not claim redriven work either.
+		redrive := s.gateDrain(s.redriveDeadLetter)
 		if s.WriteScope != "" {
 			redrive = s.requireScope(s.WriteScope, redrive)
 		}
@@ -153,6 +162,28 @@ func (s *Server) requireScope(scope string, h http.HandlerFunc) http.HandlerFunc
 		}
 		if !p.HasScope(scope) {
 			writeError(w, http.StatusForbidden, "forbidden", "missing required scope")
+			return
+		}
+		h(w, r)
+	}
+}
+
+// draining reports whether the worker is draining (ShouldClaim set and returning false). nil
+// ShouldClaim (the default) always admits, so the gate is inert unless the orchestrator wires it.
+func (s *Server) draining() bool {
+	return s.ShouldClaim != nil && !s.ShouldClaim()
+}
+
+// gateDrain refuses NEW work with 503 {"error":{"code":"draining"}} + Retry-After when the worker
+// is draining (T5a / OI-P5-2). It wraps only the write/admission handlers (submit, redrive); reads
+// pass through untouched. The check is per-request, so a worker that flips to draining stops
+// admitting immediately while in-flight requests — already past this gate — run to completion.
+func (s *Server) gateDrain(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.draining() {
+			w.Header().Set("Retry-After", "5")
+			writeError(w, http.StatusServiceUnavailable, "draining",
+				"worker is draining and not accepting new work; retry shortly")
 			return
 		}
 		h(w, r)

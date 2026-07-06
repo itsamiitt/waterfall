@@ -7,6 +7,7 @@ import {
   CONFIG_VERSION_STATUSES,
   ERROR_CLASSES,
   INCLUSION_STATUSES,
+  JOB_STATUSES,
   KEY_STATUSES,
   OP_STATES,
   statusMaps,
@@ -23,6 +24,7 @@ const CASES: [keyof typeof statusMaps, readonly string[]][] = [
   ["workerStatus", WORKER_STATUSES],
   ["alertState", ALERT_STATES],
   ["approvalStatus", APPROVAL_STATUSES],
+  ["jobStatus", JOB_STATUSES],
   ["configVersionStatus", CONFIG_VERSION_STATUSES],
   ["errorClass", ERROR_CLASSES],
 ];
@@ -49,6 +51,7 @@ describe("status map totality", () => {
     expect(WORKER_STATUSES).toHaveLength(6); // migration 0008
     expect(ALERT_STATES).toHaveLength(2); // migration 0007
     expect(APPROVAL_STATUSES).toHaveLength(7); // migration 0007
+    expect(JOB_STATUSES).toHaveLength(6); // bulk_jobs CHECK, migration 0012 (adds 'cancelled')
     expect(ERROR_CLASSES).toHaveLength(8); // internal/domain 8-class taxonomy
   });
 

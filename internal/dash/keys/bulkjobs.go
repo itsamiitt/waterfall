@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/enrichment/waterfall/internal/pg"
+	"github.com/enrichment/waterfall/internal/tenant"
 )
 
 // Durable bulk-job lifecycle for module 3 (OI-KEYS-1). Both the key bulk-op (POST /keys/bulk,
@@ -35,8 +36,24 @@ const (
 )
 
 // keysBulkLease is this executor's liveness lease on its bulk_jobs row (doc 04 §4.1). It is renewed
-// on each progress commit; on expiry the queues janitor re-claims or terminally-fails the row.
+// on each progress commit; on expiry the queues janitor re-queues the row for a successor runner
+// (OI-KEYS-1c auto-resume).
 const keysBulkLease = 60 * time.Second
+
+// maxBulkAttempts caps how many times a resumable bulk job may be (re-)claimed before it is parked
+// terminally 'failed'. A crash-looping job (e.g. a poison payload that kills its executor) thus
+// stops wedging the one-in-flight index after a bounded number of tries (doc 15 §T5b).
+const maxBulkAttempts = 5
+
+// bulkJobClaim is the durable state a runner needs to (re-)drive a claimed bulk_jobs row: the id,
+// its kind, and the last committed progress cursor (succeeded+failed) it resumes past.
+type bulkJobClaim struct {
+	ID        string
+	Kind      string
+	Succeeded int
+	Failed    int
+	Attempts  int
+}
 
 // bulkResultsCap bounds the per-item results/errors persisted on a bulk_jobs row (counts stay
 // exact; doc 06 §3.4). It mirrors the import error cap.
@@ -89,26 +106,102 @@ func (st *pgStore) claimBulkJob(ctx context.Context, id, instanceID string) (boo
 	return ok, err
 }
 
-// renewBulkJob flushes intermediate counters and renews the lease (so a live executor is not
-// reclaimed by the janitor mid-run).
-func (st *pgStore) renewBulkJob(ctx context.Context, id string, succeeded, failed int) error {
-	return st.db.Tx(ctx, func(c *pg.Conn) error {
-		return c.ExecParams(`update bulk_jobs set succeeded=$2, failed=$3,
-			lease_expires_at=now() + interval '`+keysBulkLeaseInterval()+`' where id=$1::uuid`,
-			id, int64(succeeded), int64(failed))
+// claimNextBulkJob claims ONE queued, resumable bulk_jobs row for this instance under a fresh
+// lease, using FOR UPDATE SKIP LOCKED so concurrent runners never double-claim the same row (the
+// -race contention guard). It runs under the caller's tenant GUC (RLS-scoped). ok=false when no
+// queued resumable row is visible for this Tenant. attempts is incremented on the (re-)claim.
+func (st *pgStore) claimNextBulkJob(ctx context.Context, instanceID string) (bulkJobClaim, bool, error) {
+	var cl bulkJobClaim
+	ok := false
+	err := st.db.Tx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(`with next as (
+			select id from bulk_jobs
+			  where status='queued' and kind in ('`+bulkKindKeyImport+`','`+bulkKindKeyBulk+`')
+			  order by created_at asc
+			  for update skip locked
+			  limit 1)
+			update bulk_jobs b set status='running', claimed_by=$1,
+			  lease_expires_at=now() + interval '`+keysBulkLeaseInterval()+`',
+			  started_at=coalesce(b.started_at, now()), attempts=b.attempts+1
+			from next where b.id=next.id
+			returning b.id, b.kind, b.succeeded, b.failed, b.attempts`, instanceID)
+		if e != nil {
+			return e
+		}
+		if len(res.Rows) == 0 || res.Rows[0][0] == nil {
+			return nil
+		}
+		row := res.Rows[0]
+		cl = bulkJobClaim{ID: s(row[0]), Kind: s(row[1]),
+			Succeeded: int(i64(row[2])), Failed: int(i64(row[3])), Attempts: int(i64(row[4]))}
+		ok = true
+		return nil
 	})
+	return cl, ok, err
 }
 
-// finishBulkJob commits the terminal status, final counters, per-item results, and the redacted
-// errors/summary, clearing the lease so the one-in-flight index is released.
-func (st *pgStore) finishBulkJob(ctx context.Context, id, status string, succeeded, failed int, results, errs, summary string) error {
-	return st.db.Tx(ctx, func(c *pg.Conn) error {
-		return c.ExecParams(`update bulk_jobs set status=$2, succeeded=$3, failed=$4,
-			results=$5::jsonb, errors=$6::jsonb, error_summary=$7::jsonb,
-			finished_at=now(), lease_expires_at=null where id=$1::uuid`,
-			id, status, int64(succeeded), int64(failed),
-			nullText(results), nullText(errs), nullText(summary))
+// renewBulkJobOwned flushes intermediate counters and renews the lease, but ONLY while this
+// instance still owns the running row (claimed_by=instanceID). owned=false means the lease was
+// reclaimed (the janitor re-queued the row and a successor claimed it, or it was cancelled to a
+// terminal state) — the caller MUST stop processing to avoid double-work. cancel reports whether a
+// cancellation was requested (the cooperative-cancel poll, OI-API-4). Both flags are read in the
+// SAME guarded UPDATE so a live executor observes cancellation between waves without an extra read.
+func (st *pgStore) renewBulkJobOwned(ctx context.Context, id, instanceID string, succeeded, failed int) (owned, cancel bool, err error) {
+	err = st.db.Tx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(`update bulk_jobs set succeeded=$3, failed=$4,
+			lease_expires_at=now() + interval '`+keysBulkLeaseInterval()+`'
+			where id=$1::uuid and claimed_by=$2 and status='running'
+			returning cancel_requested`, id, instanceID, int64(succeeded), int64(failed))
+		if e != nil {
+			return e
+		}
+		if len(res.Rows) > 0 && res.Rows[0][0] != nil {
+			owned = true
+			cancel = *res.Rows[0][0] == "t"
+		}
+		return nil
 	})
+	return owned, cancel, err
+}
+
+// finishBulkJobOwned commits the terminal status, final counters, per-item results, and the
+// redacted errors/summary — but ONLY while this instance still owns the running row. owned=false
+// (a superseded executor) leaves the row untouched so a resumed successor stays authoritative.
+func (st *pgStore) finishBulkJobOwned(ctx context.Context, id, instanceID, status string, succeeded, failed int, results, errs, summary string) (owned bool, err error) {
+	err = st.db.Tx(ctx, func(c *pg.Conn) error {
+		res, e := c.QueryParams(`update bulk_jobs set status=$3, succeeded=$4, failed=$5,
+			results=$6::jsonb, errors=$7::jsonb, error_summary=$8::jsonb,
+			finished_at=now(), lease_expires_at=null
+			where id=$1::uuid and claimed_by=$2 and status='running' returning id`,
+			id, instanceID, status, int64(succeeded), int64(failed),
+			nullText(results), nullText(errs), nullText(summary))
+		if e != nil {
+			return e
+		}
+		owned = len(res.Rows) > 0 && res.Rows[0][0] != nil
+		return nil
+	})
+	return owned, err
+}
+
+// listTenants enumerates every Tenant id under the platform system Principal (like the janitor), so
+// the runner can sweep tenant-scoped bulk_jobs across all Tenants.
+func (st *pgStore) listTenants(ctx context.Context) ([]string, error) {
+	sysCtx := tenant.WithPrincipal(ctx, tenant.Principal{TenantID: "platform", Scopes: []string{"role:operator"}})
+	var tenants []string
+	err := st.db.Tx(sysCtx, func(c *pg.Conn) error {
+		res, e := c.Query(`select id from tenants`)
+		if e != nil {
+			return e
+		}
+		for _, row := range res.Rows {
+			if row[0] != nil {
+				tenants = append(tenants, *row[0])
+			}
+		}
+		return nil
+	})
+	return tenants, err
 }
 
 // bulkScopeFingerprint is the canonical hash of a bulk-op's op + resolved target id set (order

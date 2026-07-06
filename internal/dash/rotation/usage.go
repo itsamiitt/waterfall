@@ -80,26 +80,42 @@ func outcomeClass(o provider.Outcome) string {
 // enrichd tags the lease context with the workflow_key and subject country of the Enrichment Job
 // so a real request's usage row is fully attributed. Dashboard-initiated leases leave them unset
 // (they carry no workflow), so both are optional and default to "".
+//
+// The ctx contract itself lives in internal/provider (a dependency-free leaf), so the enrichment
+// engine can SET attribution ahead of the provider/lease call without importing the dashboard
+// rotation stack. These are thin re-exports so callers already holding a rotation import (and the
+// existing rotation tests) keep the rotation.With* API; captureUsage reads the same provider keys.
 
-type workflowCtxKey struct{}
-type countryCtxKey struct{}
+// WithAttribution tags ctx with BOTH the workflow_key and subject country of the enrichment work
+// driving the lease, so a real request's usage row is fully attributed (OI-P4-1b). captureUsage
+// snapshots the pair at Lease() time and Done() emits them on the UsageSample. Empty strings are
+// carried as "" (unattributed), so it is backward-compatible.
+func WithAttribution(ctx context.Context, workflowKey, country string) context.Context {
+	return provider.WithAttribution(ctx, workflowKey, country)
+}
+
+// AttributionFromContext reads back the workflow_key/country pair set by WithAttribution (or the
+// individual setters); both default to "" when unset.
+func AttributionFromContext(ctx context.Context) (workflowKey, country string) {
+	return provider.AttributionFromContext(ctx)
+}
 
 // WithWorkflowKey tags ctx with the workflow_key attribution carried into the lease.
 func WithWorkflowKey(ctx context.Context, workflowKey string) context.Context {
-	return context.WithValue(ctx, workflowCtxKey{}, workflowKey)
+	return provider.WithWorkflowKey(ctx, workflowKey)
 }
 
 // WithCountry tags ctx with the subject country attribution carried into the lease.
 func WithCountry(ctx context.Context, country string) context.Context {
-	return context.WithValue(ctx, countryCtxKey{}, country)
+	return provider.WithCountry(ctx, country)
 }
 
 func workflowFromContext(ctx context.Context) string {
-	w, _ := ctx.Value(workflowCtxKey{}).(string)
+	w, _ := provider.AttributionFromContext(ctx)
 	return w
 }
 
 func countryFromContext(ctx context.Context) string {
-	c, _ := ctx.Value(countryCtxKey{}).(string)
+	_, c := provider.AttributionFromContext(ctx)
 	return c
 }

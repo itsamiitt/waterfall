@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -242,6 +245,141 @@ func TestGetRecord_AfterEnrich(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if resp.Fields["work_email"].Value != "jane@acme.com" {
 		t.Fatalf("record read missing enriched field: %s", rec.Body.String())
+	}
+}
+
+// setupDrain builds an env whose Server's ShouldClaim is backed by a caller-toggleable flag, so a
+// test can flip the worker between claiming and draining and observe admission decisions.
+func setupDrain(t *testing.T, claim *atomic.Bool) *testEnv {
+	t.Helper()
+	email := providertest.New("acme", "jane@acme.com", 0.9, 5, domain.FieldWorkEmail)
+	adapters := []provider.Adapter{email}
+	st := store.NewMemory()
+	eng := engine.New(st, adapters, engine.WithClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	planner := router.New(adapters...)
+	run := func(ctx context.Context, req domain.EnrichmentRequest) (engine.Outcome, error) {
+		return eng.Run(ctx, req, planner.Plan(req))
+	}
+	q := job.NewQueue(4)
+	jobs := job.NewMemoryStore()
+	d := job.NewDispatcher(q, jobs, run)
+	d.Start(2)
+	t.Cleanup(d.Stop)
+	srv := &api.Server{
+		Auth: api.NewStaticAuthenticator(map[string]tenant.Principal{
+			"tokA": {TenantID: "tenant-A", UserID: "uA"},
+		}),
+		Limiter:     api.NewRateLimiter(10000, 10000, nil),
+		Dispatcher:  d,
+		Submitter:   job.NewQueueSubmitter(jobs, q, nil),
+		Jobs:        jobs,
+		Records:     st,
+		ShouldClaim: func() bool { return claim.Load() },
+	}
+	return &testEnv{handler: srv.Handler(), email: email, dispatcher: d}
+}
+
+// TestDrainGate_503WhenDraining is the T5a/OI-P5-2 acceptance: with ShouldClaim()==false a new
+// submission is refused 503 {"error":{"code":"draining"}} + Retry-After; flipping ShouldClaim back
+// to true admits again; and reads (GET) plus in-flight jobs are never gated.
+func TestDrainGate_503WhenDraining(t *testing.T) {
+	var claim atomic.Bool
+	claim.Store(true)
+	env := setupDrain(t, &claim)
+
+	// A job admitted while claiming stays retrievable even after we start draining (in-flight
+	// unaffected — the gate only blocks NEW admissions).
+	first := do(env.handler, "POST", "/v1/enrichments?mode=sync", "tokA", "idem-live", body("p-live", 100, 0.85, "work_email"))
+	if first.Code != http.StatusOK {
+		t.Fatalf("want 200 while claiming, got %d: %s", first.Code, first.Body.String())
+	}
+	liveID := decodeJob(t, first)["job_id"].(string)
+
+	// Flip to draining: new submits (sync and async) are refused 503 draining + Retry-After.
+	claim.Store(false)
+	for _, target := range []string{"/v1/enrichments", "/v1/enrichments?mode=sync"} {
+		rec := do(env.handler, "POST", target, "tokA", "idem-drain", body("p-drain", 100, 0.85, "work_email"))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s while draining: want 503, got %d", target, rec.Code)
+		}
+		if rec.Header().Get("Retry-After") == "" {
+			t.Fatalf("%s: draining 503 must set Retry-After", target)
+		}
+		if code := decodeJob(t, rec)["error"].(map[string]any)["code"]; code != "draining" {
+			t.Fatalf("%s: error code = %v, want draining", target, code)
+		}
+	}
+
+	// Reads are never gated: the in-flight/committed job is still retrievable while draining.
+	poll := do(env.handler, "GET", "/v1/enrichments/"+liveID, "tokA", "", nil)
+	if poll.Code != http.StatusOK {
+		t.Fatalf("read while draining must not be gated, got %d", poll.Code)
+	}
+
+	// Resume claiming: admissions succeed again.
+	claim.Store(true)
+	again := do(env.handler, "POST", "/v1/enrichments", "tokA", "idem-again", body("p-again", 100, 0.85, "work_email"))
+	if again.Code != http.StatusAccepted {
+		t.Fatalf("want 202 after resuming, got %d: %s", again.Code, again.Body.String())
+	}
+}
+
+// TestDrainGate_NilShouldClaimAlwaysAdmits pins backward compatibility: a Server with no ShouldClaim
+// wired (the default) never drains.
+func TestDrainGate_NilShouldClaimAlwaysAdmits(t *testing.T) {
+	env := setup(t, nil) // no ShouldClaim
+	rec := do(env.handler, "POST", "/v1/enrichments", "tokA", "idem-nil", body("p", 100, 0.85, "work_email"))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("nil ShouldClaim must always admit; got %d", rec.Code)
+	}
+}
+
+// TestDrainGate_ConcurrentToggle exercises the gate under a racing ShouldClaim flip (run with -race):
+// every response is a well-formed admit (200/202) or a draining refusal (503), never a panic or a
+// torn state.
+func TestDrainGate_ConcurrentToggle(t *testing.T) {
+	var claim atomic.Bool
+	claim.Store(true)
+	env := setupDrain(t, &claim)
+
+	// A toggler flips the drain state under the submitters (separate from the submitter WaitGroup so
+	// it can run until they finish).
+	stop := make(chan struct{})
+	toggled := make(chan struct{})
+	go func() {
+		defer close(toggled)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+				claim.Store(i%2 == 0)
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	var errs atomic.Int64
+	for i := 0; i < 24; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			rec := do(env.handler, "POST", "/v1/enrichments", "tokA", "idem-conc-"+strconv.Itoa(i),
+				body("p-conc", 100, 0.85, "work_email"))
+			switch rec.Code {
+			// Admitted (202), drained (503), or a well-formed async shed (429 queue_full): all are
+			// valid, torn-state-free outcomes. The gate must never panic or produce anything else.
+			case http.StatusAccepted, http.StatusServiceUnavailable, http.StatusTooManyRequests:
+			default:
+				errs.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(stop)
+	<-toggled
+	if errs.Load() != 0 {
+		t.Fatalf("got %d responses that were neither 202 nor 503", errs.Load())
 	}
 }
 

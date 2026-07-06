@@ -194,3 +194,15 @@ export function useBulkProgress(jobId: string | null) {
     staleTime: staleTimes.telemetry,
   });
 }
+
+/** POST /bulk-jobs/{id}/cancel — request cooperative cancellation of an in-flight bulk/import job
+ * (doc 15 §T3). The executor drives it to the terminal `cancelled` status; already-committed rows
+ * are retained (G2-idempotent). No step-up (parity with POST /keys/bulk). Invalidating the imports
+ * root refetches both the /bulk-jobs and /key-imports progress views so the status flips live. */
+export function useCancelBulkJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => post<JobProgress>(`/bulk-jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.imports.root }),
+  });
+}

@@ -118,9 +118,19 @@ This is an **assumption to be load-tested** (`21-Testing.md`), not a measured re
 Canonical Field vocabulary (extend only here): `work_email`, `personal_email`, `email_status`,
 `mobile_phone`, `direct_dial`, `office_phone`, `phone_status`, `linkedin_url`, `job_title`,
 `seniority`, `department`, `company_domain`, `company_name`, `employee_count`, `industry`,
-`naics`, `sic`, `technographics`, `intent_topics`, `funding_stage`, `first_name`, `last_name`,
+`naics`, `sic`, `company_revenue`, `funding_stage`, `company_founded_year`, `company_hq_country`,
+`company_hq_city`, `company_type`, `company_linkedin_url`, `company_phone`, `duns_number`,
+`technographics`, `intent_topics`, `intent_score`, `buying_signal`, `first_name`, `last_name`,
 `full_name` (name fields are person match keys / inputs for email-finder providers — added
 Slice 04, `docs/26`).
+
+> **Firmographics/technographics/intent Fields** (`company_revenue`, `funding_stage`,
+> `company_founded_year`, `company_hq_country`, `company_hq_city`, `company_type`,
+> `company_linkedin_url`, `company_phone`, `duns_number`, `technographics`, `intent_topics`,
+> `intent_score`, `buying_signal`) back the L6–L8 providers of the 200-tool architecture
+> (ADR-0023). `technographics` and `intent_topics` are inherently multi-valued but stored as a
+> **single normalized Observation value** — a sorted, deduped, comma-joined list — so the
+> one-value-per-Field `field_versions` model (`docs/06`) is unchanged.
 
 ## 8. Document map & phase plan
 

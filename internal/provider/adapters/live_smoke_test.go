@@ -75,7 +75,7 @@ func TestAdapters_DecodeRecordedFixtures(t *testing.T) {
 	t.Run("twilio_found", func(t *testing.T) {
 		srv := serveFixture(t, "testdata/twilio_found.json")
 		defer srv.Close()
-		a := adapters.Twilio(srv.URL, clientWith(srv, "twilio:default", "AC:tok"))
+		a := adapters.Twilio(srv.URL, clientWith(srv, "twilio-lookup:default", "AC:tok"))
 		res, err := a.Fetch(context.Background(), person())
 		if err != nil {
 			t.Fatal(err)
@@ -129,7 +129,7 @@ func TestAdapters_StatusErrorMatrix(t *testing.T) {
 				w.WriteHeader(tc.status)
 			}))
 			defer srv.Close()
-			a := adapters.Twilio(srv.URL, clientWith(srv, "twilio:default", "AC:tok"))
+			a := adapters.Twilio(srv.URL, clientWith(srv, "twilio-lookup:default", "AC:tok"))
 			_, err := a.Fetch(context.Background(), person())
 			if got := domain.ClassOf(err); got != tc.want {
 				t.Fatalf("status %d should map to %s, got %s", tc.status, tc.want, got)

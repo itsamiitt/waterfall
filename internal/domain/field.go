@@ -28,6 +28,30 @@ const (
 	FieldEmployeeCount Field = "employee_count"
 	FieldIndustry      Field = "industry"
 
+	// Firmographics (L6). Company-level attributes; enriched once per Company, cached and
+	// shared across that Company's contacts. Names match docs/00 §7 (ADR-0023 rollout).
+	FieldCompanyRevenue     Field = "company_revenue"
+	FieldFundingStage       Field = "funding_stage"
+	FieldCompanyFoundedYear Field = "company_founded_year"
+	FieldCompanyHQCountry   Field = "company_hq_country"
+	FieldCompanyHQCity      Field = "company_hq_city"
+	FieldCompanyType        Field = "company_type"
+	FieldCompanyLinkedInURL Field = "company_linkedin_url"
+	FieldCompanyPhone       Field = "company_phone"
+	FieldNAICS              Field = "naics"
+	FieldSIC                Field = "sic"
+	FieldDUNS               Field = "duns_number"
+
+	// Technographics (L7). The detected tech stack is inherently multi-valued but is stored
+	// as a SINGLE normalized Observation value — a sorted, deduped, comma-joined list — so no
+	// field_versions schema change is needed (one value per Field; ADR-0023).
+	FieldTechnographics Field = "technographics"
+
+	// Intent / signals (L8). Account- or contact-level buying signals.
+	FieldIntentTopics Field = "intent_topics" // normalized comma-joined topic list
+	FieldIntentScore  Field = "intent_score"  // numeric intent strength, stringified
+	FieldBuyingSignal Field = "buying_signal" // event type: job_change | funding | hiring | ...
+
 	// Person-name match keys (inputs for email-finder providers).
 	FieldFirstName Field = "first_name"
 	FieldLastName  Field = "last_name"
@@ -42,6 +66,12 @@ var canonicalFields = map[Field]struct{}{
 	FieldMobilePhone: {}, FieldDirectDial: {}, FieldOfficePhone: {}, FieldPhoneStatus: {},
 	FieldLinkedInURL: {}, FieldJobTitle: {}, FieldSeniority: {}, FieldDepartment: {},
 	FieldCompanyDomain: {}, FieldCompanyName: {}, FieldEmployeeCount: {}, FieldIndustry: {},
+	// Firmographics (L6).
+	FieldCompanyRevenue: {}, FieldFundingStage: {}, FieldCompanyFoundedYear: {},
+	FieldCompanyHQCountry: {}, FieldCompanyHQCity: {}, FieldCompanyType: {},
+	FieldCompanyLinkedInURL: {}, FieldCompanyPhone: {}, FieldNAICS: {}, FieldSIC: {}, FieldDUNS: {},
+	// Technographics (L7) + Intent/signals (L8).
+	FieldTechnographics: {}, FieldIntentTopics: {}, FieldIntentScore: {}, FieldBuyingSignal: {},
 	FieldFirstName: {}, FieldLastName: {}, FieldFullName: {},
 }
 

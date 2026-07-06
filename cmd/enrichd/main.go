@@ -15,6 +15,7 @@ import (
 	"github.com/enrichment/waterfall/internal/domain"
 	"github.com/enrichment/waterfall/internal/engine"
 	"github.com/enrichment/waterfall/internal/provider"
+	"github.com/enrichment/waterfall/internal/provider/adapters"
 	"github.com/enrichment/waterfall/internal/provider/providertest"
 	"github.com/enrichment/waterfall/internal/router"
 	"github.com/enrichment/waterfall/internal/store"
@@ -84,4 +85,12 @@ func main() {
 	_, _ = eng.Run(ctx, req, plan.Plan(req))
 	after := cheapEmail.Calls() + premiumEmail.Calls() + phone.Calls()
 	fmt.Printf("replay (idempotent): provider calls before=%d after=%d (G2: no new paid calls)\n", before, after)
+
+	// The same Engine drives the real API-first adapters from the registry unchanged. They are
+	// constructed offline here (no network / no keys) purely to show the wired catalog; a live
+	// run (see cmd/enrichapi) resolves keys and calls each vendor through the egress SSRF choke.
+	fmt.Println("\nRegistered API-first adapters (internal/provider/adapters):")
+	for _, r := range adapters.Registry() {
+		fmt.Printf("  %-18s %-16s %s\n", r.Slug, r.Category, r.Status)
+	}
 }

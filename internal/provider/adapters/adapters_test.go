@@ -111,7 +111,7 @@ func TestTwilio_ContractAndBasicAuthInjection(t *testing.T) {
 		_, _ = w.Write([]byte(`{"valid":true,"line_type_intelligence":{"type":"mobile"}}`))
 	}))
 	defer srv.Close()
-	a := adapters.Twilio(srv.URL, clientWith(srv, "twilio:default", "AC123:tok"))
+	a := adapters.Twilio(srv.URL, clientWith(srv, "twilio-lookup:default", "AC123:tok"))
 	res, err := a.Fetch(context.Background(), person())
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
@@ -134,7 +134,7 @@ func TestAdapters_EngineIntegration(t *testing.T) {
 	defer twilioSrv.Close()
 
 	hunter := adapters.Hunter(hunterSrv.URL, clientWith(hunterSrv, "hunter:default", "HK"))
-	twilio := adapters.Twilio(twilioSrv.URL, clientWith(twilioSrv, "twilio:default", "AC:tok"))
+	twilio := adapters.Twilio(twilioSrv.URL, clientWith(twilioSrv, "twilio-lookup:default", "AC:tok"))
 
 	st := store.NewMemory()
 	eng := engine.New(st, []provider.Adapter{hunter, twilio})

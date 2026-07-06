@@ -2,8 +2,10 @@
 // Enrichment Engine. It wires the API (auth→principal, Idempotency-Key, rate limit) to a
 // bounded job queue whose workers execute the Router+Engine (G1–G5).
 //
-// It uses in-memory mock providers so it runs offline; swap in HTTPAdapters for real
-// vendors without changing the gateway or queue.
+// Providers are the real API-first adapters from internal/provider/adapters, wired through the
+// egress key-injection + SSRF choke (provider.NewEgressClient). Keys come from PROVIDER_KEYS (a
+// dev/self-host static map) or, in the full platform, the rotation engine's lease resolver; with
+// no key configured a provider call fails auth and the waterfall falls through.
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,7 +40,7 @@ import (
 	"github.com/enrichment/waterfall/internal/pgoutbox"
 	"github.com/enrichment/waterfall/internal/pgstore"
 	"github.com/enrichment/waterfall/internal/provider"
-	"github.com/enrichment/waterfall/internal/provider/providertest"
+	"github.com/enrichment/waterfall/internal/provider/adapters"
 	"github.com/enrichment/waterfall/internal/router"
 	"github.com/enrichment/waterfall/internal/store"
 	"github.com/enrichment/waterfall/internal/tenant"
@@ -55,12 +58,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Providers (mock; would be HTTPAdapters in production).
-	adapters := []provider.Adapter{
-		providertest.New("vendor-cheap", "jane.doe@acme.com", 0.72, 2, domain.FieldWorkEmail),
-		providertest.New("vendor-premium", "jane.doe@acme.com", 0.80, 6, domain.FieldWorkEmail),
-		providertest.New("vendor-phone", "+1-555-0100", 0.88, 5, domain.FieldMobilePhone),
-	}
+	// Real API-first provider adapters, from the code registry (internal/provider/adapters).
+	// The egress client is the single trust boundary the adapters call through: HTTPS-only +
+	// rebinding-safe SSRF dial guard + host allow-list (built from the registry's own base hosts)
+	// + credential injection. Keys are resolved from PROVIDER_KEYS (a dev/self-host static
+	// "slug:pool=secret,..." map); in the full platform they are leased from the rotation engine
+	// (a KeyResolver that also implements LeaseResolver) instead. With no key configured for a
+	// pool, the call fails auth and the waterfall simply falls through — no fabricated data.
+	egress := provider.NewEgressClient(
+		provider.NewHostAllowList(adapters.Hosts()...),
+		staticProviderKeys(os.Getenv),
+	)
+	provs := adapters.All(egress)
+	logger.Info("provider adapters wired", "count", len(provs))
 	reg := metrics.New()
 	bnd := bandit.New() // Thompson-sampling router learner (ADR-0008), updated by the engine.
 
@@ -98,14 +108,14 @@ func main() {
 	} else {
 		st = store.NewMemory()
 	}
-	eng := engine.New(st, adapters, engine.WithMetrics(reg), engine.WithBandit(bnd))
+	eng := engine.New(st, provs, engine.WithMetrics(reg), engine.WithBandit(bnd))
 
 	run := func(ctx context.Context, req domain.EnrichmentRequest) (engine.Outcome, error) {
 		// Build a per-request, bandit-scored plan. A fresh scorer per request avoids sharing
 		// a non-concurrent RNG across workers, and the seed (derived from the record) makes a
 		// given record's ordering reproducible on replay.
 		seed := int64(fnv1a(req.JobID + "|" + req.Subject.ID))
-		plan := router.New(adapters...).WithScorer(bnd.NewScorer(seed)).Plan(req)
+		plan := router.New(provs...).WithScorer(bnd.NewScorer(seed)).Plan(req)
 		return eng.Run(ctx, req, plan)
 	}
 
@@ -391,6 +401,26 @@ func (d deadLetterAdapter) Redrive(ctx context.Context, jobID string) (bool, err
 
 // fnv1a is a small stable hash used to seed the per-record bandit scorer, so a given
 // record's routing order reproduces on replay.
+// staticProviderKeys builds a StaticKeyResolver from the PROVIDER_KEYS env var, a dev/self-host
+// convenience of the form "pool=secret,pool=secret" where pool is a "<slug>:<pool>" selector
+// (e.g. "hunter:default=HK123,twilio-lookup:default=AC123:tok"). Each entry splits on the FIRST
+// '=' so a secret may itself contain '=' or ':'. An unset/empty var yields an empty resolver:
+// every provider call then fails auth and the waterfall falls through (no fabricated data).
+func staticProviderKeys(getenv func(string) string) provider.StaticKeyResolver {
+	out := provider.StaticKeyResolver{}
+	for _, entry := range strings.Split(getenv("PROVIDER_KEYS"), ",") {
+		entry = strings.TrimSpace(entry)
+		eq := strings.IndexByte(entry, '=')
+		if eq <= 0 {
+			continue
+		}
+		if pool := strings.TrimSpace(entry[:eq]); pool != "" {
+			out[pool] = entry[eq+1:]
+		}
+	}
+	return out
+}
+
 func fnv1a(s string) uint32 {
 	const (
 		offset = 2166136261

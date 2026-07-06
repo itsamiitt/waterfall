@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "likelihood": 8,
+  "data": {
+    "full_name": "jane doe",
+    "work_email": "jane@acme.com",
+    "mobile_phone": "+15555550100",
+    "job_title": "vp sales",
+    "linkedin_url": "linkedin.com/in/janedoe",
+    "job_company_name": "Acme",
+    "job_company_website": "acme.com",
+    "job_company_industry": "software",
+    "job_company_size": "1001-5000"
+  }
+}

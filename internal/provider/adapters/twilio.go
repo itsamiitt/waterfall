@@ -29,7 +29,7 @@ func Twilio(base string, client *http.Client) *provider.HTTPAdapter {
 		Client:  client,
 		Auth: provider.AuthDescriptor{
 			Scheme:          provider.AuthBasic,
-			KeyPoolSelector: "twilio:default", // resolves to "AccountSid:AuthToken"
+			KeyPoolSelector: "twilio-lookup:default", // "<slug>:default"; resolves to "AccountSid:AuthToken"
 		},
 		Caps: []provider.Capability{
 			{Field: domain.FieldPhoneStatus, Cost: 5, ExpectedConfidence: 0.95},

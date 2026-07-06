@@ -5,6 +5,27 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-06 — 200-provider rollout, Phase A (groundwork bridge) — ADR-0023
+Built the bridge that makes real API-first adapters runnable at scale, ahead of the per-provider
+waves (`Closo_Enrichment_Architecture_200_Tools`). **Field vocabulary** extended doc-first
+(`docs/00 §7` then `internal/domain/field.go`, kept in lockstep): code caught up to the Glossary
+(`naics`, `sic`, `technographics`, `intent_topics`, `funding_stage`) and added the L6–L8 firmo/intent
+Fields (`company_revenue`, `company_founded_year`, `company_hq_country`, `company_hq_city`,
+`company_type`, `company_linkedin_url`, `company_phone`, `duns_number`, `intent_score`,
+`buying_signal`) — 18→33 canonical Fields, additive, no migration (`technographics`/`intent_topics`
+stored as a single normalized comma-joined value). **Adapter registry**
+(`internal/provider/adapters/registry.go`): append-only single source of truth; `All(client)` builds
+the engine slice, `Hosts()` builds the egress allow-list; `TestRegistry_Invariants` enforces
+Slug==NameV, `<slug>:default` selector prefix, canonical capability Fields, and https base URLs
+(also fixed a latent `twilio-lookup` slug/selector mismatch). **Catalog seeder**
+(`cmd/providerseed` + in-package `providers.Seed`): UPSERTs one `providers` row per registered
+adapter from its introspected descriptor under `PlatformTx`; new rows land `op_state='disabled'`,
+re-seeds refresh only the integration descriptor (operator lifecycle state preserved) — proven by
+`seed_test.go`. **Binaries:** `cmd/enrichapi` now wires `adapters.All(egress)` through
+`provider.NewEgressClient` with keys from `PROVIDER_KEYS` (or the rotation lease resolver in the
+full platform); `cmd/enrichd` stays an offline demo but enumerates the registry. `go build ./...`
+and `go test ./...` green.
+
 ### 2026-07-06 — Dashboard pending-OI closeout (post-P12 hardening waves)
 Closed the open-items backlog after the P0–P12 build. Migration `0011` (mfa_used_steps,
 dash_admin_idempotency, alert_rules.anomaly_floor_credits). **Security:** TOTP single-use replay

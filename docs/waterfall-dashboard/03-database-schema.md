@@ -2028,7 +2028,7 @@ Two concurrent publishes of different drafts now serialize on the **pointer row*
 
 | ID | Item | Status | Owner |
 |---|---|---|---|
-| OI-DB-1 | Extend `internal/pgmigrate` with a no-transaction escape hatch (proposed directive `-- pgmigrate: no-transaction`) so `CREATE INDEX CONCURRENTLY` can run from migration files (§7 rule 7); until then, hot-table index builds are blocked on this item | OPEN | Senior Backend Engineer |
+| OI-DB-1 | Extend `internal/pgmigrate` with a no-transaction escape hatch (proposed directive `-- pgmigrate: no-transaction`) so `CREATE INDEX CONCURRENTLY` can run from migration files (§7 rule 7); until then, hot-table index builds are blocked on this item | RESOLVED (closeout: pgmigrate `-- pgmigrate: no-transaction` escape hatch + test) | Senior Backend Engineer |
 | OI-DB-2 | `alert_events`: MASTER SPEC §4 says monthly partitions while §10b mandates the global partial unique index `(tenant_id, rule_id) WHERE state='firing'` — PostgreSQL cannot provide both. Resolved here: unpartitioned + maintainer batched DELETE at 180d (the invariant outranks partition-drop convenience at episode volume). Ratify at /architecture-review | DECISION RECORDED | Senior Backend Engineer |
 | OI-DB-3 | Aggregator cross-tenant reads/writes run as per-Tenant dual-GUC transactions with in-memory accumulation for Class P rollups (§9.4); no operator INSERT policies and no `usage_events` operator SELECT policy were added | DECISION RECORDED | Senior Backend Engineer |
 | OI-DB-4 | `tenant_id` column added to `mfa_recovery_codes` and `approval_decisions`: MASTER SPEC §3 classes them as Class T (tenant_id NOT NULL) but the §4 column lists omit it; Class T definition wins | DECISION RECORDED | Senior Backend Engineer |

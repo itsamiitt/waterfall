@@ -7,6 +7,6 @@ build/
 coverage/
 .DS_Store
 *.local
-secrets/
+/secrets/
 *.key
 *.pem

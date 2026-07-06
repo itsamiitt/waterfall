@@ -170,8 +170,8 @@ Properties (normative, consistent with doc 03 §7):
   raw-event scans from the API impossible.
 - **Watermark cursor.** The incremental fold consumes each `usage_events` row exactly once past a
   persisted per-fold watermark; leader loss loses no data — the next leader resumes from the
-  watermark. Watermarks and loop heartbeats persist in the `self_monitor` row set (open item
-  OBS-1: DDL lands in doc 03 §2.6).
+  watermark. Watermarks and loop heartbeats persist in the `self_monitor` row set (doc 03 §2.7,
+  migration 0010; OBS-1 resolved).
 - **Replayability (48h).** Rollups are refoldable from `usage_events` within its 48h retention: a
   repair refold recomputes affected buckets wholesale and **replaces**
   (`DO UPDATE SET x = EXCLUDED.x`) — same fold code as the additive incremental mode
@@ -244,8 +244,9 @@ doc 11) actively probes Providers and writes `provider_health_checks`:
 
 ## 4. Alert rule metric vocabulary (CLOSED)
 
-The rule builder (`POST /v1/admin/alerts/rules`, doc 04 §2.11) exposes **exactly these 16
-entries** — `alert_rules.metric` is CHECK-able against this list, the evaluator switches over it,
+The rule builder (`POST /v1/admin/alerts/rules`, doc 04 §2.11) exposes **exactly these 17
+entries** (16 original + `cost.anomaly`, absorbed from the doc 12 §P6 anomaly deliverable per
+OI-P6-1) — `alert_rules.metric` is CHECK-able against this list, the evaluator switches over it,
 and the SPA enum mirrors it via `GET /v1/admin/meta/enums`. There is no query language: each entry
 compiles to one parameterized SQL aggregate over the named source. Adding an entry requires a
 change to this table, the evaluator switch, and the UI enum in lockstep (parity test, doc 13;
@@ -269,6 +270,7 @@ UNVERIFIED until production baselines exist (open item OBS-3).
 | `worker.heartbeat_age_s` | `workers` — `max(now() − last_heartbeat_at)` over non-stopped workers | seconds | `kind`, `queue` | gt / 60 / 120s |
 | `cost.daily_credits` | `cost_rollup_1d` — `SUM(credits)` for the current UTC day in scope | credits | `provider_id`, `workflow_key` | gt / `budgets.limit_credits` for the matching day-scope budget when one exists, else user-set / — |
 | `cost.budget_burn_pct` | `cost_rollup_1d` (or `tenant_usage_1d`) SUM vs `budgets.limit_credits` for the budget's scope + period (UTC latching, RF-4/doc 04) | percent | `scope`, `scope_key`, `period` | gte / 80 / — |
+| `cost.anomaly` | `cost_rollup_1d` — current UTC day SUM(credits) vs the trailing 28d same-day-of-week median; breach requires BOTH the percent threshold AND an absolute floor (package constant 1000 credits, OI-P6-3); episode payload carries the top-3 contributors | credits | `provider_id`, `workflow_key` | gt / 50 (percent over median) / — |
 | `system.sse_clients` | `self_monitor` rows — per-instance SSE client counts upserted by each dashboardd instance, summed | clients | — (platform) | gt / 400 / 120s |
 | `system.aggregator_lag_s` | `self_monitor` fold watermarks — `max(now() − watermark_ts)` across fold families | seconds | — (platform) | gt / 30 / 120s |
 
@@ -488,7 +490,7 @@ Two dashboards, two audiences, deliberately not merged:
 
 | ID | Item | Status | Owner |
 |----|------|--------|-------|
-| OBS-1 | `self_monitor` row-set DDL (component, instance, `last_run_at`, `watermark_ts`, value) — persisted loop heartbeats + fold watermarks backing §2, §4 `system.*` entries, §6; to be added to doc 03 §2.6 / migration 0009 | OPEN — doc 03 addendum | Senior Backend Engineer |
+| OBS-1 | `self_monitor` row-set DDL (component, instance, `last_run_at`→`updated_at`, `watermark_ts`, value→`payload`/`sse_clients`) — persisted loop heartbeats + fold watermarks backing §2, §4 `system.*` entries, §6 | RESOLVED (P7): doc 03 §2.7 / migration `0010_dash_self_monitor.sql`; written through `internal/dash/realtime.SelfMon` (doc 03 §6 one-owner row); doc 12 OI-P7-1 | Senior Backend Engineer |
 | OBS-2 | Four-way parity test: §4 vocabulary ⊆ evaluator switch ⊆ `meta/enums` ⊆ SPA rule-builder enum (plus §1 catalog ↔ registered families) | OPEN — doc 13 / at impl | Senior Backend Engineer |
 | OBS-3 | All §4 default thresholds, §6 self-monitoring defaults, §1 series-count bound, and the §5.6 detection SLA are pre-tune design values, UNVERIFIED until the P12 load/chaos pass | OPEN — P12 | Senior Backend Engineer |
 | OBS-4 | OTel tracing in dashboardd: hand-rolled `traceparent` propagation vs dependency exception; `req_id` reserved as correlation key meanwhile | OPEN — design target | Solutions Architect |

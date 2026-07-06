@@ -34,8 +34,10 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/health"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
 	"github.com/enrichment/waterfall/internal/dash/keys"
+	"github.com/enrichment/waterfall/internal/dash/overview"
 	"github.com/enrichment/waterfall/internal/dash/providers"
 	"github.com/enrichment/waterfall/internal/dash/queues"
+	"github.com/enrichment/waterfall/internal/dash/realtime"
 	"github.com/enrichment/waterfall/internal/dash/rotation"
 	"github.com/enrichment/waterfall/internal/dash/routing"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
@@ -334,10 +336,19 @@ func main() {
 	}))
 	defer detector.Stop()
 
+	// P7 realtime seam (ADR-0019): the per-instance SSE Hub + the SelfMon store — sole writer
+	// of the migration-0010 self_monitor row-set. Constructed before the samplers below so the
+	// queue sampler can persist its snapshot through it (closing OI-QW-9).
+	sseHub := realtime.NewHub(realtime.HubConfig{}, reg)
+	selfmon := realtime.NewSelfMon(store)
+
 	// P5 queue_stats sampler (doc 06 §6, OI-QW-7/8/9): a leader-guarded 15s tick drives the
 	// aggregator's QueueStatsFold for the single logical pgoutbox queue. Gating on the telemetry
 	// Loops leadership keeps ONE sampler across N instances without a second advisory lock, and
 	// the fold is idempotent (last-sample-wins REPLACE), so a handover double-sample is harmless.
+	// P7 closes OI-QW-9: each sample is also persisted to the self_monitor queue_stats_sample
+	// row, which followers serve and every instance's realtime poller coalesces into
+	// queue.stats.tick.
 	queueFoldStop := make(chan struct{})
 	go func() {
 		t := time.NewTicker(15 * time.Second)
@@ -352,6 +363,10 @@ func main() {
 				}
 				if err := telemLoops.Aggregator().QueueStatsFold(context.Background(), defaultQueueName, time.Now()); err != nil {
 					logger.Warn("queue stats fold", "err", err)
+					continue
+				}
+				if err := realtime.SnapshotQueueStats(context.Background(), store, selfmon); err != nil {
+					logger.Warn("queue stats self_monitor snapshot", "err", err)
 				}
 			}
 		}
@@ -380,6 +395,40 @@ func main() {
 	alertLoops.Start(context.Background())
 	defer alertLoops.Stop()
 
+	// P7 overview + SSE realtime (module 1 + ADR-0019, doc 12 §P7). The overview Aggregator is
+	// the leader-elected 2s tile loop persisting to self_monitor('overview_snapshot'); the
+	// realtime Poller on THIS instance derives the closed event vocabulary from the DB and fans
+	// out through the Hub (DB reads O(instances), never O(clients)); the streams endpoint is a
+	// GET and rides the FeatureChain's session auth WITHOUT CSRF (safe-method exemption).
+	ovAgg := overview.NewAggregator(store, selfmon, overview.Config{}, reg, logger)
+	ovAgg.Start(context.Background())
+	defer ovAgg.Stop()
+	overview.Routes(fmux, overview.Deps{
+		Aggregator: ovAgg, Store: store, Auth: httpx.CtxAuthenticator{},
+		Audit: auditLog, Logger: logger,
+	})
+	sseStreams := realtime.Routes(fmux, realtime.Deps{
+		Hub: sseHub, Auth: httpx.CtxAuthenticator{},
+		Config: realtime.StreamConfig{
+			MaxConns:      cfg.sseMaxConns,
+			WriteDeadline: cfg.sseWriteDeadline,
+		},
+		Logger: logger,
+	})
+	poller := realtime.NewPoller(store, sseHub, realtime.PollerConfig{}, logger)
+	poller.Start(context.Background())
+	defer poller.Stop()
+	// LISTEN/NOTIFY wake (timeboxed extension, ADR-0019): lower-latency poller wakes via
+	// pg_notify('dash_config', ...); best-effort — the poll interval remains the contract.
+	stopWaker := realtime.StartNotifyWaker(context.Background(), appCfg, poller, logger)
+	defer stopWaker()
+	// Self-monitor publisher (closes OI-P6-2): per-instance SSE client counts + the telemetry
+	// fold watermark land in self_monitor every 15s, so the P6 system.sse_clients /
+	// system.aggregator_lag_s alert metrics evaluate against live rows.
+	stopMonitor := realtime.StartMonitor(context.Background(), selfmon, sseStreams,
+		realtime.MonitorConfig{Watermark: telemLoops.Aggregator().Watermark}, reg, logger)
+	defer stopMonitor()
+
 	featureHandler := srv.FeatureChain(fmux)
 
 	// Compose: feature path subtrees route to featureHandler; everything else (P0 admin routes,
@@ -389,7 +438,8 @@ func main() {
 	admin.Handle("/", srv.Handler())
 	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
 		"routing", "workflows", "config", "health", "approvals", "change-history",
-		"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts"} {
+		"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts",
+		"streams", "overview", "search", "meta"} {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
@@ -638,6 +688,9 @@ grant select, insert, update, delete on
   usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d,
   key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d,
   cost_rollup_1d, provider_health_checks, provider_health_1d to dash_app;
+-- P7 self_monitor snapshot row-set (0010): loop heartbeats, fold watermarks, SSE client
+-- counts, overview/queue snapshots — written through internal/dash/realtime.SelfMon only.
+grant select, insert, update, delete on self_monitor to dash_app;
 `
 
 // startupSelfCheck refuses to run as a role that bypasses RLS (which would silently defeat G1) and
@@ -672,17 +725,19 @@ func startupSelfCheck(appCfg pg.Config) error {
 // --- configuration ---
 
 type config struct {
-	port           int
-	dsn            string
-	adminDSN       string
-	masterKey      string
-	pepper         []byte
-	issuer         string
-	jwtSecret      string
-	jwtIssuer      string
-	jwtAudience    string
-	jwtKid         string
-	trustedProxies []*net.IPNet
+	port             int
+	dsn              string
+	adminDSN         string
+	masterKey        string
+	pepper           []byte
+	issuer           string
+	jwtSecret        string
+	jwtIssuer        string
+	jwtAudience      string
+	jwtKid           string
+	trustedProxies   []*net.IPNet
+	sseMaxConns      int           // SSE_MAX_CONNS (doc 04 §3.5; default 500)
+	sseWriteDeadline time.Duration // SSE_WRITE_DEADLINE (default 10s)
 }
 
 // loadConfig reads and validates configuration from the environment, reporting every problem at
@@ -726,6 +781,22 @@ func loadConfig(getenv func(string) string) (config, error) {
 		c.jwtAudience = getenv("JWT_AUDIENCE")
 		if k := getenv("JWT_KID"); k != "" {
 			c.jwtKid = k
+		}
+	}
+
+	// SSE deployment knobs (doc 04 §3.5, doc 11 §2): connection cap + per-write deadline.
+	if v := getenv("SSE_MAX_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err != nil || n < 1 {
+			errs = append(errs, fmt.Errorf("SSE_MAX_CONNS %q is not a positive integer", v))
+		} else {
+			c.sseMaxConns = n
+		}
+	}
+	if v := getenv("SSE_WRITE_DEADLINE"); v != "" {
+		if d, err := time.ParseDuration(v); err != nil || d <= 0 {
+			errs = append(errs, fmt.Errorf("SSE_WRITE_DEADLINE %q is not a positive duration", v))
+		} else {
+			c.sseWriteDeadline = d
 		}
 	}
 

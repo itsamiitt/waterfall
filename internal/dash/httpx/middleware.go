@@ -62,6 +62,18 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Flush passes streaming flushes through to the underlying writer so long-lived responses
+// (the P7 SSE stream) are never buffered by the instrumentation wrapper.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap lets http.ResponseController reach the real connection's controller methods
+// (SetWriteDeadline for the SSE per-write deadline, doc 04 §3.5) through this wrapper.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // instrument records RED signals + a structured log line, and emits one api_access_log record
 // (route TEMPLATE only). It is outermost per route so it observes the final status.
 func (s *Server) instrument(route string, h http.HandlerFunc) http.HandlerFunc {
@@ -133,10 +145,17 @@ func (s *Server) requireMFA(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// csrf enforces the double-submit check for cookie-session mutating requests (doc 05 §4.1). The
-// JWT path carries no cookie and is exempt. Missing header => csrf_required; mismatch => csrf_invalid.
+// csrf enforces the double-submit check for cookie-session MUTATING requests (doc 05 §4.1).
+// Safe methods (GET/HEAD/OPTIONS) are exempt per the documented contract — necessarily so for
+// the P7 SSE stream, whose browser EventSource cannot send custom headers. The JWT path
+// carries no cookie and is exempt. Missing header => csrf_required; mismatch => csrf_invalid.
 func (s *Server) csrf(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			h(w, r)
+			return
+		}
 		m := metaFrom(r.Context())
 		if m.session {
 			token := r.Header.Get("X-CSRF-Token")

@@ -37,6 +37,18 @@ type Conn struct {
 	c   net.Conn
 	r   *bufio.Reader
 	buf []byte
+
+	// notifications buffers async 'A' NotificationResponse messages observed while reading
+	// query replies, so LISTEN payloads arriving mid-statement are never lost. Drained by
+	// WaitNotification.
+	notifications []Notification
+}
+
+// Notification is one LISTEN/NOTIFY message ('A' NotificationResponse).
+type Notification struct {
+	PID     uint32
+	Channel string
+	Payload string
 }
 
 // Result is a text-format query result.
@@ -272,6 +284,8 @@ func (c *Conn) simpleQuery(sql string) (*Result, error) {
 			res.Rows = append(res.Rows, parseDataRow(body))
 		case 'C', 'I', 'S', 'N':
 			// CommandComplete / EmptyQuery / ParameterStatus / Notice
+		case 'A':
+			c.bufferNotification(body)
 		case 'E':
 			if firstErr == nil {
 				firstErr = parseError(body)
@@ -357,6 +371,8 @@ func (c *Conn) finishExtended() (*Result, error) {
 		case 'D':
 			res.Rows = append(res.Rows, parseDataRow(body))
 		case 'C', 'S', 'N', 'I':
+		case 'A':
+			c.bufferNotification(body)
 		case 'E':
 			if firstErr == nil {
 				firstErr = parseError(body)

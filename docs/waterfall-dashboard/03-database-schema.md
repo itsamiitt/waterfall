@@ -28,7 +28,7 @@ Policies on partitioned parents govern all access through the parent (the only a
 
 ---
 
-## 2. Full DDL — migrations 0004–0009
+## 2. Full DDL — migrations 0004–0010
 
 Each subsection below is one migration file, presented exactly as it ships. Shared preamble for every file (repeated in each file's top comment): applied atomically by `internal/pgmigrate`; no `BEGIN`/`COMMIT`; RLS pattern copied from `migrations/0001_init.sql`.
 
@@ -1345,6 +1345,46 @@ CREATE POLICY cost_rollup_1d_operator_read ON cost_rollup_1d
 
 ---
 
+### 2.7 `migrations/0010_dash_self_monitor.sql`
+
+The `self_monitor` snapshot row-set (doc 10 OBS-1; doc 02 §5 rows 5–6; doc 12 OI-P7-1). A small
+Class-P table of single-row-per-key upserts: persisted loop heartbeats, fold watermarks,
+per-instance SSE client counts, and the leader aggregator's `overview_snapshot` /
+`queue_stats_sample` payload snapshots that follower instances (and every instance's realtime
+poller) serve from. It is the only cross-instance channel for the doc 10 §4 `system.*` alert
+metrics (`system.sse_clients` sums `sse_clients`; `system.aggregator_lag_s` reads
+`min(watermark_ts)`) and for the dead-man's-switch heartbeat ages. Rows are overwritten in place —
+retention is n/a, no partitioning, no growth.
+
+```sql
+-- Migration 0010 — self_monitor snapshot row-set (doc 03 §2.7, doc 10 OBS-1, doc 12 OI-P7-1).
+-- Single-row-per-key upserts: loop heartbeats, fold watermarks, per-instance SSE client
+-- counts, and the leader aggregator's overview/queue snapshot payloads served by followers.
+-- Class P: platform-only RLS, FORCE; written exclusively through internal/dash/realtime's
+-- SelfMon store under PlatformTx. Applied atomically by internal/pgmigrate; no BEGIN/COMMIT.
+CREATE TABLE self_monitor (
+    key          text PRIMARY KEY,      -- e.g. overview_snapshot, queue_stats_sample,
+                                        --      fold:usage, sse:<instance>
+    component    text NOT NULL,         -- emitting loop family: overview | queue_sampler |
+                                        --      aggregator | sse | evaluator | scheduler
+    instance     text,                  -- emitting dashboardd instance id (NULL for
+                                        --      leader-singleton rows)
+    payload      jsonb,                 -- snapshot body (tiles / queue sample); aggregates only
+    seq          bigint NOT NULL DEFAULT 0,  -- monotonic snapshot sequence (DB-side increment)
+    sse_clients  bigint,                -- per-instance SSE client count (sse:* rows only)
+    watermark_ts timestamptz,           -- fold watermark (fold:* rows only)
+    updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE self_monitor ENABLE ROW LEVEL SECURITY;
+ALTER TABLE self_monitor FORCE ROW LEVEL SECURITY;
+CREATE POLICY self_monitor_platform_only ON self_monitor
+    USING (app_current_tenant() = 'platform')
+    WITH CHECK (app_current_tenant() = 'platform');
+```
+
+---
+
 ## 3. RLS policy registry
 
 This registry is the **assertion target of the RLS fuzz test** (doc 13): the test enumerates `pg_policies` on a migrated database and fails CI unless the set of (table, policy, command, qual) tuples matches this table exactly — no missing policies, no extra policies. Reading conventions:
@@ -1421,6 +1461,7 @@ This registry is the **assertion target of the RLS fuzz test** (doc 13): the tes
 | worker_stats_5m | worker_stats_5m_platform_only | ALL | `app_current_tenant() = 'platform'` | PUBLIC (app_rls) |
 | provider_health_checks | provider_health_checks_platform_only | ALL | `app_current_tenant() = 'platform'` | PUBLIC (app_rls) |
 | provider_health_1d | provider_health_1d_platform_only | ALL | `app_current_tenant() = 'platform'` | PUBLIC (app_rls) |
+| self_monitor *(0010)* | self_monitor_platform_only | ALL | `app_current_tenant() = 'platform'` | PUBLIC (app_rls) |
 
 Deliberate absences the fuzz test also asserts: **no** operator policy on `sessions`, `mfa_recovery_codes`, `secret_envelopes`, `field_versions`, `idempotency_ledger`, `cost_ledger` (the G2/G4/G5 ledgers), or `job_outbox`; **no** tenant policy of any kind on `secret_envelopes`; **no** operator cross-tenant policy anywhere with a command other than SELECT (the doc 05 §3.5 fuzz oracle depends on this: cross-tenant write attempts must affect zero rows even for operators). Every handler that serves rows under **any** operator cross-tenant policy — the SELECT policies enumerated in the table above are the complete set, whatever their names — writes an `audit_log` row (ADR-0020); cross-tenant existence is never disclosed — unauthorized object references return 404 with the uniform error body `{"error":{"code":"not_found","message":"..."}}`.
 
@@ -1454,6 +1495,7 @@ Partition creation and detachment is performed by the **runtime partition-mainta
 | worker_stats_5m | monthly (`bucket_start`) | 30d | partition maintainer |
 | provider_health_checks | weekly (`checked_at`) | 30d | partition maintainer |
 | provider_health_1d | monthly (`day`) | 2y | partition maintainer |
+| self_monitor | none | n/a — single-row-per-key upserts, overwritten in place, never accumulated | — (no maintenance) |
 
 Failure of the maintainer is itself alertable (closed-vocab metric `system.partition_maintainer_stale`, doc 10) and has a runbook (doc 14): the `_default` backstops mean the failure mode is growing default partitions and missed retention, never write outages.
 
@@ -1521,6 +1563,7 @@ One package writes each table; everyone else reads through granted SELECT (subje
 | usage_events | engine hot path (`internal/job` execution, via LeaseResolver `Done`) | read-only (aggregator per-Tenant folds, nightly reconcile) | the ONE hot-path insert; dashboardd never writes it |
 | provider_stats_1m/1h/1d, key_usage_1m/1h/1d, tenant_usage_1h/1d, cost_rollup_1d, provider_health_1d | dashboardd leader aggregator loop (advisory lock `dash_aggregator`) | read-only for all features | single writer; refoldable from usage_events / provider_health_checks |
 | provider_health_checks | `internal/dash/health` (jittered scheduler) | owner | aggregator folds provider_health_1d from it |
+| self_monitor | `internal/dash/realtime` (SelfMon store) | owner | every write goes through `realtime.SelfMon` under `PlatformTx` — the enumerated emitters (overview 2s aggregator snapshot, queue-stats sampler sample, telemetry fold watermark heartbeat, per-instance SSE client counts) are loops hosted in `cmd/dashboardd` that call this one store; readers: overview followers, the realtime poller, and the P6 `system.*` alert-metric branches |
 
 The aggregator loop is hosted in `cmd/dashboardd` per doc 02 §2.5 (leader-elected); its code placement inside `internal/dash/` is a P4 implementation detail that must not change this registry's writer assignments.
 

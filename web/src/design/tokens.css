@@ -1,0 +1,91 @@
+/* Design tokens (doc 08 §6.1). The ONLY place raw color/size values may appear.
+ * Dark mode: providers.tsx owns the data-theme attribute on <html> — it applies the
+ * localStorage override or falls back to prefers-color-scheme, so components never branch
+ * on theme and this file needs a single dark block.
+ * Contrast: status/text tokens are validated by src/design/tokens-contrast.test.ts
+ * (WCAG AA: >= 4.5:1 text, >= 3:1 glyphs) in BOTH themes — a P8 gate (doc 08 OI-UI-3).
+ * --status-ok / --status-warn (light) are darkened from the doc 08 candidates (#1a7f37,
+ * #9a6700), which measured 4.48:1 / 4.44:1 against their paired surfaces; the doc marks its
+ * values as candidates until this test is green. */
+:root {
+  /* Neutral surface/text scale (light) */
+  --color-bg: #ffffff;
+  --color-bg-raised: #f6f7f9;
+  --color-bg-sunken: #eef0f3;
+  --color-border: #d8dde4;
+  --color-border-strong: #b6bec9;
+  --color-text: #17202b;
+  --color-text-muted: #5b6472;
+  --color-text-faint: #8b93a1;
+  /* Action */
+  --color-accent: #2653c4;
+  --color-accent-hover: #1e46ab;
+  --color-accent-text: #ffffff;
+  /* Status (semantic; consumed ONLY via lib/status.ts mappings) */
+  --status-ok: #187733;
+  --status-ok-bg: #e6f4ea;
+  --status-warn: #8a5c00;
+  --status-warn-bg: #fff4d6;
+  --status-error: #b42318;
+  --status-error-bg: #fdebe9;
+  --status-info: #175cd3;
+  --status-info-bg: #e8f0fd;
+  --status-neutral: #5b6472;
+  --status-neutral-bg: #eef0f3;
+  --status-paused: #7048b6;
+  --status-paused-bg: #f1eafb;
+  /* Space scale, 4px base */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --space-9: 64px;
+  /* Type scale */
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-xs: 12px/16px;
+  --text-sm: 13px/18px;
+  --text-md: 14px/20px;
+  --text-lg: 16px/24px;
+  --text-xl: 20px/28px;
+  --text-2xl: 24px/32px;
+  /* Shape and focus */
+  --radius-1: 4px;
+  --radius-2: 8px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 8px 24px rgba(16, 24, 40, 0.16);
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-bg: #0e1116;
+  --color-bg-raised: #161b22;
+  --color-bg-sunken: #0a0d12;
+  --color-border: #2b323c;
+  --color-border-strong: #444d5a;
+  --color-text: #e8ecf1;
+  --color-text-muted: #9aa4b1;
+  --color-text-faint: #6b7683;
+  --color-accent: #6b96f2;
+  --color-accent-hover: #86aaf5;
+  --color-accent-text: #0e1116;
+  --status-ok: #4cc38a;
+  --status-ok-bg: #12281c;
+  --status-warn: #e2b93b;
+  --status-warn-bg: #2a2210;
+  --status-error: #f2705f;
+  --status-error-bg: #2e1512;
+  --status-info: #74a8f7;
+  --status-info-bg: #12233d;
+  --status-neutral: #9aa4b1;
+  --status-neutral-bg: #1c222b;
+  --status-paused: #b195e8;
+  --status-paused-bg: #221a33;
+  color-scheme: dark;
+}

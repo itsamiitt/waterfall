@@ -1,0 +1,270 @@
+/* Base element styles + app shell layout (doc 09 §0: nav rail + top bar + content).
+ * Everything references tokens.css custom properties — no raw values outside design/. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font: var(--text-md) var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  font: 600 var(--text-2xl) var(--font-sans);
+  margin: var(--space-0);
+  outline: none; /* focus target on route change (doc 08 §9) */
+}
+h2 {
+  font: 600 var(--text-xl) var(--font-sans);
+  margin: var(--space-0);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-1);
+}
+
+code {
+  font: var(--text-sm) var(--font-mono);
+}
+
+/* ---- App shell ---- */
+
+.shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "rail topbar"
+    "rail main";
+  height: 100%;
+}
+
+.shell-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-raised);
+  border-right: 1px solid var(--color-border);
+  min-width: 148px;
+  overflow-y: auto;
+}
+
+.shell-rail-brand {
+  font: 600 var(--text-lg) var(--font-sans);
+  padding: var(--space-3);
+  white-space: nowrap;
+}
+
+.shell-rail a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-1);
+  color: var(--color-text-muted);
+  font: var(--text-sm) var(--font-sans);
+  white-space: nowrap;
+}
+.shell-rail a:hover {
+  background: var(--color-bg-sunken);
+  text-decoration: none;
+}
+.shell-rail a[aria-current="page"] {
+  background: var(--color-bg-sunken);
+  color: var(--color-text);
+  font-weight: 600;
+}
+.shell-rail-abbr {
+  display: inline-block;
+  width: var(--space-6);
+  font: 600 var(--text-xs) var(--font-mono);
+  color: var(--color-text-faint);
+}
+
+.shell-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.shell-main {
+  grid-area: main;
+  overflow: auto;
+  padding: var(--space-6);
+}
+
+.topbar-spacer {
+  flex: 1;
+}
+
+.topbar-identity {
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.sse-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.sse-indicator-dot {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-2);
+  background: var(--status-neutral);
+}
+.sse-indicator[data-state="live"] .sse-indicator-dot {
+  background: var(--status-ok);
+}
+.sse-indicator[data-state="connecting"] .sse-indicator-dot,
+.sse-indicator[data-state="reconnecting"] .sse-indicator-dot {
+  background: var(--status-warn);
+}
+.sse-indicator[data-state="degraded"] .sse-indicator-dot {
+  background: var(--status-error);
+}
+
+/* ---- Search box ---- */
+
+.searchbox {
+  position: relative;
+}
+.searchbox input {
+  width: 280px;
+}
+.searchbox-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: var(--space-2);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-2);
+  max-height: 320px;
+  overflow: auto;
+  z-index: 30;
+}
+.searchbox-results li {
+  list-style: none;
+}
+.searchbox-results ul {
+  margin: var(--space-0);
+  padding: var(--space-2);
+}
+.searchbox-results a {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-1);
+  color: var(--color-text);
+}
+.searchbox-results a:hover {
+  background: var(--color-bg-sunken);
+  text-decoration: none;
+}
+.searchbox-kind {
+  font: var(--text-xs) var(--font-mono);
+  color: var(--color-text-faint);
+  min-width: var(--space-9);
+}
+.searchbox-note {
+  padding: var(--space-3);
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}
+
+/* ---- Page scaffolding ---- */
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+.page-header-meta {
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-5);
+}
+
+.skeleton {
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-1);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  min-height: var(--space-8);
+}
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+.auth-card {
+  max-width: 380px;
+  margin: 10vh auto;
+  padding: var(--space-7);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.form-error {
+  color: var(--status-error);
+  font: var(--text-sm) var(--font-sans);
+}
+
+.mfa-qr {
+  display: block;
+  margin: var(--space-5) auto;
+  background: #ffffff; /* QR quiet zone must stay white in both themes */
+  padding: var(--space-3);
+  border-radius: var(--radius-1);
+}

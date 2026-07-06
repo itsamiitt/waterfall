@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/check-allowlist.mjs && vitest run",
     "test:watch": "vitest",
+    "check:orphan": "node scripts/check-no-orphan-ui.mjs",
     "e2e": "playwright test",
     "preview": "vite preview"
   },

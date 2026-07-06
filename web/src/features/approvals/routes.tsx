@@ -1,7 +1,11 @@
-// features/approvals — P11 module stub (doc 12 §P11). This file stays the lazy route
-// boundary; the real pages replace the Component export in P11.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/approvals — lazy route boundary for /approvals (doc 12 §P11).
+import { RequireRole } from "../../app/guards";
+import ApprovalsPage from "./ApprovalsPage";
 
 export function Component() {
-  return <ComingSoon module="Approvals" phase="P11" group="approvals.read" />;
+  return (
+    <RequireRole group="approvals.read">
+      <ApprovalsPage />
+    </RequireRole>
+  );
 }

@@ -1,7 +1,13 @@
-// features/alerts — P11 module stub (doc 12 §P11). This file stays the lazy route
-// boundary; the real pages replace the Component export in P11.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/alerts — lazy route boundary for /alerts and /alerts/rules/:id (doc 12 §P11).
+import { useParams } from "react-router";
+import { RequireRole } from "../../app/guards";
+import AlertsPage from "./AlertsPage";
+import RuleEditorRoute from "./RuleEditorRoute";
 
 export function Component() {
-  return <ComingSoon module="Alerts" phase="P11" group="alerts.read" />;
+  const params = useParams();
+  const isRuleEditor = params.id !== undefined;
+  return (
+    <RequireRole group="alerts.read">{isRuleEditor ? <RuleEditorRoute /> : <AlertsPage />}</RequireRole>
+  );
 }

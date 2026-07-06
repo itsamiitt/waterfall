@@ -1,7 +1,18 @@
-// features/security — P11 module stub (doc 12 §P11). This file stays the lazy route
-// boundary; the real pages replace the Component export in P11.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/security — lazy route boundary for /security/{users,sessions,audit} and /settings
+// (doc 12 §P11). One feature chunk serves all four; the pathname selects the page.
+import { useLocation } from "react-router";
+import { RequireRole } from "../../app/guards";
+import SecurityPage from "./SecurityPage";
+import SettingsPage from "./SettingsPage";
 
 export function Component() {
-  return <ComingSoon module="Security" phase="P11" group="sessions.read" />;
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/settings")) {
+    return (
+      <RequireRole group="sessions.read">
+        <SettingsPage />
+      </RequireRole>
+    );
+  }
+  return <SecurityPage />;
 }

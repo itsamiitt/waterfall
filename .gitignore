@@ -10,3 +10,5 @@ coverage/
 /secrets/
 *.key
 *.pem
+web/test-results/
+web/playwright-report/

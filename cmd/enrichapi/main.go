@@ -8,12 +8,17 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -24,6 +29,7 @@ import (
 	"github.com/enrichment/waterfall/internal/domain"
 	"github.com/enrichment/waterfall/internal/durable"
 	"github.com/enrichment/waterfall/internal/engine"
+	"github.com/enrichment/waterfall/internal/heartbeat"
 	"github.com/enrichment/waterfall/internal/job"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
@@ -195,6 +201,15 @@ func main() {
 	}))
 	dispatcher.Start(8) // worker pool
 	defer dispatcher.Stop()
+
+	// Worker heartbeat to the dashboard (OI-P5-1, doc 12 §P5). Fully OPT-IN: inert unless
+	// DASH_HEARTBEAT_URL is set, so default enrichapi behavior is unchanged. The endpoint is
+	// RBAC-gated, so the beat carries a machine JWT — either a pre-minted DASH_HEARTBEAT_JWT or one
+	// minted here from DASH_HEARTBEAT_JWT_SECRET (HS256, role:operator + admin:write, short-lived).
+	if cfg.HeartbeatURL != "" {
+		hbStop := startHeartbeat(logger, cfg)
+		defer hbStop()
+	}
 
 	// Auth: verified JWT when JWT_HS256_SECRET is set (production path), else static dev
 	// tokens. Either way, tenant_id flows ONLY from the authenticated principal (G1).
@@ -378,4 +393,77 @@ func fnv1a(s string) uint32 {
 		h *= prime
 	}
 	return h
+}
+
+// startHeartbeat wires the opt-in worker heartbeat client (OI-P5-1). It posts to the dashboard's
+// RBAC-gated /v1/admin/workers/{id}/heartbeat and converges on the echoed desired_state. Returns a
+// stop func. The bearer is a pre-minted DASH_HEARTBEAT_JWT, or one minted here from
+// DASH_HEARTBEAT_JWT_SECRET. jobs_active drain-gating of the dispatcher is a documented follow-up
+// (OI-P5-2): this loop conveys liveness + desired_state; the client's ShouldClaim()/DesiredState()
+// expose the drain signal for a future dispatcher gate.
+func startHeartbeat(logger *slog.Logger, cfg *config.Config) func() {
+	workerID := cfg.HeartbeatWorkerID
+	if workerID == "" {
+		host, _ := os.Hostname()
+		workerID = host + "-" + strconv.Itoa(os.Getpid())
+	}
+	bearer := func() (string, error) {
+		if cfg.HeartbeatJWT != "" {
+			return cfg.HeartbeatJWT, nil
+		}
+		if cfg.HeartbeatJWTSecret == "" {
+			return "", nil
+		}
+		return mintHS256(cfg), nil
+	}
+	transport := heartbeat.NewHTTPTransport(heartbeat.HTTPConfig{BaseURL: cfg.HeartbeatURL, Bearer: bearer})
+	hb := heartbeat.New(heartbeat.Config{
+		Transport: transport, WorkerID: workerID, Kind: orDefault(cfg.HeartbeatKind, "enrichd"),
+		Region: cfg.HeartbeatRegion, Queue: cfg.HeartbeatQueue, Version: cfg.HeartbeatVersion, Logger: logger,
+	})
+	interval := time.Duration(cfg.HeartbeatIntervalS) * time.Second
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		if err := hb.Run(ctx, interval); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("heartbeat loop stopped", "err", err)
+		}
+	}()
+	logger.Info("worker heartbeat enabled", "url", cfg.HeartbeatURL, "worker_id", workerID, "interval", interval)
+	return cancel
+}
+
+func orDefault(v, d string) string {
+	if v == "" {
+		return d
+	}
+	return v
+}
+
+// mintHS256 mints a short-lived HS256 machine JWT the dashboard verifier accepts (tenant_id +
+// role:operator/admin:write scopes, exp, optional iss/aud). Hand-rolled from stdlib so the worker
+// binary needs no test-support import; mirrors the compact JWS the internal/auth verifier parses.
+func mintHS256(cfg *config.Config) string {
+	b64 := func(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+	header, _ := json.Marshal(map[string]any{"alg": "HS256", "typ": "JWT", "kid": cfg.HeartbeatJWTKid})
+	now := time.Now()
+	claims := map[string]any{
+		"tenant_id": cfg.HeartbeatTenant,
+		"scopes":    []string{"role:operator", "admin:write"},
+		"iat":       now.Unix(),
+		"exp":       now.Add(5 * time.Minute).Unix(),
+	}
+	if cfg.HeartbeatJWTIssuer != "" {
+		claims["iss"] = cfg.HeartbeatJWTIssuer
+	}
+	if cfg.HeartbeatJWTAudience != "" {
+		claims["aud"] = cfg.HeartbeatJWTAudience
+	}
+	payload, _ := json.Marshal(claims)
+	signing := b64(header) + "." + b64(payload)
+	mac := hmac.New(sha256.New, []byte(cfg.HeartbeatJWTSecret))
+	mac.Write([]byte(signing))
+	return signing + "." + b64(mac.Sum(nil))
 }

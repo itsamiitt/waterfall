@@ -98,12 +98,12 @@ func (s *Store) InsertRule(ctx context.Context, r Rule) (Rule, error) {
 		return c.ExecParams(
 			`insert into alert_rules
 			   (id, tenant_id, name, metric, scope, op, threshold, window_s, cooldown_s,
-			    severity, channels, enabled, muted_until, created_by, updated_at)
+			    severity, channels, enabled, muted_until, created_by, updated_at, anomaly_floor_credits)
 			 values ($1, app_current_tenant(), $2, $3, $4::jsonb, $5, $6, $7, $8, $9,
-			         $10::uuid[], $11, $12, $13, $14)`,
+			         $10::uuid[], $11, $12, $13, $14, $15)`,
 			r.ID, r.Name, r.Metric, scopeJSON(r.Scope), r.Op, r.Threshold, r.WindowS, r.CooldownS,
 			nullStr(r.Severity), uuidArrayLiteral(r.Channels), r.Enabled, tsOrNull(r.MutedUntil),
-			nullStr(r.CreatedBy), r.UpdatedAt)
+			nullStr(r.CreatedBy), r.UpdatedAt, i64OrNull(r.AnomalyFloorCredits))
 	})
 	if err != nil {
 		return Rule{}, err
@@ -116,7 +116,7 @@ func (s *Store) ListRules(ctx context.Context, fMetric, fSeverity string, fEnabl
 	var out []Rule
 	err := s.db.Tx(ctx, func(c *pg.Conn) error {
 		q := `select id, name, metric, scope, op, threshold, window_s, cooldown_s, severity,
-		             channels, enabled, muted_until, created_by, updated_at
+		             channels, enabled, muted_until, created_by, updated_at, anomaly_floor_credits
 		        from alert_rules where 1=1`
 		var args []any
 		if fMetric != "" {
@@ -154,7 +154,7 @@ func (s *Store) GetRule(ctx context.Context, id string) (Rule, error) {
 	err := s.db.Tx(ctx, func(c *pg.Conn) error {
 		res, qerr := c.QueryParams(
 			`select id, name, metric, scope, op, threshold, window_s, cooldown_s, severity,
-			        channels, enabled, muted_until, created_by, updated_at
+			        channels, enabled, muted_until, created_by, updated_at, anomaly_floor_credits
 			   from alert_rules where id = $1`, id)
 		if qerr != nil {
 			return qerr
@@ -187,18 +187,20 @@ func (s *Store) PatchRule(ctx context.Context, id string, p RulePatch) (Rule, er
 		}
 		return c.ExecParams(
 			`update alert_rules set
-			   name        = coalesce($2, name),
-			   threshold   = coalesce($3, threshold),
-			   window_s    = coalesce($4, window_s),
-			   cooldown_s  = coalesce($5, cooldown_s),
-			   severity    = coalesce($6, severity),
-			   channels    = coalesce($7::uuid[], channels),
-			   enabled     = coalesce($8, enabled),
-			   muted_until = case when $9 then $10 else muted_until end,
-			   updated_at  = $11
+			   name                  = coalesce($2, name),
+			   threshold             = coalesce($3, threshold),
+			   window_s              = coalesce($4, window_s),
+			   cooldown_s            = coalesce($5, cooldown_s),
+			   severity              = coalesce($6, severity),
+			   channels              = coalesce($7::uuid[], channels),
+			   enabled               = coalesce($8, enabled),
+			   muted_until           = case when $9 then $10 else muted_until end,
+			   anomaly_floor_credits = coalesce($12, anomaly_floor_credits),
+			   updated_at            = $11
 			 where id = $1`,
 			id, p.Name, p.Threshold, p.WindowS, p.CooldownS, p.Severity,
-			uuidArrayOrNull(p.Channels), p.Enabled, p.SetMuted, tsOrNull(p.MutedUntil), s.now().UTC())
+			uuidArrayOrNull(p.Channels), p.Enabled, p.SetMuted, tsOrNull(p.MutedUntil), s.now().UTC(),
+			i64OrNull(p.AnomalyFloorCredits))
 	})
 	if err != nil {
 		return Rule{}, err
@@ -228,15 +230,16 @@ func (s *Store) DeleteRule(ctx context.Context, id string) error {
 // RulePatch carries the optional fields of a PATCH. A nil pointer means "leave unchanged"; SetMuted
 // distinguishes "clear muted_until" (SetMuted=true, MutedUntil=nil) from "leave it".
 type RulePatch struct {
-	Name       *string
-	Threshold  *float64
-	WindowS    *int
-	CooldownS  *int
-	Severity   *string
-	Channels   []string
-	Enabled    *bool
-	SetMuted   bool
-	MutedUntil *time.Time
+	Name                *string
+	Threshold           *float64
+	WindowS             *int
+	CooldownS           *int
+	Severity            *string
+	Channels            []string
+	Enabled             *bool
+	SetMuted            bool
+	MutedUntil          *time.Time
+	AnomalyFloorCredits *int64 // nil = leave unchanged (coalesce); set = new absolute floor
 }
 
 // --- channel CRUD ---

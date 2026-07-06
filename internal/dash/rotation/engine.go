@@ -57,6 +57,14 @@ type Config struct {
 	RateLimitThreshold int           // sustained RATE_LIMIT count before parking; default 3
 	RebandEvery        time.Duration // score re-band cadence; default 1s
 	RefreshEvery       time.Duration // pool reload cadence; default 30s
+
+	// RecordUsage is the OPTIONAL live usage feed (OI-P4-1, doc 12 §P4). When non-nil, every
+	// completed lease (Lease.Done) emits one UsageSample carrying the call's attribution
+	// dimensions. It is a plain func — NOT a telemetry type — so rotation never imports
+	// internal/dash/telemetry; the orchestrator adapts it onto a telemetry.Recorder in dashboardd.
+	// nil (the default) preserves the exact prior behavior (backward compatible): no feed, no
+	// per-lease overhead. The hook runs on the egress Done path and must not block.
+	RecordUsage func(ev UsageSample)
 }
 
 // Engine is the rotation LeaseResolver: it selects a key per the pool strategy, draws a batched
@@ -72,9 +80,10 @@ type Engine struct {
 	now     func() time.Time
 	log     *slog.Logger
 
-	buckets  *bucketRegistry
-	trigger  *Trigger
-	rlThresh int64
+	buckets     *bucketRegistry
+	trigger     *Trigger
+	rlThresh    int64
+	recordUsage func(UsageSample) // optional live usage feed (OI-P4-1); nil = disabled
 
 	mu    sync.RWMutex
 	pools map[string]*PoolState
@@ -124,6 +133,7 @@ func New(cfg Config) *Engine {
 		buckets:      newBucketRegistry(cfg.Store),
 		trigger:      newTrigger(cfg.Store, cfg.Audit, cfg.Sink, cfg.Now, cfg.Logger),
 		rlThresh:     int64(cfg.RateLimitThreshold),
+		recordUsage:  cfg.RecordUsage,
 		pools:        map[string]*PoolState{},
 		rebandEvery:  cfg.RebandEvery,
 		refreshEvery: cfg.RefreshEvery,
@@ -142,6 +152,13 @@ func (e *Engine) Lease(ctx context.Context, poolSelector string) (provider.Lease
 		return provider.Lease{}, err
 	}
 	region := regionFromContext(ctx)
+	// Snapshot the usage-attribution dimensions ONCE, here on the request path — tenant,
+	// workflow_key and country live on the lease ctx and are not available inside Done (which
+	// runs later on the egress path). nil hook => no capture, zero overhead (backward compatible).
+	var dims usageDims
+	if e.recordUsage != nil {
+		dims = captureUsage(ctx, poolSelector)
+	}
 	var skip map[string]bool
 	// Bound the failover walk by the pool size (+1 for the first pick).
 	for attempt := 0; attempt <= len(ps.keys); attempt++ {
@@ -170,7 +187,24 @@ func (e *Engine) Lease(ctx context.Context, poolSelector string) (provider.Lease
 		return provider.Lease{
 			KeyID:  kk.id,
 			Secret: secret,
-			Done:   func(o provider.Outcome) { e.recordOutcome(ctx, kk, o) },
+			Done: func(o provider.Outcome) {
+				e.recordOutcome(ctx, kk, o)
+				// OI-P4-1: fold the completed call into the live usage_events feed. Runs after
+				// the KM-3/EWMA update; the hook (a telemetry.Recorder in dashboardd) is
+				// fire-and-forget and never blocks the egress path.
+				if e.recordUsage != nil {
+					e.recordUsage(UsageSample{
+						TenantID:     dims.tenantID,
+						KeyID:        kk.id,
+						ProviderID:   dims.providerID,
+						WorkflowKey:  dims.workflowKey,
+						Country:      dims.country,
+						OutcomeClass: outcomeClass(o),
+						Credits:      kk.costPerCall,
+						LatMs:        o.LatencyMs,
+					})
+				}
+			},
 		}, nil
 	}
 	return provider.Lease{}, ErrNoKeyAvailable

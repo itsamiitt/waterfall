@@ -98,6 +98,8 @@ func setupAlertSchema(t *testing.T, admin *pg.Conn) {
 	applyMigration(t, admin, "../../../migrations/0004_dash_identity_rbac.sql")
 	applyMigration(t, admin, "../../../migrations/0007_dash_alerts_approvals.sql")
 	applyMigration(t, admin, "../../../migrations/0009_dash_telemetry.sql")
+	// Migration 0011 adds the per-rule anomaly floor (OI-P6-3) the alerts store now reads/writes.
+	mustExec(t, admin, "alter table alert_rules add column if not exists anomaly_floor_credits bigint")
 
 	mustExec(t, admin, "create role "+alertRole+" login nosuperuser")
 	grant := append(append(append([]string{}, alertTables...), alertRollups...), alertIDTables...)

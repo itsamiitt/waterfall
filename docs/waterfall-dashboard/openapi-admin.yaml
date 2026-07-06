@@ -1,0 +1,2496 @@
+# Waterfall Dashboard Admin API (/v1/admin) - human-facing rendering.
+# Machine-authoritative artifact: openapi-admin.json (parsed by internal/dash/apispec/parity_test.go).
+# Both files are generated from one route table and share an identical path set.
+openapi: 3.0.3
+info:
+  title: Waterfall Dashboard Admin API
+  version: 1.0.0
+  description: >-
+    Human-facing rendering of the /v1/admin surface
+    (docs/waterfall-dashboard/04-api-contracts.md). openapi-admin.json is authoritative.
+servers:
+  - url: /
+paths:
+  '/v1/admin/auth/login':
+    post:
+      summary: Verify email+password; start session
+      operationId: post_v1_admin_auth_login
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/mfa/verify':
+    post:
+      summary: Complete login with TOTP or recovery code
+      operationId: post_v1_admin_auth_mfa_verify
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/mfa/enroll':
+    post:
+      summary: Begin TOTP enrollment
+      operationId: post_v1_admin_auth_mfa_enroll
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/mfa/enroll/confirm':
+    post:
+      summary: Confirm enrollment; return recovery codes
+      operationId: post_v1_admin_auth_mfa_enroll_confirm
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/logout':
+    post:
+      summary: Revoke current session
+      operationId: post_v1_admin_auth_logout
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/me':
+    get:
+      summary: 'Current user, role, tenant, session expiry'
+      operationId: get_v1_admin_auth_me
+      tags: [auth]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/sessions':
+    get:
+      summary: List sessions
+      operationId: get_v1_admin_auth_sessions
+      tags: [auth]
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/auth/sessions/{id}':
+    delete:
+      summary: Revoke a session
+      operationId: delete_v1_admin_auth_sessions
+      tags: [auth]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/users':
+    get:
+      summary: List users
+      operationId: get_v1_admin_users
+      tags: [users]
+      parameters:
+        - name: role
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: email
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create user (invite)
+      operationId: post_v1_admin_users
+      tags: [users]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/users/{id}':
+    get:
+      summary: User detail
+      operationId: get_v1_admin_users
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update role/status/ABAC attrs
+      operationId: patch_v1_admin_users
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Deactivate user (soft)
+      operationId: delete_v1_admin_users
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/users/{id}/reset-password':
+    post:
+      summary: Issue password reset
+      operationId: post_v1_admin_users_reset_password
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/roles':
+    get:
+      summary: Static role x action matrix
+      operationId: get_v1_admin_roles
+      tags: [users]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/ip-allowlists':
+    get:
+      summary: List tenant CIDR allowlist
+      operationId: get_v1_admin_ip_allowlists
+      tags: [users]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Replace the allowlist set
+      operationId: put_v1_admin_ip_allowlists
+      tags: [users]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/audit-log':
+    get:
+      summary: Hash-chained audit trail
+      operationId: get_v1_admin_audit_log
+      tags: [security]
+      parameters:
+        - name: actor_user_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+        - name: object_kind
+          in: query
+          required: false
+          schema: { type: string }
+        - name: object_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/audit-log/verify':
+    get:
+      summary: Walk + verify the audit chain
+      operationId: get_v1_admin_audit_log_verify
+      tags: [security]
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/access-log':
+    get:
+      summary: API access log (90d)
+      operationId: get_v1_admin_access_log
+      tags: [security]
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: route
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers':
+    get:
+      summary: List catalog
+      operationId: get_v1_admin_providers
+      tags: [providers]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: op_state
+          in: query
+          required: false
+          schema: { type: string }
+        - name: category
+          in: query
+          required: false
+          schema: { type: string }
+        - name: region
+          in: query
+          required: false
+          schema: { type: string }
+        - name: tag
+          in: query
+          required: false
+          schema: { type: string }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create provider
+      operationId: post_v1_admin_providers
+      tags: [providers]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/compare':
+    get:
+      summary: Side-by-side declared vs measured per field
+      operationId: get_v1_admin_providers_compare
+      tags: [providers]
+      parameters:
+        - name: ids
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/rankings':
+    get:
+      summary: Measured cost-per-hit ranking per field
+      operationId: get_v1_admin_providers_rankings
+      tags: [providers]
+      parameters:
+        - name: metric
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/coverage':
+    get:
+      summary: Fields x providers capability grid
+      operationId: get_v1_admin_providers_coverage
+      tags: [providers]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}':
+    get:
+      summary: Provider detail
+      operationId: get_v1_admin_providers
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update catalog/ops fields
+      operationId: patch_v1_admin_providers
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete provider (approval-gated)
+      operationId: delete_v1_admin_providers
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/enable':
+    post:
+      summary: 'op_state=enabled'
+      operationId: post_v1_admin_providers_enable
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/disable':
+    post:
+      summary: 'op_state=disabled'
+      operationId: post_v1_admin_providers_disable
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/pause':
+    post:
+      summary: 'op_state=paused'
+      operationId: post_v1_admin_providers_pause
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/maintenance':
+    post:
+      summary: 'op_state=maintenance'
+      operationId: post_v1_admin_providers_maintenance
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/test':
+    post:
+      summary: Smoke-test descriptor via a leased key
+      operationId: post_v1_admin_providers_test
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/health-check':
+    post:
+      summary: Run one health check now
+      operationId: post_v1_admin_providers_health_check
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/refresh-metadata':
+    post:
+      summary: Re-pull descriptor metadata
+      operationId: post_v1_admin_providers_refresh_metadata
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/sync-credits':
+    post:
+      summary: Pull provider-reported credit balance
+      operationId: post_v1_admin_providers_sync_credits
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/benchmark':
+    post:
+      summary: Run fixed sample through the real adapter
+      operationId: post_v1_admin_providers_benchmark
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/duplicate':
+    post:
+      summary: Clone catalog row as new draft
+      operationId: post_v1_admin_providers_duplicate
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/archive':
+    post:
+      summary: Soft-archive (approval-gated)
+      operationId: post_v1_admin_providers_archive
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/health':
+    get:
+      summary: Current health summary
+      operationId: get_v1_admin_providers_health
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/stats':
+    get:
+      summary: 'Time series from provider_stats_*'
+      operationId: get_v1_admin_providers_stats
+      tags: [providers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: res
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/keys':
+    get:
+      summary: 'List a provider''s keys'
+      operationId: get_v1_admin_providers_keys
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: health
+          in: query
+          required: false
+          schema: { type: string }
+        - name: region
+          in: query
+          required: false
+          schema: { type: string }
+        - name: environment
+          in: query
+          required: false
+          schema: { type: string }
+        - name: tag
+          in: query
+          required: false
+          schema: { type: string }
+        - name: rotation_group
+          in: query
+          required: false
+          schema: { type: string }
+        - name: imported_batch_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: pool_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create provider key (seal secret)
+      operationId: post_v1_admin_providers_keys
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}':
+    get:
+      summary: Key metadata + computed availability
+      operationId: get_v1_admin_keys
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update metadata/limits/weight
+      operationId: patch_v1_admin_keys
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Archive a single key (soft)
+      operationId: delete_v1_admin_keys
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/enable':
+    post:
+      summary: 'status=active'
+      operationId: post_v1_admin_keys_enable
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/disable':
+    post:
+      summary: 'status=disabled'
+      operationId: post_v1_admin_keys_disable
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/rotate':
+    post:
+      summary: Create successor key with overlap window
+      operationId: post_v1_admin_keys_rotate
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/test':
+    post:
+      summary: One provider.Call with this key
+      operationId: post_v1_admin_keys_test
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/health-check':
+    post:
+      summary: Probe this key now
+      operationId: post_v1_admin_keys_health_check
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/refresh-credits':
+    post:
+      summary: Sync provider-reported balance for this key
+      operationId: post_v1_admin_keys_refresh_credits
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/{id}/usage':
+    get:
+      summary: Per-key usage time series
+      operationId: get_v1_admin_keys_usage
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: res
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/providers/{id}/keys/import':
+    post:
+      summary: Bulk import keys
+      operationId: post_v1_admin_providers_keys_import
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-imports/{job_id}':
+    get:
+      summary: Import batch progress/results
+      operationId: get_v1_admin_key_imports
+      tags: [keys]
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/keys/bulk':
+    post:
+      summary: Bulk op by ids or filter
+      operationId: post_v1_admin_keys_bulk
+      tags: [keys]
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/bulk-jobs/{id}':
+    get:
+      summary: Bulk job progress/results
+      operationId: get_v1_admin_bulk_jobs
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools':
+    get:
+      summary: List key pools
+      operationId: get_v1_admin_key_pools
+      tags: [keys]
+      parameters:
+        - name: provider_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: strategy
+          in: query
+          required: false
+          schema: { type: string }
+        - name: owner_tenant_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create key pool
+      operationId: post_v1_admin_key_pools
+      tags: [keys]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools/{id}':
+    get:
+      summary: Pool detail + member summary
+      operationId: get_v1_admin_key_pools
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Rename/params/status
+      operationId: patch_v1_admin_key_pools
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete pool
+      operationId: delete_v1_admin_key_pools
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools/{id}/members':
+    put:
+      summary: Replace member key set
+      operationId: put_v1_admin_key_pools_members
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools/{id}/strategy':
+    put:
+      summary: Set selection strategy + params
+      operationId: put_v1_admin_key_pools_strategy
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/rotation/strategies':
+    get:
+      summary: Static catalog of the 12 strategies
+      operationId: get_v1_admin_rotation_strategies
+      tags: [rotation]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/rotation/triggers':
+    get:
+      summary: 'Error-class -> state-machine trigger config'
+      operationId: get_v1_admin_rotation_triggers
+      tags: [rotation]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Update trigger thresholds/cooldowns
+      operationId: put_v1_admin_rotation_triggers
+      tags: [rotation]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools/{id}/selection-state':
+    get:
+      summary: Debug view of in-memory PoolState
+      operationId: get_v1_admin_key_pools_selection_state
+      tags: [rotation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/key-pools/{id}/simulate':
+    post:
+      summary: Simulate N selections (zero egress)
+      operationId: post_v1_admin_key_pools_simulate
+      tags: [rotation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/providers':
+    get:
+      summary: Fleet health summary (worst-first)
+      operationId: get_v1_admin_health_providers
+      tags: [health]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: region
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/providers/{id}/timeline':
+    get:
+      summary: 90d day-buckets + 48h hour-buckets
+      operationId: get_v1_admin_health_providers_timeline
+      tags: [health]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: res
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/schedules':
+    get:
+      summary: Per-provider check schedules
+      operationId: get_v1_admin_health_schedules
+      tags: [health]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/schedules/{id}':
+    put:
+      summary: Replace a schedule
+      operationId: put_v1_admin_health_schedules
+      tags: [health]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/checks/run':
+    post:
+      summary: Run checks now
+      operationId: post_v1_admin_health_checks_run
+      tags: [health]
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/health/regional':
+    get:
+      summary: Health by region matrix
+      operationId: get_v1_admin_health_regional
+      tags: [health]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing':
+    get:
+      summary: List routing scopes + active version + epoch
+      operationId: get_v1_admin_routing
+      tags: [config]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions':
+    get:
+      summary: Version history for a scope
+      operationId: get_v1_admin_routing_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create draft version
+      operationId: post_v1_admin_routing_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions/{id}':
+    get:
+      summary: Version detail incl. validation_report
+      operationId: get_v1_admin_routing_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Edit draft/validated payload
+      operationId: patch_v1_admin_routing_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions/{id}/validate':
+    post:
+      summary: Run validators; pin payload_hash
+      operationId: post_v1_admin_routing_versions_validate
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions/{id}/publish':
+    post:
+      summary: Atomic pointer flip (approval-gated)
+      operationId: post_v1_admin_routing_versions_publish
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions/{id}/dry-run':
+    post:
+      summary: Simulate against draft (zero egress)
+      operationId: post_v1_admin_routing_versions_dry_run
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/versions/{id}/clone':
+    post:
+      summary: Copy version to new draft
+      operationId: post_v1_admin_routing_versions_clone
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/routing/{scope_key}/rollback':
+    post:
+      summary: Publish a prior version (approval-gated)
+      operationId: post_v1_admin_routing_rollback
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows':
+    get:
+      summary: List workflows scopes + active version + epoch
+      operationId: get_v1_admin_workflows
+      tags: [config]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions':
+    get:
+      summary: Version history for a scope
+      operationId: get_v1_admin_workflows_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create draft version
+      operationId: post_v1_admin_workflows_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions/{id}':
+    get:
+      summary: Version detail incl. validation_report
+      operationId: get_v1_admin_workflows_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Edit draft/validated payload
+      operationId: patch_v1_admin_workflows_versions
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions/{id}/validate':
+    post:
+      summary: Run validators; pin payload_hash
+      operationId: post_v1_admin_workflows_versions_validate
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions/{id}/publish':
+    post:
+      summary: Atomic pointer flip (approval-gated)
+      operationId: post_v1_admin_workflows_versions_publish
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions/{id}/dry-run':
+    post:
+      summary: Simulate against draft (zero egress)
+      operationId: post_v1_admin_workflows_versions_dry_run
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/versions/{id}/clone':
+    post:
+      summary: Copy version to new draft
+      operationId: post_v1_admin_workflows_versions_clone
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workflows/{scope_key}/rollback':
+    post:
+      summary: Publish a prior version (approval-gated)
+      operationId: post_v1_admin_workflows_rollback
+      tags: [config]
+      parameters:
+        - name: scope_key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/config/epochs':
+    get:
+      summary: Current epoch per kind for cache validation
+      operationId: get_v1_admin_config_epochs
+      tags: [config]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/queues':
+    get:
+      summary: Queue list with per-state count vector
+      operationId: get_v1_admin_queues
+      tags: [queues]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/queues/{name}/stats':
+    get:
+      summary: Time series enq/deq/depth/oldest-age
+      operationId: get_v1_admin_queues_stats
+      tags: [queues]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: res
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/queues/{name}/jobs':
+    get:
+      summary: List enrichment jobs by state
+      operationId: get_v1_admin_queues_jobs
+      tags: [queues]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+        - name: workflow_key
+          in: query
+          required: false
+          schema: { type: string }
+        - name: error_class
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/dead-letters':
+    get:
+      summary: 'List parked jobs (dead=true)'
+      operationId: get_v1_admin_dead_letters
+      tags: [queues]
+      parameters:
+        - name: error_class
+          in: query
+          required: false
+          schema: { type: string }
+        - name: before
+          in: query
+          required: false
+          schema: { type: string }
+        - name: after
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/dead-letters/{id}/redrive':
+    post:
+      summary: Re-deliver one parked job
+      operationId: post_v1_admin_dead_letters_redrive
+      tags: [queues]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/queues/{name}/replay':
+    post:
+      summary: Filtered bulk redrive
+      operationId: post_v1_admin_queues_replay
+      tags: [queues]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/jobs/{id}':
+    get:
+      summary: Outbox row detail
+      operationId: get_v1_admin_jobs
+      tags: [queues]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/queues/{name}/workers':
+    put:
+      summary: Desired worker count intent for a queue
+      operationId: put_v1_admin_queues_workers
+      tags: [queues]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers':
+    get:
+      summary: Fleet list
+      operationId: get_v1_admin_workers
+      tags: [workers]
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string }
+        - name: queue
+          in: query
+          required: false
+          schema: { type: string }
+        - name: region
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}':
+    get:
+      summary: Worker detail
+      operationId: get_v1_admin_workers
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/stats':
+    get:
+      summary: Time series from worker_stats_5m
+      operationId: get_v1_admin_workers_stats
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: res
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/heartbeat':
+    post:
+      summary: Worker heartbeat ingest (worker-facing)
+      operationId: post_v1_admin_workers_heartbeat
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/restart':
+    post:
+      summary: 'desired_state=stopped then restart intent'
+      operationId: post_v1_admin_workers_restart
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/drain':
+    post:
+      summary: 'Finish in-flight jobs, then stop'
+      operationId: post_v1_admin_workers_drain
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/pause':
+    post:
+      summary: Stop claiming; keep running
+      operationId: post_v1_admin_workers_pause
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/{id}/resume':
+    post:
+      summary: 'desired_state=running'
+      operationId: post_v1_admin_workers_resume
+      tags: [workers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/scale':
+    post:
+      summary: Scale intent
+      operationId: post_v1_admin_workers_scale
+      tags: [workers]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/workers/rolling-restart':
+    post:
+      summary: Sequenced drains honoring max_unavailable
+      operationId: post_v1_admin_workers_rolling_restart
+      tags: [workers]
+      responses:
+        "202":
+          $ref: '#/components/responses/Accepted'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/cost/summary':
+    get:
+      summary: Group-by spend
+      operationId: get_v1_admin_cost_summary
+      tags: [cost]
+      parameters:
+        - name: group_by
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/cost/per-enrichment':
+    get:
+      summary: credits/call and credits/successful-result
+      operationId: get_v1_admin_cost_per_enrichment
+      tags: [cost]
+      parameters:
+        - name: group_by
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/cost/roi':
+    get:
+      summary: Cost per filled field per provider per workflow
+      operationId: get_v1_admin_cost_roi
+      tags: [cost]
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/cost/forecast':
+    get:
+      summary: Linear + 7d seasonality projection
+      operationId: get_v1_admin_cost_forecast
+      tags: [cost]
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/cost/export':
+    get:
+      summary: NDJSON stream of the summary query
+      operationId: get_v1_admin_cost_export
+      tags: [cost]
+      parameters:
+        - name: group_by
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/budgets':
+    get:
+      summary: List budget objects
+      operationId: get_v1_admin_budgets
+      tags: [cost]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    put:
+      summary: 'Replace the tenant''s budget set'
+      operationId: put_v1_admin_budgets
+      tags: [cost]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/rules':
+    get:
+      summary: List rules
+      operationId: get_v1_admin_alerts_rules
+      tags: [alerts]
+      parameters:
+        - name: metric
+          in: query
+          required: false
+          schema: { type: string }
+        - name: severity
+          in: query
+          required: false
+          schema: { type: string }
+        - name: enabled
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create rule
+      operationId: post_v1_admin_alerts_rules
+      tags: [alerts]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/rules/{id}':
+    get:
+      summary: Rule detail
+      operationId: get_v1_admin_alerts_rules
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update rule (incl. snooze)
+      operationId: patch_v1_admin_alerts_rules
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete rule
+      operationId: delete_v1_admin_alerts_rules
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/rules/{id}/test':
+    post:
+      summary: Evaluate rule now
+      operationId: post_v1_admin_alerts_rules_test
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/channels':
+    get:
+      summary: List channels
+      operationId: get_v1_admin_alerts_channels
+      tags: [alerts]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create channel
+      operationId: post_v1_admin_alerts_channels
+      tags: [alerts]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/channels/{id}':
+    delete:
+      summary: Delete channel
+      operationId: delete_v1_admin_alerts_channels
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/channels/{id}/test':
+    post:
+      summary: Test-send through the real notifier
+      operationId: post_v1_admin_alerts_channels_test
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/events':
+    get:
+      summary: Episode history
+      operationId: get_v1_admin_alerts_events
+      tags: [alerts]
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+        - name: rule_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: severity
+          in: query
+          required: false
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/alerts/events/{id}/ack':
+    post:
+      summary: Acknowledge an episode
+      operationId: post_v1_admin_alerts_events_ack
+      tags: [alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/approvals':
+    get:
+      summary: List approval requests
+      operationId: get_v1_admin_approvals
+      tags: [approvals]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: action_kind
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create an explicit approval request
+      operationId: post_v1_admin_approvals
+      tags: [approvals]
+      responses:
+        "201":
+          $ref: '#/components/responses/Created'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/approvals/{id}':
+    get:
+      summary: Approval detail
+      operationId: get_v1_admin_approvals
+      tags: [approvals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/approvals/{id}/approve':
+    post:
+      summary: Record approval decision
+      operationId: post_v1_admin_approvals_approve
+      tags: [approvals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/approvals/{id}/reject':
+    post:
+      summary: Reject
+      operationId: post_v1_admin_approvals_reject
+      tags: [approvals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/approvals/{id}/cancel':
+    post:
+      summary: Cancel pending request
+      operationId: post_v1_admin_approvals_cancel
+      tags: [approvals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/change-history/{kind}/{id}':
+    get:
+      summary: Per-object timeline
+      operationId: get_v1_admin_change_history
+      tags: [approvals]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/overview':
+    get:
+      summary: Full tile snapshot
+      operationId: get_v1_admin_overview
+      tags: [overview]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/overview/tiles/{tile}':
+    get:
+      summary: Single tile (deep-link target)
+      operationId: get_v1_admin_overview_tiles
+      tags: [overview]
+      parameters:
+        - name: tile
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/streams':
+    get:
+      summary: Multiplexed SSE stream
+      operationId: get_v1_admin_streams
+      tags: [overview]
+      parameters:
+        - name: topics
+          in: query
+          required: false
+          schema: { type: string }
+        - name: last_event_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/search':
+    get:
+      summary: Cross-entity search
+      operationId: get_v1_admin_search
+      tags: [overview]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/meta/enums':
+    get:
+      summary: Closed vocabularies for UI parity
+      operationId: get_v1_admin_meta_enums
+      tags: [overview]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+components:
+  responses:
+    OK:
+      description: Success
+      content:
+        application/json:
+          schema: { type: object }
+    Created:
+      description: Created
+      content:
+        application/json:
+          schema: { type: object }
+    Accepted:
+      description: Accepted (async job or approval request)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Accepted' }
+    Error:
+      description: Uniform error envelope (doc 04 s1.6)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    CursorPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { type: object } }
+        next_cursor: { type: [string, 'null'] }
+    Accepted:
+      type: object
+      properties:
+        job_id: { type: string }
+        approval_request_id: { type: string }
+    Provider: { type: object, additionalProperties: true }
+    ProviderKey: { type: object, additionalProperties: true }
+    KeyPool: { type: object, additionalProperties: true }
+    User: { type: object, additionalProperties: true }
+    Session: { type: object, additionalProperties: true }
+    ConfigVersion: { type: object, additionalProperties: true }
+    Queue: { type: object, additionalProperties: true }
+    Job: { type: object, additionalProperties: true }
+    Worker: { type: object, additionalProperties: true }
+    AlertRule: { type: object, additionalProperties: true }
+    AlertChannel: { type: object, additionalProperties: true }
+    AlertEvent: { type: object, additionalProperties: true }
+    ApprovalRequest: { type: object, additionalProperties: true }
+    Budget: { type: object, additionalProperties: true }
+    Overview: { type: object, additionalProperties: true }

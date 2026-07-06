@@ -91,6 +91,33 @@ func TestTOTP_VerifyWindow(t *testing.T) {
 	}
 }
 
+// TestVerifyTOTPStep checks the matched-step accessor the replay guard records: an accepted code
+// reports the exact time step it matched (so mfa_used_steps keys on the right step), and a code one
+// step in the future reports that neighbouring step — not the current one.
+func TestVerifyTOTPStep(t *testing.T) {
+	seed := NewSeed()
+	base := time.Unix(1_700_000_000, 0)
+	curStep := base.Unix() / 30
+
+	// current-step code -> matched step == curStep
+	if step, ok := verifyTOTPStep(seed, GenerateTOTP(seed, base), base); !ok || step != curStep {
+		t.Fatalf("current code: step=%d ok=%v, want step=%d ok=true", step, ok, curStep)
+	}
+	// a code from the +1 step, verified at base, is accepted (skew window) and reports curStep+1.
+	next := GenerateTOTP(seed, base.Add(30*time.Second))
+	if step, ok := verifyTOTPStep(seed, next, base); !ok || step != curStep+1 {
+		t.Fatalf("+1 code: step=%d ok=%v, want step=%d ok=true", step, ok, curStep+1)
+	}
+	// a code two steps away is rejected (no match, step 0).
+	if step, ok := verifyTOTPStep(seed, GenerateTOTP(seed, base.Add(90*time.Second)), base); ok || step != 0 {
+		t.Fatalf("+3 code: step=%d ok=%v, want step=0 ok=false", step, ok)
+	}
+	// a malformed code never matches.
+	if _, ok := verifyTOTPStep(seed, "12345", base); ok {
+		t.Fatal("short code must not verify")
+	}
+}
+
 func TestOTPAuthURL(t *testing.T) {
 	seed := []byte("12345678901234567890")
 	raw := OTPAuthURL("Waterfall", "ops@acme.example", seed)

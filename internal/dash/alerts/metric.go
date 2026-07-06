@@ -28,9 +28,10 @@ type MetricDef struct {
 	PointInTime bool     `json:"point_in_time"`
 }
 
-// Metrics is the closed vocabulary (doc 10 §4: 16 entries) plus cost.anomaly — the anomaly metric
-// deliverable of doc 12 §P6 (trailing 28d same-day-of-week median, dual threshold). The extra entry
-// is recorded as an OI for doc-10 §4 lockstep (final report).
+// Metrics is the CLOSED alert-rule metric vocabulary (doc 10 §4: 17 entries incl. cost.anomaly, the
+// anomaly deliverable of doc 12 §P6 — trailing 28d same-day-of-week median, dual threshold). This
+// slice, the evaluator switch (metriceval.go), the /meta/enums served list (overview/enums.go), and
+// the doc 10 §4 table are kept in lockstep (OI-P6-1); the parity tests below and in overview pin it.
 var Metrics = []MetricDef{
 	{"provider.success_rate", "provider_stats_1m", "ratio", []string{"provider_id"}, false},
 	{"provider.error_rate", "provider_stats_1m", "ratio", []string{"provider_id"}, false},

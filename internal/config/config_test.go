@@ -59,6 +59,69 @@ func TestLoad_AggregatesAllErrors(t *testing.T) {
 	}
 }
 
+func TestLoad_HeartbeatDisabledByDefault(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil {
+		t.Fatalf("empty env should be valid: %v", err)
+	}
+	if c.Heartbeat {
+		t.Fatal("heartbeat must be off unless DASH_HEARTBEAT_URL is set")
+	}
+	if c.HeartbeatJWTKid != "default" || c.HeartbeatTenant != "platform" || c.HeartbeatIntervalS != 10 {
+		t.Fatalf("heartbeat defaults wrong: %+v", c)
+	}
+}
+
+func TestLoad_HeartbeatValidMint(t *testing.T) {
+	c, err := Load(env(map[string]string{
+		"DASH_HEARTBEAT_URL":        "https://dash.internal",
+		"DASH_HEARTBEAT_JWT_SECRET": "a-sufficiently-long-hmac-secret",
+		"DASH_HEARTBEAT_WORKER_ID":  "enrich-1",
+		"DASH_HEARTBEAT_INTERVAL_S": "5",
+	}))
+	if err != nil {
+		t.Fatalf("valid heartbeat config rejected: %v", err)
+	}
+	if !c.Heartbeat || c.HeartbeatURL != "https://dash.internal" || c.HeartbeatIntervalS != 5 ||
+		c.HeartbeatWorkerID != "enrich-1" {
+		t.Fatalf("heartbeat parsed wrong: %+v", c)
+	}
+}
+
+func TestLoad_HeartbeatErrors(t *testing.T) {
+	// URL set, no credential.
+	if _, err := Load(env(map[string]string{"DASH_HEARTBEAT_URL": "https://d"})); err == nil ||
+		!strings.Contains(err.Error(), "neither DASH_HEARTBEAT_JWT nor DASH_HEARTBEAT_JWT_SECRET") {
+		t.Fatalf("expected missing-credential error, got %v", err)
+	}
+	// Both credentials set.
+	if _, err := Load(env(map[string]string{
+		"DASH_HEARTBEAT_URL":        "https://d",
+		"DASH_HEARTBEAT_JWT":        "tok",
+		"DASH_HEARTBEAT_JWT_SECRET": "a-sufficiently-long-hmac-secret",
+	})); err == nil || !strings.Contains(err.Error(), "both set") {
+		t.Fatalf("expected mutual-exclusion error, got %v", err)
+	}
+	// Short minting secret + bad URL scheme, aggregated.
+	_, err := Load(env(map[string]string{
+		"DASH_HEARTBEAT_URL":        "ftp://nope",
+		"DASH_HEARTBEAT_JWT_SECRET": "short",
+	}))
+	if err == nil {
+		t.Fatal("expected errors for bad url + short secret")
+	}
+	for _, want := range []string{"DASH_HEARTBEAT_URL", "DASH_HEARTBEAT_JWT_SECRET"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("aggregated error should mention %s; got:\n%s", want, err.Error())
+		}
+	}
+	// Credential without URL.
+	if _, err := Load(env(map[string]string{"DASH_HEARTBEAT_JWT": "tok"})); err == nil ||
+		!strings.Contains(err.Error(), "DASH_HEARTBEAT_URL is not") {
+		t.Fatalf("expected credential-without-url error, got %v", err)
+	}
+}
+
 func TestLoad_CoherenceChecks(t *testing.T) {
 	// admin/relay DSN without a primary DSN.
 	if _, err := Load(env(map[string]string{"POSTGRES_ADMIN_DSN": "host=db user=postgres dbname=w"})); err == nil ||

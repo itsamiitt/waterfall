@@ -136,8 +136,17 @@ func main() {
 			case <-reaperStop:
 				return
 			case <-t.C:
-				if err := sessions.DeleteExpired(context.Background()); err != nil {
+				rctx := context.Background()
+				if err := sessions.DeleteExpired(rctx); err != nil {
 					logger.Warn("session reaper", "err", err)
+				}
+				// TOTP single-use markers (OI-SEC-8): forensic slack only, correctness needs ~90s.
+				if err := users.DeleteUsedStepsBefore(rctx, time.Now().Add(-10*time.Minute)); err != nil {
+					logger.Warn("mfa used-step reaper", "err", err)
+				}
+				// Durable admin idempotency ledger (OI-API-8): 24h retention (doc 04 §1.3).
+				if err := srv.ReapIdempotency(rctx, time.Now().Add(-24*time.Hour)); err != nil {
+					logger.Warn("idempotency reaper", "err", err)
 				}
 			}
 		}
@@ -152,6 +161,13 @@ func main() {
 	// (providers.Deps.Resolver — closing OI-KEYS-2: provider/key test/health-check probes now do a
 	// live bounded provider.Call with a resolved key) and rotation.Routes (so selection-state
 	// reflects the same live PoolState cache). Its background re-band + refresh loops start here.
+	// Telemetry usage recorder — created before the rotation engine so its Lease.Done path can feed
+	// usage_events (OI-P4-1). The BufferedRecorder never blocks the hot path (bounded channel,
+	// drop-with-metric on overflow). rotation.UsageSample maps 1:1 onto telemetry.UsageEvent.
+	usageRecorder := telemetry.NewBufferedRecorder(telemetry.NewRecorder(store), telemetry.BufferedConfig{}, reg)
+	usageRecorder.Start(context.Background())
+	defer usageRecorder.Stop()
+
 	rotEngine := rotation.New(rotation.Config{
 		Store:   rotation.NewStore(store),
 		Audit:   auditLog,
@@ -159,6 +175,16 @@ func main() {
 		Bandit:  bandit.New(),
 		Now:     time.Now,
 		Logger:  logger,
+		// OI-P4-1: every completed lease attributes one usage_events row to its key_id. Customer
+		// workflow_key/country populate once enrichd routes real traffic through leases; dashboard-
+		// initiated leases (health/test/benchmark) attribute to the platform Tenant.
+		RecordUsage: func(ev rotation.UsageSample) {
+			usageRecorder.Record(context.Background(), telemetry.UsageEvent{
+				TenantID: ev.TenantID, ProviderID: ev.ProviderID, KeyID: ev.KeyID,
+				WorkflowKey: ev.WorkflowKey, Country: ev.Country,
+				OutcomeClass: ev.OutcomeClass, Credits: ev.Credits, LatMs: ev.LatMs,
+			})
+		},
 	})
 	rotEngine.Start()
 	defer rotEngine.Stop()
@@ -190,14 +216,11 @@ func main() {
 		Now: time.Now,
 	})
 
-	// P4 telemetry backbone (doc 10 §2): the hot-path BufferedRecorder Sink plus the leader-elected
-	// Loops chassis (aggregator fold + partition maintainer + key-budget reconcile). The startup
-	// EnsurePartitions is best-effort here (the app role must OWN the 0009 telemetry tables to run
-	// DDL); a failure is alertable but must not wedge boot. The live rotation->usage_events hot path
-	// (feeding this recorder from Lease.Done) is deferred: OI-P4-1.
-	usageRecorder := telemetry.NewBufferedRecorder(telemetry.NewRecorder(store), telemetry.BufferedConfig{}, reg)
-	usageRecorder.Start(context.Background())
-	defer usageRecorder.Stop()
+	// P4 telemetry backbone (doc 10 §2): the leader-elected Loops chassis (aggregator fold +
+	// partition maintainer + key-budget reconcile). The startup EnsurePartitions is best-effort here
+	// (the app role must OWN the 0009 telemetry tables to run DDL); a failure is alertable but must
+	// not wedge boot. The usageRecorder feeding this (OI-P4-1) is created above and wired into the
+	// rotation engine's Lease.Done path.
 	telemLoops := telemetry.NewLoops(store, time.Now, reg, telemetry.LoopConfig{})
 	if err := telemLoops.Start(context.Background()); err != nil {
 		logger.Warn("telemetry loops startup (partition ensure)", "err", err)
@@ -335,6 +358,12 @@ func main() {
 		TenantID: "platform", Scopes: []string{"role:operator"},
 	}))
 	defer detector.Stop()
+
+	// Bulk-jobs janitor (OI-KEYS-1b): one leader (advisory lock) sweeps expired-lease running
+	// bulk_jobs to terminal 'failed', releasing the one-in-flight index a dead instance would wedge.
+	bulkJanitor := qsvc.NewJanitor(0)
+	bulkJanitor.Start(context.Background())
+	defer bulkJanitor.Stop()
 
 	// P7 realtime seam (ADR-0019): the per-instance SSE Hub + the SelfMon store — sole writer
 	// of the migration-0010 self_monitor row-set. Constructed before the samplers below so the
@@ -497,11 +526,13 @@ func (v *totpStepUp) VerifyStepUp(ctx context.Context, code string) error {
 	if err != nil {
 		return err
 	}
-	seed, err := v.users.TOTPSeed(ctx, p.UserID)
+	// VerifyAndConsume also records the (user, time_step) single-use marker, so a step-up code
+	// cannot be replayed within its window (OI-SEC-8), exactly like the login MFA path.
+	ok, err := v.users.VerifyAndConsume(ctx, p.UserID, code, v.now())
 	if err != nil {
 		return err
 	}
-	if !security.VerifyTOTP(seed, code, v.now()) {
+	if !ok {
 		return errStepUpFailed
 	}
 	return nil
@@ -688,6 +719,8 @@ grant select, insert, update, delete on
   usage_events, provider_stats_1m, provider_stats_1h, provider_stats_1d,
   key_usage_1m, key_usage_1h, key_usage_1d, tenant_usage_1h, tenant_usage_1d,
   cost_rollup_1d, provider_health_checks, provider_health_1d to dash_app;
+-- 0011 hardening closeout (TOTP replay guard + durable admin idempotency).
+grant select, insert, update, delete on mfa_used_steps, dash_admin_idempotency to dash_app;
 -- P7 self_monitor snapshot row-set (0010): loop heartbeats, fold watermarks, SSE client
 -- counts, overview/queue snapshots — written through internal/dash/realtime.SelfMon only.
 grant select, insert, update, delete on self_monitor to dash_app;

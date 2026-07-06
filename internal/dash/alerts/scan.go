@@ -25,6 +25,8 @@ func scanRule(r []*string) Rule {
 		MutedUntil: tsPtr(r[11]),
 		CreatedBy:  str(r[12]),
 		UpdatedAt:  parseTS(str(r[13])),
+		// r[14] = anomaly_floor_credits (nullable bigint; nil → package default at eval time).
+		AnomalyFloorCredits: i64Ptr(r[14]),
 	}
 }
 
@@ -139,6 +141,25 @@ func f64(p *string) float64 {
 	}
 	v, _ := strconv.ParseFloat(*p, 64)
 	return v
+}
+
+func i64Ptr(p *string) *int64 {
+	if p == nil {
+		return nil
+	}
+	n, err := strconv.ParseInt(*p, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+// i64OrNull returns a bigint parameter or SQL NULL for a nil pointer.
+func i64OrNull(p *int64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 func f64Ptr(p *string) *float64 {

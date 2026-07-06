@@ -75,7 +75,7 @@ func NewServer(d Deps) *Server {
 		access:   d.Access,
 		secrets:  d.Secrets,
 		audit:    d.Audit,
-		idem:     newIdemLedger(),
+		idem:     durableOrMemLedger(d.Store),
 		metrics:  d.Metrics,
 		proxies:  d.TrustedProxies,
 		ready:    d.Ready,

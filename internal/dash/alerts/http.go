@@ -196,15 +196,16 @@ func (h *handlers) getRule(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) patchRule(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name       *string    `json:"name"`
-		Threshold  *float64   `json:"threshold"`
-		WindowS    *int       `json:"window_s"`
-		CooldownS  *int       `json:"cooldown_s"`
-		Severity   *string    `json:"severity"`
-		Channels   []string   `json:"channels"`
-		Enabled    *bool      `json:"enabled"`
-		MutedUntil *time.Time `json:"muted_until"`
-		ClearMuted bool       `json:"clear_muted"`
+		Name                *string    `json:"name"`
+		Threshold           *float64   `json:"threshold"`
+		WindowS             *int       `json:"window_s"`
+		CooldownS           *int       `json:"cooldown_s"`
+		Severity            *string    `json:"severity"`
+		Channels            []string   `json:"channels"`
+		Enabled             *bool      `json:"enabled"`
+		MutedUntil          *time.Time `json:"muted_until"`
+		AnomalyFloorCredits *int64     `json:"anomaly_floor_credits"`
+		ClearMuted          bool       `json:"clear_muted"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -212,6 +213,7 @@ func (h *handlers) patchRule(w http.ResponseWriter, r *http.Request) {
 	p := RulePatch{
 		Name: body.Name, Threshold: body.Threshold, WindowS: body.WindowS, CooldownS: body.CooldownS,
 		Severity: body.Severity, Channels: body.Channels, Enabled: body.Enabled,
+		AnomalyFloorCredits: body.AnomalyFloorCredits,
 	}
 	if body.MutedUntil != nil {
 		p.SetMuted = true

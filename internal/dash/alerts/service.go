@@ -243,6 +243,7 @@ func ruleSnapshot(r Rule) json.RawMessage {
 	b, _ := json.Marshal(map[string]any{
 		"id": r.ID, "name": r.Name, "metric": r.Metric, "op": r.Op, "threshold": r.Threshold,
 		"window_s": r.WindowS, "cooldown_s": r.CooldownS, "enabled": r.Enabled, "channels": r.Channels,
+		"anomaly_floor_credits": r.AnomalyFloorCredits,
 	})
 	return b
 }

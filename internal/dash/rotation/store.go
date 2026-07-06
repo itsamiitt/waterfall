@@ -22,6 +22,7 @@ type poolKeyRow struct {
 	SuccessEWMA      *float64
 	CreditsRemaining *int64
 	DailyLimit       *int64
+	CostPerCall      *int64 // provider_keys.cost_per_call; the credits one leased call spends (OI-P4-1)
 }
 
 // PoolData is a pool's identity + strategy + member rows, the input to buildPoolState.
@@ -71,7 +72,7 @@ func NewStore(store *db.Store) Store { return newPGStore(store) }
 var _ Store = (*pgStore)(nil)
 
 const poolKeyColumns = `pk.id, pk.secret_envelope_id, pk.weight, pk.priority, pk.region, pk.status,
-	pk.latency_ewma_ms, pk.success_ewma, pk.credits_remaining, pk.daily_limit`
+	pk.latency_ewma_ms, pk.success_ewma, pk.credits_remaining, pk.daily_limit, pk.cost_per_call`
 
 func scanPoolKey(r []*string) poolKeyRow {
 	return poolKeyRow{
@@ -85,6 +86,7 @@ func scanPoolKey(r []*string) poolKeyRow {
 		SuccessEWMA:      pfloat(r[7]),
 		CreditsRemaining: pint(r[8]),
 		DailyLimit:       pint(r[9]),
+		CostPerCall:      pint(r[10]),
 	}
 }
 

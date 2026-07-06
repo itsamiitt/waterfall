@@ -27,12 +27,13 @@ const numBands = 16
 // set once at build; the atomics carry everything the hot path and the 1s re-band loop touch, so
 // selection stays lock-free.
 type keyState struct {
-	id         string
-	envelopeID string
-	weight     int
-	priority   *int64
-	region     string
-	dailyLimit int64 // provider_keys.daily_limit for the lease bucket (0 = unlimited)
+	id          string
+	envelopeID  string
+	weight      int
+	priority    *int64
+	region      string
+	dailyLimit  int64 // provider_keys.daily_limit for the lease bucket (0 = unlimited)
+	costPerCall int64 // provider_keys.cost_per_call — credits attributed to one leased call (OI-P4-1)
 
 	avail  atomic.Bool            // KM-3 availability (KeyAvailable of the live status)
 	status atomic.Pointer[string] // live status string for the selection-state snapshot
@@ -199,6 +200,9 @@ func buildPoolState(selector, strategy, params string, rows []poolKeyRow, bnd *b
 		}
 		if r.DailyLimit != nil {
 			k.dailyLimit = *r.DailyLimit
+		}
+		if r.CostPerCall != nil {
+			k.costPerCall = *r.CostPerCall
 		}
 		if r.LatencyEWMA != nil {
 			k.latBits.Store(math.Float64bits(*r.LatencyEWMA))

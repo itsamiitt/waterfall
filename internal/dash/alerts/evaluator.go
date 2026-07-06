@@ -130,7 +130,7 @@ func (e *Evaluator) evaluateTenant(ctx context.Context, tid string) error {
 	err := e.store.tenantTx(ctx, tid, func(c *pg.Conn) error {
 		res, qerr := c.QueryParams(
 			`select id, name, metric, scope, op, threshold, window_s, cooldown_s, severity,
-			        channels, enabled, muted_until, created_by, updated_at
+			        channels, enabled, muted_until, created_by, updated_at, anomaly_floor_credits
 			   from alert_rules where enabled = true`)
 		if qerr != nil {
 			return qerr

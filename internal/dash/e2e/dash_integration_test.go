@@ -90,6 +90,7 @@ func setupDashSchema(t *testing.T, admin *pg.Conn) {
 	t.Helper()
 	tryExec(admin, "drop owned by "+appRole+" cascade")
 	tryExec(admin, "drop role if exists "+appRole)
+	tryExec(admin, "drop table if exists mfa_used_steps, dash_admin_idempotency cascade")
 	tryExec(admin, "drop table if exists "+strings.Join(dashTables, ", ")+" cascade")
 	tryExec(admin, "drop sequence if exists audit_log_id_seq, api_access_log_id_seq cascade")
 	tryExec(admin, "drop function if exists app_current_role() cascade")
@@ -106,8 +107,27 @@ func setupDashSchema(t *testing.T, admin *pg.Conn) {
 		t.Fatalf("apply migration 0004: %v", err)
 	}
 
+	// Migration 0011 tables the hardened login/idempotency paths need (mfa_used_steps for the TOTP
+	// single-use guard, dash_admin_idempotency for the durable admin idempotency ledger). Both depend
+	// only on 0004; created inline so the 0004-only P0 schema exercises the hardened paths.
+	mustExec(t, admin, `create table mfa_used_steps (
+		tenant_id text not null, user_id uuid not null references users(id),
+		time_step bigint not null, used_at timestamptz not null default now(),
+		primary key (user_id, time_step))`)
+	mustExec(t, admin, `create table dash_admin_idempotency (
+		tenant_id text not null, idempotency_key text not null, body_hash bytea not null,
+		status int, response jsonb, created_at timestamptz not null default now(),
+		primary key (tenant_id, idempotency_key))`)
+	for _, tbl := range []string{"mfa_used_steps", "dash_admin_idempotency"} {
+		mustExec(t, admin, "alter table "+tbl+" enable row level security")
+		mustExec(t, admin, "alter table "+tbl+" force row level security")
+		mustExec(t, admin, "create policy "+tbl+"_iso on "+tbl+
+			" using (tenant_id = app_current_tenant()) with check (tenant_id = app_current_tenant())")
+	}
+
 	mustExec(t, admin, "create role "+appRole+" login nosuperuser")
 	mustExec(t, admin, "grant select, insert, update, delete on "+strings.Join(dashTables, ", ")+" to "+appRole)
+	mustExec(t, admin, "grant select, insert, update, delete on mfa_used_steps, dash_admin_idempotency to "+appRole)
 	mustExec(t, admin, "grant usage on sequence audit_log_id_seq, api_access_log_id_seq to "+appRole)
 }
 

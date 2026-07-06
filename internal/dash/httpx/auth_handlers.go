@@ -112,9 +112,11 @@ func (s *Server) handleMFAVerify(w http.ResponseWriter, r *http.Request) {
 		TenantID: sess.TenantID, UserID: sess.UserID, Scopes: []string{"role:" + sess.Role},
 	})
 
+	// VerifyAndConsume verifies the TOTP AND records the (user, time_step) single-use marker so a
+	// captured code cannot be replayed inside its ±1-step window (OI-SEC-8; mfa_used_steps).
 	ok := false
-	if seed, serr := s.users.TOTPSeed(uctx, sess.UserID); serr == nil {
-		ok = security.VerifyTOTP(seed, body.Code, s.now())
+	if v, verr := s.users.VerifyAndConsume(uctx, sess.UserID, body.Code, s.now()); verr == nil && v {
+		ok = true
 	}
 	if !ok {
 		if consumed, cerr := s.users.ConsumeRecoveryCode(uctx, sess.UserID, body.Code); cerr == nil && consumed {

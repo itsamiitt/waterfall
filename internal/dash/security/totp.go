@@ -35,22 +35,33 @@ func GenerateTOTP(seed []byte, t time.Time) string {
 // VerifyTOTP reports whether code is a valid TOTP for seed at time t, accepting the current step
 // and ±1 step of clock skew. The compare is constant-time.
 func VerifyTOTP(seed []byte, code string, t time.Time) bool {
+	_, ok := verifyTOTPStep(seed, code, t)
+	return ok
+}
+
+// verifyTOTPStep reports whether code is a valid TOTP for seed at time t within the ±1-step
+// window and, when it is, the accepted time step (floor(unix/step)). It compares every window
+// with no early return, so timing stays independent of which step matched — the same constant-time
+// discipline as VerifyTOTP. The returned step is what the single-use replay guard records
+// (mfa_used_steps, doc 05 §5.1 / OI-SEC-8), so a captured code cannot be replayed inside its window.
+func verifyTOTPStep(seed []byte, code string, t time.Time) (step int64, ok bool) {
 	if len(code) != totpDigits {
-		return false
+		return 0, false
 	}
-	step := int64(t.Unix()) / int64(totpStep.Seconds())
-	ok := false
+	cur := int64(t.Unix()) / int64(totpStep.Seconds())
+	matched := int64(0)
+	found := false
 	for _, w := range []int64{-1, 0, 1} {
-		c := step + w
+		c := cur + w
 		if c < 0 {
 			continue
 		}
-		// Compare every window (no early return) to keep timing independent of which step matched.
 		if subtle.ConstantTimeCompare([]byte(hotp(seed, uint64(c))), []byte(code)) == 1 {
-			ok = true
+			matched = c
+			found = true
 		}
 	}
-	return ok
+	return matched, found
 }
 
 // hotp is the RFC 4226 HMAC-based one-time password with dynamic truncation, rendered to

@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "check:orphan": "node scripts/check-no-orphan-ui.mjs",
     "e2e": "playwright test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "check:allowlist": "node scripts/check-allowlist.mjs",
+    "check:ci": "tsc --noEmit && vitest run && node scripts/check-allowlist.mjs && node scripts/check-no-orphan-ui.mjs && npm run build && node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

@@ -64,7 +64,7 @@ Duration histograms use one shared log-spaced bucket set
 | 19 | `dash_health_checks_inflight` | gauge | — | 1 | Probes currently executing vs the bounded-concurrency cap (§3.3) |
 | 20 | `dash_health_status_transitions_total` | counter | `provider`, `to_status` (`up`, `degraded`, `down`, `maintenance`) | ≤ 4 × catalog | Provider health status edges; each edge also emits SSE `provider.health.changed` |
 | 21 | `dash_health_scheduler_last_run_age_seconds` | gaugefunc | — | 1 | Dead-man heartbeat of the health scheduler loop |
-| 22 | `dash_alert_evaluations_total` | counter | `metric` (16 closed vocabulary entries, §4), `outcome` (`breach`, `clear`, `suppressed`, `error`) | 64 | Evaluator activity per vocabulary entry; `suppressed` = maintenance/`muted_until` skips |
+| 22 | `dash_alert_evaluations_total` | counter | `metric` (17 closed vocabulary entries, §4), `outcome` (`ok`, `suppressed`, `error`) | 64 | Evaluator activity per vocabulary entry; `suppressed` = maintenance/`muted_until` skips |
 | 23 | `dash_alert_events_total` | counter | `transition` (`fired`, `resolved`, `renotified`), `severity` (`info`, `warning`, `critical`) | 9 | Episode edges (mirrors `alert_events` writes) |
 | 24 | `dash_alert_notifications_total` | counter | `channel_kind` (`email`, `slack`, `teams`, `discord`, `webhook`), `result` (`sent`, `failed`, `ssrf_blocked`) | 15 | Notifier delivery outcomes; `ssrf_blocked` is security telemetry (docs/20 §6) |
 | 25 | `dash_alert_notifier_pending` | gaugefunc | — | 1 | `alert_notifications` rows in `status='pending'` (delivery backlog) |
@@ -270,7 +270,7 @@ UNVERIFIED until production baselines exist (open item OBS-3).
 | `worker.heartbeat_age_s` | `workers` — `max(now() − last_heartbeat_at)` over non-stopped workers | seconds | `kind`, `queue` | gt / 60 / 120s |
 | `cost.daily_credits` | `cost_rollup_1d` — `SUM(credits)` for the current UTC day in scope | credits | `provider_id`, `workflow_key` | gt / `budgets.limit_credits` for the matching day-scope budget when one exists, else user-set / — |
 | `cost.budget_burn_pct` | `cost_rollup_1d` (or `tenant_usage_1d`) SUM vs `budgets.limit_credits` for the budget's scope + period (UTC latching, RF-4/doc 04) | percent | `scope`, `scope_key`, `period` | gte / 80 / — |
-| `cost.anomaly` | `cost_rollup_1d` — current UTC day SUM(credits) vs the trailing 28d same-day-of-week median; breach requires BOTH the percent threshold AND an absolute floor (package constant 1000 credits, OI-P6-3); episode payload carries the top-3 contributors | credits | `provider_id`, `workflow_key` | gt / 50 (percent over median) / — |
+| `cost.anomaly` | `cost_rollup_1d` — current UTC day SUM(credits) vs the trailing 28d same-day-of-week median; breach requires BOTH the percent threshold AND an absolute-credits floor — per-rule `alert_rules.anomaly_floor_credits` when set, else the package default 1000 credits (OI-P6-3); episode payload carries the top-3 contributors | credits | `provider_id`, `workflow_key` | gt / 50 (percent over median) / — |
 | `system.sse_clients` | `self_monitor` rows — per-instance SSE client counts upserted by each dashboardd instance, summed | clients | — (platform) | gt / 400 / 120s |
 | `system.aggregator_lag_s` | `self_monitor` fold watermarks — `max(now() − watermark_ts)` across fold families | seconds | — (platform) | gt / 30 / 120s |
 

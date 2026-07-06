@@ -8,14 +8,33 @@ import (
 	"github.com/enrichment/waterfall/internal/pg"
 )
 
-// anomalyAbsFloor is the absolute-credits floor of the cost.anomaly DUAL threshold (doc 12 §P6):
-// today must exceed the same-day-of-week median by BOTH the rule's percent threshold AND this many
-// credits, so a large relative spike on a near-zero baseline does not fire.
+// anomalyAbsFloor is the DEFAULT absolute-credits floor of the cost.anomaly DUAL threshold (doc 12
+// §P6, doc 10 §4): today must exceed the same-day-of-week median by BOTH the rule's percent
+// threshold AND this many credits, so a large relative spike on a near-zero baseline does not fire.
+// A rule may override it per-rule via alert_rules.anomaly_floor_credits (OI-P6-3).
 const anomalyAbsFloor = 1000
+
+// anomalyFloor resolves the absolute-credits floor for a rule: its per-rule override when set,
+// otherwise the package default (OI-P6-3, doc 10 §4).
+func anomalyFloor(r Rule) float64 {
+	if r.AnomalyFloorCredits != nil {
+		return float64(*r.AnomalyFloorCredits)
+	}
+	return anomalyAbsFloor
+}
+
+// anomalyBreaches is the pure DUAL-threshold decision for cost.anomaly: today breaches only when the
+// percent increase over the same-day-of-week median meets the rule's threshold AND the absolute
+// credit delta clears the (per-rule or default) floor. Kept I/O-free so OI-P6-3's unit test drives
+// it directly.
+func anomalyBreaches(r Rule, pctIncrease, creditDelta float64) bool {
+	return pctIncrease >= r.Threshold && creditDelta >= anomalyFloor(r)
+}
 
 // costAnomaly compares today's spend to the trailing-28d same-day-of-week median (4 prior samples)
 // in the rule's provider/workflow scope. It breaches when the increase exceeds BOTH rule.Threshold
-// percent AND anomalyAbsFloor credits. The reported value is the percent increase over the median.
+// percent AND the rule's absolute-credits floor (per-rule override or the package default; see
+// anomalyBreaches). The reported value is the percent increase over the median.
 func costAnomaly(c *pg.Conn, r Rule, now time.Time) (metricResult, error) {
 	today := now.UTC().Truncate(24 * time.Hour)
 	scopeWhere, scopeArgs := costScopeWhere(r)
@@ -44,7 +63,7 @@ func costAnomaly(c *pg.Conn, r Rule, now time.Time) (metricResult, error) {
 	} else if todayCredits > 0 {
 		pctIncrease = 100
 	}
-	breach := pctIncrease >= r.Threshold && (todayCredits-med) >= anomalyAbsFloor
+	breach := anomalyBreaches(r, pctIncrease, todayCredits-med)
 	return metricResult{value: pctIncrease, breaching: breach, hasData: true}, nil
 }
 

@@ -288,6 +288,78 @@ func (u *Users) ConfirmMFA(ctx context.Context, userID, code string, at time.Tim
 	return plain, nil
 }
 
+// VerifyAndConsume verifies a TOTP code against the user's sealed seed AND atomically records the
+// accepted time step as single-use in mfa_used_steps, closing the replay window (doc 05 §5.1 /
+// OI-SEC-8). It returns ok=true only when the code both verifies and its (user, time_step) had not
+// been consumed before: the INSERT ... ON CONFLICT DO NOTHING returns zero rows on a replay, which
+// is reported as ok=false (a captured code cannot be reused inside its ±1-step acceptance window).
+//
+// A code that does not verify returns (false, nil). A replay of an already-consumed step likewise
+// returns (false, nil). Only a storage/crypto fault (opening the seed, the INSERT) returns a
+// non-nil error. tenant_id is taken from the ctx Principal (G1), never from an argument, and must
+// equal the tenant bound by the RLS transaction. This is the consuming variant of VerifyTOTP —
+// existing VerifyTOTP call sites are untouched; the login mfa/verify and the keys/approvals
+// step-up verifier switch to this.
+func (u *Users) VerifyAndConsume(ctx context.Context, userID, code string, now time.Time) (bool, error) {
+	seed, err := u.TOTPSeed(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	step, ok := verifyTOTPStep(seed, code, now)
+	if !ok {
+		return false, nil
+	}
+	p, err := tenant.FromContext(ctx)
+	if err != nil {
+		return false, err
+	}
+	consumed := false
+	err = u.store.Tx(ctx, func(c *pg.Conn) error {
+		res, qerr := c.QueryParams(
+			`insert into mfa_used_steps (tenant_id, user_id, time_step) values ($1,$2,$3)
+			 on conflict do nothing returning user_id`,
+			p.TenantID, userID, step)
+		if qerr != nil {
+			return qerr
+		}
+		consumed = len(res.Rows) > 0 // zero rows == the step was already used == replay
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return consumed, nil
+}
+
+// DeleteUsedStepsBefore reaps single-use TOTP step records stamped before cutoff (doc 05 §5.1: the
+// guard only needs ~90s of history; the table keeps ~10 min of forensic slack). It enumerates
+// tenants under the operator SELECT policy, then deletes per-tenant under each tenant's own binding
+// — no BYPASSRLS — mirroring Sessions.DeleteExpired so it can share the session-reaper loop. A
+// lagging reaper never weakens the guard: the ±1-step window is only ~90s wide, far inside cutoff.
+func (u *Users) DeleteUsedStepsBefore(ctx context.Context, cutoff time.Time) error {
+	sysCtx := tenant.WithPrincipal(ctx, tenant.Principal{TenantID: "platform", Scopes: []string{"role:operator"}})
+	var tenants []string
+	if err := u.store.Tx(sysCtx, func(c *pg.Conn) error {
+		res, err := c.Query(`select id from tenants`)
+		if err != nil {
+			return err
+		}
+		for _, row := range res.Rows {
+			tenants = append(tenants, str(row[0]))
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, tid := range tenants {
+		tctx := tenant.WithPrincipal(ctx, tenant.Principal{TenantID: tid})
+		_ = u.store.Tx(tctx, func(c *pg.Conn) error {
+			return c.ExecParams(`delete from mfa_used_steps where used_at < $1`, cutoff)
+		})
+	}
+	return nil
+}
+
 // ConsumeRecoveryCode marks a matching unused recovery code used (single-use) in one transaction
 // and reports whether a code was consumed (doc 05 §5.2).
 func (u *Users) ConsumeRecoveryCode(ctx context.Context, userID, code string) (bool, error) {

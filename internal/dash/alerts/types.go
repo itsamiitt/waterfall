@@ -60,8 +60,13 @@ type Rule struct {
 	Channels   []string          `json:"channels,omitempty"`
 	Enabled    bool              `json:"enabled"`
 	MutedUntil *time.Time        `json:"muted_until"`
-	CreatedBy  string            `json:"created_by,omitempty"`
-	UpdatedAt  time.Time         `json:"updated_at"`
+	// AnomalyFloorCredits is the per-rule absolute-credits floor for a cost.anomaly rule's DUAL
+	// threshold (doc 10 §4 / OI-P6-3): today's spend must exceed the same-day-of-week median by
+	// BOTH the percent Threshold AND this many credits before the rule breaches. NULL (nil) →
+	// the package default (anomalyAbsFloor, 1000). Ignored by non-anomaly metrics.
+	AnomalyFloorCredits *int64    `json:"anomaly_floor_credits,omitempty"`
+	CreatedBy           string    `json:"created_by,omitempty"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // Event is one edge-triggered episode row (firing -> resolved). It is NOT partitioned so the

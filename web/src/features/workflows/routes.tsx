@@ -1,7 +1,12 @@
-// features/workflows — P10 module stub (doc 12 §P10). This file stays the lazy route
-// boundary; the real pages replace the Component export in P10.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/workflows — the lazy route boundary (doc 08 §10). Routes: /workflows (index),
+// /workflows/:scope and /workflows/:scope/edit (builder; the editor renders read-only for a
+// published version, so the detail route reuses it). Matches app/router.tsx.
+import { useParams } from "react-router";
+import { WorkflowListPage } from "./WorkflowListPage";
+import { WorkflowEditorPage } from "./WorkflowEditor";
+import "./workflows.css";
 
 export function Component() {
-  return <ComingSoon module="Waterfall Workflows" phase="P10" group="workflows.read" />;
+  const { scope } = useParams();
+  return scope ? <WorkflowEditorPage /> : <WorkflowListPage />;
 }

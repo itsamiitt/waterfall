@@ -1,7 +1,12 @@
-// features/routing — P10 module stub (doc 12 §P10). This file stays the lazy route
-// boundary; the real pages replace the Component export in P10.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/routing — the lazy route boundary (doc 08 §10). Routes: /routing (scope list),
+// /routing/:scope/edit (dnd editor). One Component switches on the presence of :scope, matching
+// app/router.tsx which mounts this chunk for both paths.
+import { useParams } from "react-router";
+import { RoutingListPage } from "./RoutingListPage";
+import { RoutingEditorPage } from "./RoutingEditor";
+import "./routing.css";
 
 export function Component() {
-  return <ComingSoon module="Routing Policies" phase="P10" group="routing.read" />;
+  const { scope } = useParams();
+  return scope ? <RoutingEditorPage /> : <RoutingListPage />;
 }

@@ -1,7 +1,16 @@
-// features/queues — P10 module stub (doc 12 §P10). This file stays the lazy route
-// boundary; the real pages replace the Component export in P10.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/queues — the lazy route boundary (doc 08 §10). Routes: /queues (cards),
+// /queues/:name (console), /dead-letters (DLQ). One Component dispatches on the matched path,
+// matching app/router.tsx which mounts this chunk for all three.
+import { useLocation, useParams } from "react-router";
+import { QueuesPage } from "./QueuesPage";
+import { QueueConsole } from "./QueueConsole";
+import { DeadLettersPage } from "./DeadLettersPage";
+import "./queues.css";
 
 export function Component() {
-  return <ComingSoon module="Queues & Dead Letters" phase="P10" group="dead_letters.read" />;
+  const { name } = useParams();
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/dead-letters")) return <DeadLettersPage />;
+  if (name) return <QueueConsole name={name} />;
+  return <QueuesPage />;
 }

@@ -1,0 +1,50 @@
+/* features/workers — feature-scoped styles, tokens only (doc 08 §6.1). Prefixed `wk-`. */
+
+.wk-muted {
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}
+.wk-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-3);
+}
+.wk-filters {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+  max-width: 640px;
+}
+.wk-desired {
+  font: var(--text-sm) var(--font-mono);
+  color: var(--color-text-muted);
+}
+.wk-conv {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.wk-runbook {
+  font: var(--text-xs) var(--font-sans);
+  color: var(--status-warn);
+}
+.wk-row-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+.wk-dialog-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+.wk-honest {
+  background: var(--status-info-bg);
+  border: 1px solid var(--status-info);
+  border-radius: var(--radius-1);
+  padding: var(--space-3);
+  margin: 0;
+  font: var(--text-sm) var(--font-sans);
+}

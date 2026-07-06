@@ -1,0 +1,175 @@
+/* features/queues — feature-scoped styles, tokens only (doc 08 §6.1). Prefixed `qu-`. */
+
+.qu-muted {
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}
+.qu-dlq-link {
+  margin-left: auto;
+}
+
+.qu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+.qu-card {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.qu-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+.qu-card-name {
+  font: 600 var(--text-md) var(--font-mono);
+}
+.qu-vector {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+}
+.qu-vector-cell {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  padding: var(--space-2);
+  text-align: center;
+}
+.qu-vector-cell[data-alert] {
+  border-color: var(--status-warn);
+  background: var(--status-warn-bg);
+}
+.qu-vector-cell dt {
+  font: var(--text-xs) var(--font-sans);
+  color: var(--color-text-muted);
+}
+.qu-vector-cell dd {
+  margin: var(--space-1) 0 0;
+  font: 600 var(--text-md) var(--font-mono);
+}
+.qu-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.qu-rates {
+  font: var(--text-sm) var(--font-mono);
+  color: var(--color-text-muted);
+}
+.qu-zero-workers {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  background: var(--status-error-bg);
+  border: 1px solid var(--status-error);
+  border-radius: var(--radius-1);
+  padding: var(--space-3);
+  margin: 0;
+  font: var(--text-sm) var(--font-sans);
+}
+
+.qu-console-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+.qu-accumulating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}
+.qu-panel {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.qu-panel-title {
+  font: 600 var(--text-sm) var(--font-sans);
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+.qu-state-tabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.qu-state-tab {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+  font: var(--text-sm) var(--font-mono);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.qu-state-tab[data-active] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+.qu-state-count {
+  font-weight: 600;
+}
+.qu-workers-intent {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  max-width: 340px;
+}
+
+.qu-dl-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.qu-dl-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.qu-dl-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.qu-dl-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-sm) var(--font-sans);
+}
+.qu-dl-lasterror {
+  font: var(--text-sm) var(--font-mono);
+  color: var(--status-error);
+  margin: 0;
+}
+.qu-dl-subhead {
+  font: 600 var(--text-sm) var(--font-sans);
+  margin: 0;
+}
+.qu-dl-actions {
+  display: flex;
+  gap: var(--space-3);
+}

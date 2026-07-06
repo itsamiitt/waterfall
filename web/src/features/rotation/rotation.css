@@ -1,0 +1,93 @@
+/* features/rotation — layout-only styles; all values reference design tokens (doc 08 §6.1). */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-5) 0;
+}
+.section-title {
+  font: 600 var(--text-md) var(--font-sans);
+}
+.action-bar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.filter-bar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-5);
+}
+.kv-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-5);
+  font: var(--text-sm) var(--font-sans);
+  align-items: baseline;
+}
+.kv-list dt {
+  color: var(--color-text-muted);
+}
+.kv-list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.bands {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font: var(--text-sm) var(--font-mono);
+}
+.band-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-sunken);
+}
+.strat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+.strat-card {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dist-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 56px;
+  gap: var(--space-3);
+  align-items: center;
+  font: var(--text-sm) var(--font-sans);
+}
+.dist-bar {
+  display: block;
+  height: var(--space-4);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-sunken);
+  overflow: hidden;
+}
+.dist-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.dist-pct {
+  font-family: var(--font-mono);
+  text-align: right;
+}

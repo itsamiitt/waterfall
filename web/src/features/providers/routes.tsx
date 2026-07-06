@@ -1,7 +1,15 @@
-// features/providers — P9 module stub (doc 12 §P9). This file stays the lazy route
-// boundary; the real pages replace the Component export in P9.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/providers — lazy route boundary (doc 08 §3). One Component dispatches the three
+// Module 2 routes: /providers (list), /providers/compare, /providers/:id/* (detail + tabs).
+import { useLocation, useParams } from "react-router";
+import ProvidersList from "./ProvidersList";
+import ProviderDetail from "./ProviderDetail";
+import CompareView from "./CompareView";
+import "./providers.css";
 
 export function Component() {
-  return <ComingSoon module="Providers" phase="P9" group="providers.read" />;
+  const { id } = useParams();
+  const { pathname } = useLocation();
+  if (id) return <ProviderDetail />;
+  if (pathname.endsWith("/compare")) return <CompareView />;
+  return <ProvidersList />;
 }

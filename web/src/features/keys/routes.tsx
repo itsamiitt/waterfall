@@ -1,7 +1,12 @@
-// features/keys — P9 module stub (doc 12 §P9). This file stays the lazy route
-// boundary; the real pages replace the Component export in P9.
-import { ComingSoon } from "../../app/ComingSoon";
+// features/keys — lazy route boundary (doc 08 §3). One Component dispatches the two Module 3
+// routes: /keys (grid) and /keys/import (wizard).
+import { useLocation } from "react-router";
+import KeysPage from "./KeysPage";
+import ImportWizard from "./ImportWizardPage";
+import "./keys.css";
 
 export function Component() {
-  return <ComingSoon module="Keys" phase="P9" group="keys.read" />;
+  const { pathname } = useLocation();
+  if (pathname.endsWith("/import")) return <ImportWizard />;
+  return <KeysPage />;
 }

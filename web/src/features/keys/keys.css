@@ -1,0 +1,150 @@
+/* features/keys — layout-only styles; all values reference design tokens (doc 08 §6.1). */
+.action-bar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-bar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: var(--space-4);
+}
+.filter-bar .p-field {
+  min-width: 130px;
+}
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.section-title {
+  font: 600 var(--text-md) var(--font-sans);
+}
+.key-grid {
+  scroll-behavior: auto;
+}
+.key-grid td,
+.key-grid th {
+  white-space: nowrap;
+}
+.grid-loading {
+  padding: var(--space-3);
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-1);
+  background: var(--status-info-bg);
+}
+.bulk-summary {
+  font: var(--text-sm) var(--font-sans);
+}
+.bulk-ops {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+.banner {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-1);
+  border: 1px solid var(--status-warn);
+  background: var(--status-warn-bg);
+  color: var(--color-text);
+  font: var(--text-sm) var(--font-sans);
+}
+.provider-badges {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.kv-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-5);
+  font: var(--text-sm) var(--font-sans);
+  align-items: baseline;
+}
+.kv-list dt {
+  color: var(--color-text-muted);
+}
+.kv-list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.credits-bar {
+  display: inline-block;
+  width: 64px;
+  height: var(--space-4);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-sunken);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.credits-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.progress-track {
+  width: 100%;
+  height: var(--space-4);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-sunken);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.2s ease;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+.radio-row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.radio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-sm) var(--font-sans);
+}
+textarea.p-input {
+  font: var(--text-sm) var(--font-mono);
+  resize: vertical;
+}
+.detail-meta {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  font: var(--text-sm) var(--font-sans);
+  color: var(--color-text-muted);
+}

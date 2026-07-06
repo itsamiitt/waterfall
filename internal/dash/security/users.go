@@ -174,8 +174,8 @@ func (u *Users) Deactivate(ctx context.Context, id string) error {
 		if len(res.Rows) == 0 {
 			return ErrNotFound
 		}
-		return c.ExecParams(
-			`update sessions set revoked_at = now() where user_id = $1 and revoked_at is null`, id)
+		_, err = revokeAllSessionsForUser(c, id)
+		return err
 	})
 }
 
@@ -209,8 +209,8 @@ func (u *Users) ResetPassword(ctx context.Context, id, passwordHash string) erro
 		if len(res.Rows) == 0 {
 			return ErrNotFound
 		}
-		return c.ExecParams(
-			`update sessions set revoked_at = now() where user_id = $1 and revoked_at is null`, id)
+		_, err = revokeAllSessionsForUser(c, id)
+		return err
 	})
 }
 

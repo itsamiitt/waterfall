@@ -5,6 +5,27 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-06 — Dashboard pending-OI closeout (post-P12 hardening waves)
+Closed the open-items backlog after the P0–P12 build. Migration `0011` (mfa_used_steps,
+dash_admin_idempotency, alert_rules.anomaly_floor_credits). **Security:** TOTP single-use replay
+guard (VerifyAndConsume, login + step-up); durable admin idempotency ledger (replaces the in-process
+map); fingerprint-pepper rotation; NIST SP800-38D AES-256-GCM KATs + PBKDF2-HMAC-SHA256 KATs;
+X-Forwarded-For-spoof + session-fixation negatives; bulk session-revoke. **Telemetry:** live
+rotation `Lease.Done` → usage_events feed (Config.RecordUsage). **Bulk jobs:** keys bulk-op/import on
+the durable bulk_jobs lease model + an advisory-locked janitor that fails expired-lease jobs.
+**Cost/alerts:** cost.anomaly added to the closed metric catalog + /meta/enums; per-rule anomaly
+floor. **enrichd:** opt-in worker heartbeat with a minted HS256 machine JWT. **Contracts/tooling:**
+openapi-admin.{json,yaml} + apispec parity test (145==145); pgmigrate `-- pgmigrate: no-transaction`
+escape hatch; web `check:ci`. **Resilience:** configver test-only publish-crash fault hook +
+PG-restart-reconnect + poison-import-row chaos tests; 50k-import and 1M-fold measured single-instance.
+**Live E2E:** Playwright login→MFA→overview passes end-to-end — caught and fixed a real SPA
+history-fallback bug (deep links / refresh 404'd). **Repo integrity:** fixed a `.gitignore` rule
+(`secrets/`) that had gitignored the entire internal/dash/secrets envelope-encryption package since
+P0, so the committed tree now builds from a clean checkout. Design-target stores
+(Redis/ClickHouse/Kafka/Temporal) + WORM anchor recorded as deploy-time decisions. Residuals to
+staging: full-scale multi-instance/10-min load, enrichd drain-gating (OI-P5-2), bulk auto-resume
+(OI-KEYS-1c), recovery-code-on-step-up.
+
 ### 2026-07-06 — Waterfall Management Dashboard build (P0–P12) — control-plane + 12 module UIs + P12 hardening closure
 Delivered the full admin dashboard for the enrichment engine across twelve one-commit phases on branch
 `waterfall` (contract: `docs/waterfall-dashboard/12`). **Backend** (`internal/dash/*`, 21 packages, stdlib-only):

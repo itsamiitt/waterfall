@@ -84,7 +84,7 @@ headroom per pool (capacity model, doc 11).
 ## RB-2 — Key compromise emergency rotation (with overlap)
 
 **Symptoms.** Vendor breach notice; anomalous usage on one key (`key_usage_1m` spike at odd
-hours); `cost_anomaly` alert naming the key's Provider; keys flipping `auth_failed` after the
+hours); `cost.anomaly` alert naming the key's Provider; keys flipping `auth_failed` after the
 vendor revoked them server-side.
 
 **Diagnosis.**
@@ -127,7 +127,7 @@ alert (manual re-enable only); keyed-fingerprint dedupe at import catches re-imp
 
 ## RB-3 — Provider outage (pause + failover routing publish)
 
-**Symptoms.** `alert.event.fired` for `provider.error_rate` / `provider.health_check_stale`;
+**Symptoms.** `alert.event.fired` for `provider.error_rate` / `provider.success_rate`;
 breaker open (`fail_provider_down` dominant class); health timeline segments red; Waterfall
 completion rate drops for Fields the Provider covers.
 
@@ -324,6 +324,21 @@ security owner.
 Verify walker (this alarm working as designed IS the prevention); WORM/offsite copies of audit
 partitions per doc 05; least-privilege DB roles enforced by the startup self-check.
 
+> **`audit_chain_incident` marker-row ceremony (normative — closes OI-RB-3).** The marker referenced
+> by RB-7 step 4 and RB-14 step 5 is an ordinary hash-chained `audit_log` append with
+> `action = "audit_chain_incident"`; like every audit row it extends the chain and is itself never
+> rewritten (append-only — it *documents* a discontinuity, it does not repair one).
+> **Who may append it:** an operator only (RBAC operator scope), through the authenticated audit
+> path the incident tooling drives under an operator Principal — never by direct SQL and never as a
+> superuser (the same least-privilege rule the chain's integrity rests on; only `app_rls` writes,
+> only `relay` holds BYPASSRLS). **Required fields** (carried in the row's `after` snapshot,
+> string-valued so the chain re-canonicalizes byte-identically, doc 05 §8.1): `reason` — free-text
+> incident summary naming the affected `tenant_id` + `seq` range and forensic references; `actor` —
+> the appending operator's `user_id`; `detected_at` — the RFC 3339 UTC instant the discontinuity was
+> observed. Verification tooling treats a well-formed marker as a documented exception for exactly
+> the range it names, reporting that exception rather than silently passing it — so the history stays
+> honest across the gap.
+
 ---
 
 ## RB-8 — Master key rotation (planned)
@@ -415,8 +430,10 @@ tiles visibly stale; delta latency > 2s (UNVERIFIED target from doc 13 §6 L2); 
 events (ring-buffer overflow); reconnect storms after deploys.
 
 **Diagnosis.**
-1. `/metrics` on each dashboardd instance: SSE client gauge, ring-overflow counter, per-topic
-   event rates, aggregator tick age (names per doc 10 catalog).
+1. `/metrics` on each dashboardd instance: SSE client gauge (`dash_sse_clients`), ring-overflow /
+   drop counter (`dash_sse_dropped_total`), per-topic event rates (`dash_sse_events_total`),
+   aggregator heartbeat age (`dash_aggregator_last_run_age_seconds`) — exact names per the doc 10
+   §1.1 metric catalog.
 2. Proxy path check: `curl -N -H "Cookie: <session>" "https://<host>/v1/admin/streams?topics=overview"`
    — heartbeat comment must arrive every 15s unbuffered. If it arrives in bursts, the proxy is
    buffering: doc 11 mandates flush-through (`X-Accel-Buffering: no` / `proxy_buffering off`) and
@@ -497,7 +514,7 @@ to /approvals.
 
 ## RB-12 — Lost workers wave (heartbeats stop)
 
-**Symptoms.** `workers.lost` alert; /workers grid shows a cohort flipping `lost`
+**Symptoms.** `worker.lost_count` alert; /workers grid shows a cohort flipping `lost`
 (`worker.state.changed` burst); queue panels warn "no live workers on this queue" while depth
 grows; `oldest_age_s` rising (RB-5 co-symptom).
 
@@ -538,8 +555,8 @@ died" is itself alertable.
 
 ## RB-13 — Budget overrun / cost anomaly
 
-**Symptoms.** `budget.pct_consumed` step alert (actual thresholds latch once per UTC period;
-forecast alerts armed only with ≥14 days history); `cost_anomaly` episode with top-3 contributing
+**Symptoms.** `cost.budget_burn_pct` step alert (actual thresholds latch once per UTC period;
+forecast alerts armed only with ≥14 days history); `cost.anomaly` episode with top-3 contributing
 (provider, workflow) pairs attached; EOM forecast band crossing a budget line on /cost.
 
 **Diagnosis.**
@@ -572,7 +589,7 @@ forecast alerts armed only with ≥14 days history); `cost_anomaly` episode with
   this honest in the UI).
 
 **Verification.** Daily credits for the culprit dimension return to baseline in
-`cost/summary`; `cost_anomaly` episode resolves; G4 ledger shows reservations bounded by the new
+`cost/summary`; `cost.anomaly` episode resolves; G4 ledger shows reservations bounded by the new
 ceiling (ErrCeilingExceeded rejections visible at the engine, none silently absorbed); forecast
 band re-centers under the budget within a few days of history.
 
@@ -614,9 +631,17 @@ UNVERIFIED until the P12 restore drill measures them.
    must exist in the deployed `DASH_MASTER_KEY` keyring (the keyring is env, backed up separately
    from the DB — ADR-0017; a DB restore without the keyring is unopenable by design). Spot-verify:
    `POST /v1/admin/keys/{id}/test` on several keys, one alert-channel test-send, one TOTP login.
-7. **Session hygiene.** Revoke all restored sessions (bulk revoke per doc 05 — restored session
-   rows predate the incident): users re-authenticate; MFA enrollment is unaffected (TOTP seeds are
-   envelopes).
+7. **Session hygiene.** Revoke all restored sessions in bulk — restored session rows predate the
+   incident. Per user, `security.Sessions.RevokeAllForUser(ctx, userID)` cuts that user's entire
+   live set in one audited, RLS-scoped statement
+   (`update sessions set revoked_at = now() where user_id = $1 and revoked_at is null`), returning
+   the count — replacing the per-id `DELETE /v1/admin/auth/sessions/{id}` loop of prior drills; the
+   password-reset (`POST /v1/admin/users/{id}/reset-password`) and deactivate
+   (`DELETE /v1/admin/users/{id}`) admin paths invoke the same helper in-transaction, so a single
+   compromised account is cut through those existing endpoints. Users re-authenticate; MFA
+   enrollment is unaffected (TOTP seeds are envelopes). (OI-RB-2: the reusable `RevokeAllForUser`
+   primitive is shipped and integration-tested; a dedicated
+   `POST /v1/admin/users/{id}/revoke-sessions` endpoint is intentionally deferred — see Open items.)
 8. **Telemetry reconciliation.** Rollups are consistent as-of the restore point. For the window
    between restore point and freeze: if within the 48h usage_events retention captured by the
    backup, refold (aggregator refold path — idempotent additive upserts, doc 13 §3.7); older or
@@ -644,7 +669,7 @@ backup verification so RB-7 never starts from a restore.
 
 | ID | Item | Status | Owner |
 |---|---|---|---|
-| OI-RB-1 | Exact metric names used in Diagnosis steps to be pinned verbatim to the doc 10 catalog when it freezes (this doc references the catalog, not ad-hoc names) | OPEN (closes with doc 10 freeze) | GTM Infrastructure Engineer |
-| OI-RB-2 | Bulk session-revoke mechanism for RB-14 step 7 (per-id DELETE today; bulk endpoint or SQL-with-audit procedure to be specified in doc 05) | OPEN (doc 05) | Senior Backend Engineer |
-| OI-RB-3 | `audit_chain_incident` marker-row ceremony (who may append it, required fields) to be specified in doc 05 incident procedures; RB-7/RB-14 reference it | OPEN (doc 05) | Enterprise UX Architect → Security owner |
+| OI-RB-1 | Exact metric names used in Diagnosis steps pinned verbatim to the doc 10 §4 closed alert vocabulary (and RB-10 diagnosis pinned to the §1.1 metric catalog): `cost.anomaly` (was `cost_anomaly`, RB-2/RB-13), `provider.success_rate` (was `provider.health_check_stale`, RB-3), `worker.lost_count` (was `workers.lost`, RB-12), `cost.budget_burn_pct` (was `budget.pct_consumed`, RB-13), and RB-10's SSE/aggregator gauges to their `dash_*` names — each verified against doc 10 | RESOLVED | GTM Infrastructure Engineer |
+| OI-RB-2 | Bulk session-revoke for RB-14 step 7: `security.Sessions.RevokeAllForUser(ctx, userID) (int, error)` shipped (single audited, RLS-scoped UPDATE; unit + live-PG integration test) and wired into the existing reset-password / deactivate paths in-transaction. A dedicated `POST /v1/admin/users/{id}/revoke-sessions` route is deferred to avoid an out-of-scope edit to the sibling-owned `openapi-admin.json` (apispec parity must stay green); endpoint exposure to be added when that spec is next revised | RESOLVED (primitive shipped; dedicated route deferred) | Senior Backend Engineer |
+| OI-RB-3 | `audit_chain_incident` marker-row ceremony (who may append it, required fields) specified as a normative note under RB-7 (operator-only via the authenticated audit path; required `reason`/`actor`/`detected_at`); RB-7 step 4 / RB-14 step 5 reference it | RESOLVED | Enterprise UX Architect → Security owner |
 | OI-RB-4 | RPO/RTO and SSE-latency figures cited here are design targets, UNVERIFIED until the P12 drills measure them (doc 13 §6, doc 11 capacity model) | OPEN (closes in P12) | Solutions Architect |

@@ -364,6 +364,13 @@ func (s *PGStore) Publish(ctx context.Context, p PublishParams, idx *workflowInd
 			}
 		}
 
+		// 2b. FAULT POINT (test-only, inert in production): the pointer now names p.VersionID but
+		// this transaction has NOT committed and the epoch bump (step 5) has not run. A publish-
+		// crash chaos test assigns configver.PublishFaultAfterPointer to crash/kill the tx here;
+		// because everything runs in one transaction, the crash rolls back the pointer flip
+		// atomically, so config_active is never left dangling (doc 13 §7 / OI-TS-5).
+		firePublishFault()
+
 		// 3. Flip the version -> published (the pointer is authority; status is bookkeeping).
 		if err := c.ExecParams(
 			`update config_versions set status='published', published_at=now(), published_by=$2

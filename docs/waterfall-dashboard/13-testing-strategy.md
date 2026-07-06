@@ -175,18 +175,20 @@ Measured 2026-07-06 on dev (Go 1.26.4, PostgreSQL 17.10, single instance, Intel 
 8259CL). The in-proc P-gate harnesses (the `-bench` benchmark plus the integration soak/fold/import
 tests) recorded the numbers below and are green in `scripts/run-rls-test.sh`. **Honesty note (repo
 UNVERIFIED discipline):** a measured smaller-scale number converts the UNVERIFIED tag *for that
-scale only*; the standalone multi-instance load scripts (`scripts/load/sse_soak.go`,
-`scripts/load/api_load.go`) and the extended fixtures (`TestImportLoad50k`, `TestFold1M`) are NOT
-yet built — their full 10-min / 500-client / 50k-row / 1M-event / multi-instance runs are **deferred
-to a staging load-lab** (tracked OI-P12-1 in doc 12 §5). Those full-scale targets remain
-UNVERIFIED-at-scale until that run writes back here.
+scale only*. The extended single-instance fixtures `TestImportLoad50k` (`internal/dash/keys`) and
+`TestFold1M` (`internal/dash/telemetry`) are now **built and measured on this dev box** (numbers in
+L3/L4 below, labeled dev single instance). The standalone multi-instance load scripts
+(`scripts/load/sse_soak.go`, `scripts/load/api_load.go`) are NOT yet built, and the full 10-min /
+500-client / multi-instance / retention-window / RSS-budget runs remain **deferred to a staging
+load-lab** (tracked OI-P12-1 in doc 12 §5). Those full-scale targets remain UNVERIFIED-at-scale
+until that run writes back here.
 
 | # | Claim (design target) | Harness / command | Pass threshold | Measured 2026-07-06 (dev, single instance) |
 |---|---|---|---|---|
 | L1 | Key selection ≥10k selections/s per pool, O(1), concurrency-safe | `CGO_ENABLED=1 go test -bench=PoolSelect -benchmem -benchtime=2s -cpu=1,4,8 ./internal/dash/rotation`; correctness via `go test -race -run TestRotationLeaseNoOverLease` | ≥10,000 ops/s per pool at -cpu=8 across all strategies; zero race reports | **MET (measured):** round_robin **24.7M sel/s** (39.6 ns/op, 0 B/op, 0 allocs) @ -cpu=8; weighted **26.7M sel/s** — ~2,470× target. No-over-lease proven by `TestRotationLeaseNoOverLease` (50-goroutine storm, total granted ≤ daily_limit). |
 | L2 | SSE fan-out: 200 clients, ≤2s delta latency; extended soak at 500 clients (doc 00 §8 U-4) | in-proc `TestSSESoakLite` (200 clients / 20s window); extended `scripts/load/sse_soak.go -clients 500 -duration 10m` (to be built) | p99 tick-to-receipt ≤ 2s; zero dropped `*.changed`; reconnect storm recovers ≤30s | **MET at 200-client/20s (measured):** 14,200 ticks, p50 **2.01ms**, p99 **12.27ms** (target ≤2s), 35 changed events, **zero dropped** (`TestSSESoakLite`). Full 10-min / 500-client / reconnect-storm soak: harness to be built; deferred to staging (OI-P12-1). |
-| L3 | Import 50k rows within caps | 1k-gate `TestKeysImportSealAndRLS`; extended `TestImportLoad50k` (to be built) | job completes; envelopes sealed; no plaintext; per-row errors non-fatal | **1k-key gate MET (measured):** 1000 keys sealed, **zero plaintext** across provider_keys / audit_log / captured slog, 8.75s (`TestKeysImportSealAndRLS`). 50k-row fixture + RSS budget: deferred to staging (OI-P12-1). |
-| L4 | Rollup fold under 1M synthetic usage_events | 100k `TestTelemetryFoldRefoldIdentical`; extended `TestFold1M` (to be built) | fold within one retention window; refold byte-identical (§3.7); fold lag below alert threshold | **100k-event fold MET (measured):** 100,000 usage_events fold→snapshot→truncate→refold **byte-identical** across 9 rollup tables; incremental additive fold == repair refold; 4.34s for 3 folds (`TestTelemetryFoldRefoldIdentical`). 1M-event scale: deferred to staging (OI-P12-1). |
+| L3 | Import 50k rows within caps | 1k-gate `TestKeysImportSealAndRLS`; 50k `TestImportLoad50k` (built); poison-row isolation `TestPoisonImportRowIsolation` (built) | job completes; envelopes sealed; no plaintext; per-row errors non-fatal | **1k-key gate MET:** 1000 keys sealed, **zero plaintext** across provider_keys / audit_log / captured slog, 8.75s (`TestKeysImportSealAndRLS`). **50k-row import MET (measured 2026-07-06, dev, single instance):** 50,000 rows sealed + inserted in **15m30s (~54 rows/s)**, 0 failed, batch `succeeded`, all envelopes non-null (`TestImportLoad50k`) — the per-row seal→dup-check→insert path is 3 serial txns/row, so this is a single-instance throughput floor, NOT the staging target. **Per-row errors non-fatal MET:** malformed + duplicate rows isolated in `key_import_batches.errors`, 500/500 good rows imported, terminal `partial` (`TestPoisonImportRowIsolation`). RSS budget + multi-instance blue-green resume: deferred to staging (OI-P12-1). |
+| L4 | Rollup fold under 1M synthetic usage_events | 100k `TestTelemetryFoldRefoldIdentical`; 1M `TestFold1M` (built) | fold within one retention window; refold byte-identical (§3.7); fold lag below alert threshold | **100k-event fold MET:** 100,000 usage_events fold→snapshot→truncate→refold **byte-identical** across 9 rollup tables; incremental additive fold == repair refold; 4.34s for 3 folds (`TestTelemetryFoldRefoldIdentical`). **1M-event fold MET (measured 2026-07-06, dev, single instance):** 1,000,000 usage_events refolded in **4.45s (~225k events/s)**, `provider_stats_1m` sum(req)=1,000,000 (every event folded exactly once); 1M seed 10.9s (`TestFold1M`) — single-instance dev, NOT the staging target. Multi-instance / full-retention-window fold-lag vs alert threshold: deferred to staging (OI-P12-1). |
 | L5 | Admin API p95 under sustained load | `scripts/load/api_load.go -rps 200 -duration 5m` (to be built) | p95 ≤ 250ms, p99 ≤ 750ms at 200 rps; zero 5xx; uniform error bodies | **Not run:** load harness to be built; full run deferred to staging (OI-P12-1). The P12 live-boot smoke drove /healthz /readyz /metrics / and 6 authenticated operator reads + login, observing only expected status codes and uniform error envelopes (doc 12 §5). |
 
 Conversion protocol: each measured result is committed in P12 with its harness output; the
@@ -206,6 +208,52 @@ Executed as scripted drills (`scripts/chaos/`) against ≥2 dashboardd instances
 | Poison import row | CSV with one malformed/oversized/formula row among 10k | row-level failure recorded in `key_import_batches.errors`; remaining 9,999 succeed; job terminal state `partial` (doc 04 §4.1), not crash; drawer renders per-row errors |
 | Instance kill mid-bulk-import (doc 11 §4.3 L7) | `kill -9` the dashboardd instance whose `claimed_by` matches the running 50k-import job (L3 harness); rerun as blue-green drain variant (SIGTERM at drain deadline, doc 11 §6 step 4) | janitor (`dash_bulk_janitor`) re-queues the job within one lease interval + one sweep; another instance resumes from the last committed row offset; zero duplicate sealed envelopes (G2); job reaches resumed or terminal state — never stranded `running`; `bulk_jobs_one_in_flight_uq` releases (post-terminal resubmit → 202, not 409 `bulk_job_conflict`); `dash_bulk_jobs_stuck` returns to 0 |
 
+### 7.1 In-process fault-injection proofs (P12, measured 2026-07-06 dev single instance)
+
+The multi-instance scripted drills above (`scripts/chaos/`) stay the release-rehearsal path. Three of
+their invariants are ALSO proven as deterministic in-process integration tests so they gate on every
+`scripts/run-rls-test.sh` run (single-instance, no orchestration) and close **OI-P12-1** chaos +
+**OI-P12-3 / OI-TS-5** at the single-instance scale:
+
+- **Publish-crash fault point (`TestPublishCrashFaultPointInvariant`, `internal/dash/configver`).**
+  The fault point is an **env-gated, test-only package var** `configver.PublishFaultAfterPointer
+  func()` (defined in `internal/dash/configver/fault.go`), invoked inside `PGStore.Publish`
+  immediately after the `config_active` pointer flip and BEFORE the transaction commits. It is the
+  OI-TS-5 decision: a package var, **not a debug endpoint**. It defaults `nil`; only in-process test
+  code can assign it (no env var, flag, config field, or HTTP route sets it), so a production
+  dashboardd build can never fire it — the nil check is the guard and the fault point is inert and
+  unreachable from outside the binary. The test assigns the hook to PANIC mid-publish and asserts the
+  whole transaction rolls back atomically: `config_active` still points at the prior published
+  version (never a dangling pointer to the non-validated candidate), the candidate stays `validated`,
+  and `config_epochs` is NOT double-bumped. A clean retry (hook disarmed) then publishes exactly once
+  — proving forward progress after a crash.
+- **PostgreSQL restart / pool reconnection (`TestPGRestartPoolRecovers`, `internal/dash/configver`).**
+  A workload runs through a `db.Store` pool that is forced to cache `poolMax` live connections; an
+  admin `pg_terminate_backend` sweep then drops every pooled backend — the connection-level effect of
+  a PG restart, and portable to CI service containers where `pg_ctl restart` is unavailable. The
+  hand-rolled `internal/pg` pool evicts each broken conn on its failed `BEGIN` (marked broken,
+  closed, token returned) and dials fresh, so queries succeed again. **No fix to `internal/pg/pool.go`
+  was needed** — the pool self-heals across queries. Honest limitation (recorded here, not a bug):
+  there is no transparent per-query retry, so the first post-restart query surfaces one transient
+  error to the caller before the pool reconnects (the test tolerates up to `poolMax` transient
+  failures, then requires steady-state success). Callers/`/readyz` retry.
+- **Poison import row (`TestPoisonImportRowIsolation`, `internal/dash/keys`).** A bulk import with a
+  malformed row (empty required secret) and a duplicate row among 500 good rows: the poison rows are
+  isolated in `key_import_batches.errors` (codes `validation_failed` + `conflict`), all 500 good rows
+  import, the batch reaches terminal `partial` (doc 04 §4.1) with no crash and no all-or-nothing loss,
+  and no key material leaks into the errors payload.
+
+All three in-process proofs are deterministic and **single-goroutine** (the publish crash panics one
+publish; the pool drill kills backends then reconnects sequentially; the poison import is one async
+batch polled to terminal), so they gate cleanly without the race detector — appropriate since the
+current dev box has no C toolchain, so `CGO_ENABLED=1 go test -race` is unavailable there; the
+existing concurrent suites (`TestConcurrentPublishConflict`, `TestRotationLeaseNoOverLease`) keep the
+`-race` coverage on a CI runner that has gcc.
+
+These are single-instance proofs; the full multi-instance drills (leader kill mid-fold, dashboardd
+`kill -9`, live PG `pg_ctl restart` under SSE/API traffic, instance kill mid-bulk-import) remain
+**deferred to the staging chaos rehearsal** (OI-P12-1).
+
 ## 8. Security testing
 
 | Suite | Content | Gating |
@@ -224,6 +272,6 @@ Executed as scripted drills (`scripts/chaos/`) against ≥2 dashboardd instances
 |---|---|---|---|
 | OI-TS-1 | NIST CAVP GCM vector subset selection (AES-256, 96-bit nonce; encrypt + decrypt/tag-fail files) to vendor into `internal/dash/secrets/testdata/` | OPEN (P1) | Senior Backend Engineer |
 | OI-TS-2 | PBKDF2-HMAC-SHA256 public vector source pinned (RFC 6070 is SHA-1; use the widely mirrored SHA-256 vector set + repo golden vectors) | OPEN (P0) | Senior Backend Engineer |
-| OI-TS-3 | L3/L4/L5 absolute thresholds (RSS budget, fold duration, rps target) are set at first measurement in P12 and written back here | OPEN (closes in P12) | Senior Backend Engineer |
+| OI-TS-3 | L3/L4/L5 absolute thresholds (RSS budget, fold duration, rps target) are set at first measurement in P12 and written back here | **PARTIAL (2026-07-06):** L3 50k-import (15m30s / ~54 rows/s) and L4 1M-fold (4.45s / ~225k ev/s) first single-instance dev measurements recorded (§6, via `TestImportLoad50k` / `TestFold1M`). Still OPEN: L5 api rps target (`api_load.go` not built), RSS budget, and all staging-scale / multi-instance thresholds (OI-P12-1). | Senior Backend Engineer |
 | OI-TS-4 | Playwright browser matrix (Chromium-only in CI vs +Firefox/WebKit) and screenshot-diff tolerance | OPEN (P8) | Enterprise UX Architect |
-| OI-TS-5 | Fault-point hook mechanism for the publish-crash drill (env-gated test hook vs debug endpoint) — must not exist in production builds | OPEN (P12) | Senior Backend Engineer |
+| OI-TS-5 | Fault-point hook mechanism for the publish-crash drill (env-gated test hook vs debug endpoint) — must not exist in production builds | **RESOLVED (P12, 2026-07-06):** env-gated test-only package var `configver.PublishFaultAfterPointer` (nil default, test-assigned only, no debug endpoint / env / route) fired after the pointer flip before commit; proven by `TestPublishCrashFaultPointInvariant` (§7.1). Inert in production builds. | Senior Backend Engineer |

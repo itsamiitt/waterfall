@@ -157,6 +157,40 @@ func (s *Sessions) Revoke(ctx context.Context, id string) (bool, error) {
 	return changed, err
 }
 
+// RevokeAllForUser revokes every live (un-revoked) session for userID in the caller's tenant scope
+// in a single statement and returns the number of sessions actually revoked. It is the bulk form of
+// Revoke (RB-14 step 7 session-hygiene, OI-RB-2): RLS scopes the UPDATE to the caller's bound
+// tenant, so a userID in another tenant is a no-op (0) — a compromised or restored account's whole
+// session set is cut in one round-trip instead of an N-call per-id DELETE loop. It is
+// audited-capable: the caller records one audit row carrying the returned count. Idempotent — a
+// second call after all sessions are already revoked returns 0.
+func (s *Sessions) RevokeAllForUser(ctx context.Context, userID string) (int, error) {
+	n := 0
+	err := s.store.Tx(ctx, func(c *pg.Conn) error {
+		var e error
+		n, e = revokeAllSessionsForUser(c, userID)
+		return e
+	})
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// revokeAllSessionsForUser marks every live session for userID revoked on the supplied, already
+// tenant-bound conn and returns how many rows changed. It runs on a caller-provided conn (not its
+// own Tx) so it composes into a larger transaction — the user-deactivate and password-reset paths
+// revoke sessions in the SAME transaction as their user write (doc 04 §2.2), while
+// Sessions.RevokeAllForUser wraps it in a standalone Tx. RLS scopes the UPDATE to the bound tenant.
+func revokeAllSessionsForUser(c *pg.Conn, userID string) (int, error) {
+	res, err := c.QueryParams(
+		`update sessions set revoked_at = now() where user_id = $1 and revoked_at is null returning id`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return len(res.Rows), nil
+}
+
 // SessionInfo is a listed session (never includes the CSRF token or full id secret material).
 type SessionInfo struct {
 	ID                string

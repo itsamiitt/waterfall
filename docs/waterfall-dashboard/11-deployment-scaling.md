@@ -1,6 +1,6 @@
 # 11 — Deployment & Scaling
 
-> **Status:** DRAFT · **Owner:** GTM Infrastructure Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** GTM Infrastructure Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Scope: how `dashboardd` is deployed, configured, kept available, scaled, degraded, and upgraded without downtime. Architecture context is doc 02; schema/partition operations are doc 03; procedures are doc 14 runbooks. Repo discipline applies throughout: every numeric scale or performance claim that has not been measured carries the tag **UNVERIFIED**, and §4 names the P12 load test that converts each one. Gate labels used verbatim: **G1 tenant isolation, G2 idempotency, G3 bounded execution, G4 cost ceiling, G5 provenance.**
 

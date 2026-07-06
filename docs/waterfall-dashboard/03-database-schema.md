@@ -1,6 +1,6 @@
 # 03 — Database Schema
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 This is **the authoritative schema document** for the Waterfall Enrichment Engine Management Dashboard: migrations `0004`–`0009`, their row-level-security policies, partitioning and retention, index rationale, table ownership, and the online-migration playbook. Implementation agents copy the DDL here 1:1 into `migrations/NNNN_snake_description.sql` files. Terminology follows the canonical Glossary (`docs/00-Project-Overview.md` §7) verbatim: Tenant, Provider, Provider Key, Key Pool, Waterfall, Enrichment Job, Field, Confidence, Cost Ceiling, Idempotency Key. The five gates are referenced by their exact labels — **G1 tenant isolation, G2 idempotency, G3 bounded execution, G4 cost ceiling, G5 provenance** — under the governing invariant: **"the model proposes, a deterministic gate disposes."** Every table here backs a real panel and endpoint (the docs/17 no-orphan-UI rule); every panel's data lives in a table in this document.
 

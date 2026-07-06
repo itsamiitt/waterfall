@@ -1,6 +1,6 @@
 # 07 — Routing & Waterfall Configuration
 
-> **Status:** DRAFT · **Owner:** Principal Product Architect · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Principal Product Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 This document is the contract for the Request Routing Center (module 6), Waterfall Configuration
 (module 7), and the Key Rotation Engine's strategy/state-machine surface (module 4). It owns: the

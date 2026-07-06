@@ -1,6 +1,6 @@
 # Implementation Progress
 
-**Last updated:** 2026-07-01 · Legend: `DRAFT` / `IN-REVIEW` / `APPROVED` / `BLOCKED` · gate = human approval required.
+**Last updated:** 2026-07-06 · Legend: `DRAFT` / `IN-REVIEW` / `APPROVED` / `BLOCKED` · gate = human approval required.
 
 ## Phase status
 | Phase | Scope | Doc(s) | Status | Gate |
@@ -270,6 +270,34 @@ Mainline `go build/vet/test/gofmt` clean (99 tests); **fail-fast + G1 self-check
 | `GET /readyz` + `pgstore.Ping` | ✅ | ready only when datastore reachable; distinct from `/healthz` | `TestReadyz` (200/200/503) + live | ✅ |
 
 Integration tests are build-tagged (`-tags integration`) and gated on `WATERFALL_PG_DSN` (SCRAM/TLS additionally on `WATERFALL_PG_SCRAM_DSN`/`WATERFALL_PG_TLS_DSN`); run via `scripts/run-rls-test.sh` (`-p 1`; pg conn + pool + **role-privileges** + SCRAM + TLS + G2/G4 ledgers + RLS + outbox crash-safety + outbox dead-letter + DLQ redrive + migration runner + **migration-drift** + full-stack E2E — 13 live tests). The end-to-end **crash-recovery through the real binary** runs via `scripts/crash-recovery-test.sh`. **`scripts/demo.sh`** runs the whole tour in one command.
+
+### Waterfall Management Dashboard — Phases P0–P12 — `IMPLEMENTED` 2026-07-06 (`docs/waterfall-dashboard/12` §5)
+Mainline `go build ./... && go vet ./...` clean (47 packages); `scripts/run-rls-test.sh` release-blocker
+suite green on PostgreSQL 17.10 (RLS zero-rows on every dashboard table + fuzz + G2 replay + CSRF/idempotency
+negatives); web `tsc --noEmit` + **192 vitest** (22 files) + no-orphan-UI + **111.2 KB-gz** production build green;
+**live boot smoke passed** (dashboardd boots against an ephemeral PG17 with bootstrap → serves SPA + `/healthz`
+`/readyz` `/metrics`, rejects unauth admin 401, pbkdf2 login operator→mfa_required / tenant_user→ok, six
+authenticated operator reads 200). One commit per phase on branch `waterfall`; the deliverable docs 00–14 are ACCEPTED.
+
+| Phase | Built (packages / migrations) | Acceptance evidence (test) | Status |
+|-------|-------------------------------|----------------------------|--------|
+| P0 | identity/tenancy/session/audit spine; `dash/{db,httpx,rbac,security,secrets,audit}` + `cmd/dashboardd` (migr 0004) | RLS zero-rows all 8 tables; login→MFA→audit-verify E2E; CSRF 403; idem 409 (`TestDashRLSZeroRows`, `TestDashLoginMFAAndSecurity`) | IMPLEMENTED |
+| P1 | providers catalog + keys/pools + envelope secrets + 1k import (migr 0005) | 1k-key import sealed, **zero plaintext**; envelope round-trip; Class-P RLS (`TestKeysImportSealAndRLS`, `TestProvidersLifecycleAndRLS`) | IMPLEMENTED |
+| P2 | `dash/rotation` engine (strategies, batched leases, KM-3 machine) | no over-lease @50 goroutines; ≥10k sel/s (measured **24.7M**); engine E2E (`TestRotationLeaseNoOverLease`, `TestRotationEngineE2E`, `BenchmarkPoolSelect`) | IMPLEMENTED |
+| P3 | config versioning + routing + workflows (migr 0006) | lifecycle+rollback; concurrent-publish 409; dry-run zero egress (`TestConfigLifecycleAndRLS`, `TestConcurrentPublishConflict`) | IMPLEMENTED |
+| P4 | telemetry backbone + health center + approvals + leader loops (migr 0007/0008/0009) | 100k refold **byte-identical**; approval exactly-once; health timeline (`TestTelemetryFoldRefoldIdentical`, `TestApprovalsExactlyOnce`, `TestHealthTimelineFoldAndNoData`) | IMPLEMENTED |
+| P5 | queues + workers read model + pgoutbox redrive + heartbeat client | replay idempotent; drain converges; lost detection (`TestQueuesReplayIdempotent`, `TestWorkersDrainConverges`, `TestWorkersLostDetection`) | IMPLEMENTED |
+| P6 | cost analytics + alerts evaluator/notifier | group-bys match ledgers; SSRF test-send blocked; fire/dedupe/resolve (`TestCostGroupBysMatchLedgers`, `TestAlertsTestSendSSRFBlocked`, `TestAlertsFireDedupeResolve`) | IMPLEMENTED |
+| P7 | overview 2s aggregator + SSE realtime + poller + self_monitor (migr 0010) | 200-client soak-lite **p99 12.27ms** zero-drop; snapshot→delta; leader failover (`TestSSESoakLite`, `TestOverviewSnapshotThenDelta`, `TestOverviewAggregatorFailover`) | IMPLEMENTED |
+| P8 | SPA scaffold: design system, typed api client, SSE manager, auth flow | `npm run build` green; client idem+CSRF; SSE routing (vitest `client`/`sse`) | IMPLEMENTED |
+| P9 | FE providers/keys/rotation/health screens | key grid @1k virtualized; status totality; no-orphan-UI (vitest `keyGrid`/`status`/`badges`) | IMPLEMENTED |
+| P10 | FE routing/workflows/queues/workers screens | routing publish+rollback; DLQ redrive; convergence (vitest `lifecycle`/`redrive`/`convergence`) | IMPLEMENTED |
+| P11 | FE cost/alerts/security/approvals/settings + a11y | no-orphan-UI across ALL routes; cost/alerts/approvals models (vitest) | IMPLEMENTED |
+| P12 | hardening: measured load numbers, security pass, runbook validation, docs→ACCEPTED | live boot smoke; L1–L4 measured (doc 13 §6); secret scan clean; docs 00–14 flipped ACCEPTED | IMPLEMENTED |
+
+Residual full-scale / multi-instance / chaos / live-Playwright items are deferred to a staging load-lab
+(doc 12 §5 OI-P12-1..3). Integration suite is `-tags integration`, gated on `WATERFALL_PG_DSN`, run serially
+(`-p 1`) via the extended `scripts/run-rls-test.sh` (`PGBIN=…/pg17 bash scripts/run-rls-test.sh`).
 
 **Next slices (not started):** Postgres G2/G4 ledgers + connection pool (extend datastore RLS to idempotency/cost) · SCRAM/TLS in pg client + migration runner · distributed durable log (Kafka/Redpanda + DB outbox/CDC) · OpenTelemetry tracing + Grafana dashboards · webhook-retry topic + registration API · JWKS discovery + RS256 PEM/mTLS + token revocation · egress as a separate service + network policy · live-vendor fixture validation · online calibration + label feedback loop + durable/shared bandit state. See `docs/23` §5 · `24` §6 · `25` §5 · `26` §4 · `27` §4 · `28` §5 · `29` §5 · `30` §5 · `31` §5 · `32` §5.
 

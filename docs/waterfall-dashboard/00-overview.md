@@ -1,6 +1,6 @@
 # 00 — Overview: Waterfall Enrichment Engine Management Dashboard
 
-> **Status:** DRAFT · **Owner:** Principal Product Architect · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Principal Product Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > This document is the anchor for the `docs/waterfall-dashboard/` series and supersedes
 > [`docs/17-Dashboard-Planning.md`](../17-Dashboard-Planning.md). It honors and extends doc 17's
@@ -301,16 +301,20 @@ taxonomy). Existing ADRs 0001–0015 remain in force and are cited by number thr
 
 Per repo discipline, every numeric scale or performance claim below is a **design target**, not
 a measurement. Each carries the UNVERIFIED tag in every downstream doc until its named
-verification gate passes.
+verification gate passes. **P12 update (2026-07-06):** the runnable single-instance gates were
+measured and recorded in doc 13 §6; rows below are flipped to MEASURED where a real number exists,
+and the remaining fleet/volume/multi-instance targets stay UNVERIFIED and are deferred to a staging
+load-lab (OI-P12-1, doc 12 §5). A measured single-instance number converts the tag *at that scale
+only*.
 
-| ID | Claim | Design target | Tag | Verification gate |
+| ID | Claim | Design target | Tag | Verification gate / P12 evidence |
 |----|-------|---------------|-----|-------------------|
-| U-1 | Enrichment request volume | Millions of enrichment requests/day | UNVERIFIED | P12 load tests (doc 13 load suite) |
-| U-2 | Worker fleet size | Thousands of concurrent workers | UNVERIFIED | P12 load tests |
-| U-3 | Provider Key inventory | Hundreds of Providers; 1,000+ Provider Keys per Provider | UNVERIFIED | P12 (the P1 gate exercises a 1k-key import only) |
-| U-4 | SSE fan-out | 200-client soak with ≤2s delta latency and Last-Event-ID replay | UNVERIFIED | P7 gate; extended soak (500 clients) in the doc 13 load suite at P12 |
-| U-5 | Key selection throughput | 10k selections/s under `-race` with no over-lease at 50 goroutines | UNVERIFIED | P2 gate |
-| U-6 | Lease convergence | Cross-instance key-state convergence ≤1s; crash loses ≤1 lease batch (≤64 calls) | UNVERIFIED | P2 gate + P12 chaos tests |
+| U-1 | Enrichment request volume | Millions of enrichment requests/day | UNVERIFIED | Fleet-volume load test — not runnable on a dev single instance; deferred to staging (OI-P12-1) |
+| U-2 | Worker fleet size | Thousands of concurrent workers | UNVERIFIED | Fleet-scale load test — deferred to staging (OI-P12-1) |
+| U-3 | Provider Key inventory | Hundreds of Providers; 1,000+ Provider Keys per Provider | PARTIALLY MEASURED | 1k-key import MEASURED 2026-07-06 (1000 sealed, zero plaintext, 8.75s — `TestKeysImportSealAndRLS`; doc 13 §6 L3); hundreds-of-providers scale deferred to staging |
+| U-4 | SSE fan-out | 200-client soak with ≤2s delta latency and Last-Event-ID replay | MEASURED | 2026-07-06: 200 clients/20s → p50 2.01ms, **p99 12.27ms** (≤2s), zero dropped `*.changed` (`TestSSESoakLite`; doc 13 §6 L2). 500-client/10-min soak deferred to staging (OI-P12-1) |
+| U-5 | Key selection throughput | 10k selections/s under `-race` with no over-lease at 50 goroutines | MEASURED | 2026-07-06: round_robin **24.7M sel/s** @ -cpu=8 (0 allocs); no over-lease @ 50 goroutines (`BenchmarkPoolSelect` + `TestRotationLeaseNoOverLease`; doc 13 §6 L1). Target met ~2,470× |
+| U-6 | Lease convergence | Cross-instance key-state convergence ≤1s; crash loses ≤1 lease batch (≤64 calls) | PARTIALLY MEASURED | Crash-loses-≤1-batch (≤64) bound proven by the P2 lease suite; cross-instance ≤1s convergence chaos drill deferred to staging (OI-P12-1) |
 
 ## Open items
 

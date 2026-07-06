@@ -1,6 +1,6 @@
 # 06 — Queue & Worker Design
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-04 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 This document specifies the Queue Management (module 8) and Worker Management (module 9) panels of
 the dashboard: what they read, what they may write, and the exact semantics of every action. It

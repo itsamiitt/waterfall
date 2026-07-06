@@ -1,6 +1,6 @@
 # 08 — UI Architecture
 
-> **Status:** DRAFT · **Owner:** Enterprise UX Architect · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Enterprise UX Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > This document specifies the frontend of the Management Dashboard: a React + TypeScript + Vite
 > SPA in `web/`, served statically by `cmd/dashboardd`, consuming **only** the `/v1/admin` surface

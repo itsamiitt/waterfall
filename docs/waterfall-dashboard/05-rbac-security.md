@@ -1,6 +1,6 @@
 # 05 — RBAC, Sessions, Secrets & Security
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 This document is the security contract for the Waterfall Enrichment Engine Management Dashboard
 (`cmd/dashboardd`, `/v1/admin/*`). It extends `docs/18-Security.md` — the platform security model —

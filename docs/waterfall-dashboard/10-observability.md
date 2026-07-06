@@ -1,6 +1,6 @@
 # 10 — Observability
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 This document is the observability contract for `cmd/dashboardd`: the complete metric catalog, the
 telemetry rollup pipeline, health-check semantics, the closed alert-rule metric vocabulary, alert

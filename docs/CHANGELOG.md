@@ -5,6 +5,42 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-06 — Waterfall Management Dashboard build (P0–P12) — control-plane + 12 module UIs + P12 hardening closure
+Delivered the full admin dashboard for the enrichment engine across twelve one-commit phases on branch
+`waterfall` (contract: `docs/waterfall-dashboard/12`). **Backend** (`internal/dash/*`, 21 packages, stdlib-only):
+P0 identity/tenancy/session/audit spine (dual-GUC RLS `db`, `httpx` auth+CSRF+idempotency chain, `rbac`,
+`security` pbkdf2+RFC-6238 TOTP, hash-chained `audit`, AES-256-GCM `secrets`) + `cmd/dashboardd` (env→pool→
+migrations→routes→`/healthz` `/readyz` `/metrics`); P1 providers catalog + keys/pools + envelope-sealed 1k
+CSV import; P2 rotation engine (12 strategies, batched quota leases, KM-3 trigger machine); P3 config
+versioning + routing/waterfall validators + zero-egress dry-run; P4 telemetry backbone (usage_events + all
+rollups) + provider health center + approvals quorum engine + leader-elected loops; P5 queues/workers read
+model over `job_outbox` + pgoutbox redrive + heartbeat; P6 cost analytics + alerts evaluator/notifier
+(SSRF-guarded); P7 overview 2s aggregator + multiplexed SSE realtime + Last-Event-ID replay. Migrations
+0004–0010 (append-only, FORCE RLS on every table). **Frontend** (`web/`, Vite+React+TS, ADR-0016 locked deps):
+P8 design system + typed api client + SSE manager + auth; P9 providers/keys(1k virtualized grid)/rotation/
+health; P10 routing(dnd-kit)/workflows/queues/dead-letters/workers; P11 cost/alerts/security/approvals/settings
++ a11y. **P12 hardening (2026-07-06):** converted the runnable single-instance UNVERIFIED targets to measured
+numbers in doc 13 §6 — L1 key-selection **24.7M sel/s** @ -cpu=8 (0 allocs, ~2,470× the 10k/s target;
+`BenchmarkPoolSelect` + no-over-lease `TestRotationLeaseNoOverLease`), L2 SSE 200-client/20s soak **p99 12.27ms**
+(≤2s), zero dropped changed events (`TestSSESoakLite`), L3 1k-key import sealed zero-plaintext, L4 100k-event
+fold→refold **byte-identical** across 9 rollup tables; web bundle **111.2 KB gz** initial (budget 400 KB).
+**Live boot smoke passed**: dashboardd booted against an ephemeral PG17 with bootstrap (10 migrations + `dash_app`
+role provisioning), served the SPA + liveness/readiness/metrics, rejected the unauthenticated admin route (401),
+completed a pbkdf2 login (operator→`mfa_required`, tenant_user→`ok`+csrf), and served six authenticated operator
+reads (audit-verify `{ok:true}`, queues, dead-letters, overview, workers, audit-log) all 200; clean SIGTERM
+shutdown. **Security pass:** secret scan clean (only synthetic test placeholders); RLS zero-rows release blocker +
+fuzz + G2 replay + CSRF/idempotency/SSRF-notifier/formula-injection suites green via `scripts/run-rls-test.sh` on
+PG17.10. **Chaos (covered subset):** aggregator-leader failover (`TestOverviewAggregatorFailover`,
+`TestTelemetryLeaderElection`) + publish-crash consistency (`TestConcurrentPublishConflict`) satisfy their §7
+invariants; PG-restart-reconnection + poison-import-row + publish-crash fault-injection deferred to staging.
+**Runbook validation:** RB-5/6/7/12 Diagnosis/Verification read commands executed live against the booted
+dashboardd (all 200). Gates: `go build ./... && go vet ./...` clean (47 packages); web `tsc --noEmit` + 192
+vitest + no-orphan-UI + build green. Docs `waterfall-dashboard/00–14` flipped DRAFT→ACCEPTED; doc 00 §8 UNVERIFIED
+register + doc 13 §6 load table updated with measured values; doc 12 §5 Self-Verification Record refreshed with
+P12 measured evidence + closure line. **Honestly deferred (OI-P12-1..3):** full-scale/multi-instance load
+(500-client/10-min SSE soak, 50k-row import, 1M-event fold, API p95 @ 200 rps), the remaining chaos drills +
+RB-14 restore RPO/RTO, and the Playwright-against-live E2E run — all to a staging load-lab.
+
 ### 2026-07-01 — Implementation Slice 20 (Go) — config validation + startup self-check
 Human approved making misconfiguration fail loudly at startup instead of per-request. New
 `internal/config`: `Load(getenv)` (pure, unit-testable) validates PORT (1..65535), DSNs (must have

@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> **Status:** DRAFT · **Owner:** Solutions Architect · **Last updated:** 2026-07-04 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Solutions Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Governing invariant, verbatim from the platform docs: **"the model proposes, a deterministic gate disposes."** Every mechanism in this document is a deterministic gate around state the dashboard reads or writes. The five platform gates are referenced by their exact labels: **G1 tenant isolation, G2 idempotency, G3 bounded execution, G4 cost ceiling, G5 provenance.** All terminology follows the canonical Glossary (`docs/00-Project-Overview.md` §7): Tenant, Provider, Provider Key, Key Pool, Waterfall, Enrichment Job, Field, Confidence, Cost Ceiling, Idempotency Key. This document supersedes the concept-level `docs/17-Dashboard-Planning.md` while honoring its rule that **every panel maps to a backing service and table — no orphan UI.**
 

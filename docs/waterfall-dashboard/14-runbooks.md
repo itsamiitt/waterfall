@@ -1,6 +1,6 @@
 # 14 — Runbooks
 
-> **Status:** DRAFT · **Owner:** GTM Infrastructure Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** GTM Infrastructure Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Operational procedures for the Waterfall Enrichment Engine Management Dashboard. Every runbook
 > follows Symptoms → Diagnosis → Actions → Verification → Prevention, with exact endpoints

@@ -1,6 +1,6 @@
 # 04 — API Contracts: `/v1/admin` Surface
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-04 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > This document is **the authoritative contract** for the Management Dashboard admin API until
 > `docs/waterfall-dashboard/openapi-admin.yaml` reaches parity (§6, open item OI-API-1).

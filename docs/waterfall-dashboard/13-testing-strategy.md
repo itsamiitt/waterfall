@@ -1,6 +1,6 @@
 # 13 — Testing Strategy
 
-> **Status:** DRAFT · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Senior Backend Engineer · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Extends the repo gate-test discipline (`docs/21-Testing.md`): mandatory negative tests for
 > **G1 tenant isolation, G2 idempotency, G3 bounded execution, G4 cost ceiling, G5 provenance**
@@ -169,23 +169,30 @@ Run against a dashboardd serving `web/dist` with a seeded live PG. Each flow is 
 | Alert rule fire→notify→ack | create channel (test-send OK against local sink) → create rule with low threshold → seed breaching rollup rows → episode fires (`alert.event.fired` SSE renders badge) → notification recorded in alert_notifications → ack suppresses renotify → recovery resolves episode |
 | RBAC deny-matrix spot checks | tenant_user: no user-management UI, write actions 403 with uniform envelope; tenant_admin: no cross-tenant data, no operator views; operator: cross-tenant read views render AND corresponding audit_log rows appear; direct URL navigation to forbidden routes redirects/denies (server authoritative) |
 
-## 6. Load tests — UNVERIFIED → measured conversion plan
+## 6. Load tests — measured conversion (P12, 2026-07-06)
 
-Every quantitative design target below is **UNVERIFIED** until its harness records a number in
-P12; results are written back to this table and to doc 00's UNVERIFIED register (repo
-discipline: measurement converts the tag, nothing else does).
+Measured 2026-07-06 on dev (Go 1.26.4, PostgreSQL 17.10, single instance, Intel Xeon Platinum
+8259CL). The in-proc P-gate harnesses (the `-bench` benchmark plus the integration soak/fold/import
+tests) recorded the numbers below and are green in `scripts/run-rls-test.sh`. **Honesty note (repo
+UNVERIFIED discipline):** a measured smaller-scale number converts the UNVERIFIED tag *for that
+scale only*; the standalone multi-instance load scripts (`scripts/load/sse_soak.go`,
+`scripts/load/api_load.go`) and the extended fixtures (`TestImportLoad50k`, `TestFold1M`) are NOT
+yet built — their full 10-min / 500-client / 50k-row / 1M-event / multi-instance runs are **deferred
+to a staging load-lab** (tracked OI-P12-1 in doc 12 §5). Those full-scale targets remain
+UNVERIFIED-at-scale until that run writes back here.
 
-| # | Claim (UNVERIFIED design target) | Harness / command | Pass threshold |
-|---|---|---|---|
-| L1 | Key selection ≥10k selections/s per pool, O(1), concurrency-safe | `go test -bench=BenchmarkPoolSelect -benchtime=10s -cpu=1,4,8 ./internal/dash/rotation`; correctness separately via `go test -race -run TestPoolSelectConcurrent` (benchmarks are not run under `-race`) | ≥10,000 ops/s per pool at -cpu=8 across all strategies; zero race reports |
-| L2 | SSE fan-out: 200 clients (P7 gate), ≤2s delta latency; extended P12 soak at 500 clients (doc 00 §8 U-4) | `go run ./scripts/load/sse_soak.go -clients 200 -topics overview,key,queue -duration 10m` against 1 dashboardd instance; P12 extended soak reruns with `-clients 500`; measures publish→receipt per event | p99 tick-to-receipt ≤ 2s at both 200 and 500 clients; zero dropped `*.changed` events; reconnect storm (kill/restart mid-soak) recovers via Last-Event-ID or reset within 30s |
-| L3 | Import 50k rows within caps | `go test -tags integration -run TestImportLoad50k ./internal/dash/keys` (50k-row CSV fixture ≤25MB) | job completes; 50k envelopes sealed; peak dashboardd RSS bounded (recorded, budget set at first measurement); no plaintext persisted; per-row errors reported not fatal |
-| L4 | Rollup fold under 1M synthetic usage_events | `go test -tags integration -run TestFold1M ./cmd/dashboardd` — seeds 1M events across 48h partitions, runs the leader fold, then refolds | fold completes within one retention window (measured duration recorded); refold byte-identical (§3.7 invariant at scale); fold lag metric stays below alert threshold |
-| L5 | Admin API p95 under sustained load | `go run ./scripts/load/api_load.go -rps 200 -duration 5m -mix reads=90,writes=10` (list endpoints paginate at limit 200; writes carry Idempotency-Key) | p95 ≤ 250ms, p99 ≤ 750ms at 200 rps (targets UNVERIFIED; recorded values become the doc 11 capacity-model inputs); zero 5xx; error bodies uniform |
+| # | Claim (design target) | Harness / command | Pass threshold | Measured 2026-07-06 (dev, single instance) |
+|---|---|---|---|---|
+| L1 | Key selection ≥10k selections/s per pool, O(1), concurrency-safe | `CGO_ENABLED=1 go test -bench=PoolSelect -benchmem -benchtime=2s -cpu=1,4,8 ./internal/dash/rotation`; correctness via `go test -race -run TestRotationLeaseNoOverLease` | ≥10,000 ops/s per pool at -cpu=8 across all strategies; zero race reports | **MET (measured):** round_robin **24.7M sel/s** (39.6 ns/op, 0 B/op, 0 allocs) @ -cpu=8; weighted **26.7M sel/s** — ~2,470× target. No-over-lease proven by `TestRotationLeaseNoOverLease` (50-goroutine storm, total granted ≤ daily_limit). |
+| L2 | SSE fan-out: 200 clients, ≤2s delta latency; extended soak at 500 clients (doc 00 §8 U-4) | in-proc `TestSSESoakLite` (200 clients / 20s window); extended `scripts/load/sse_soak.go -clients 500 -duration 10m` (to be built) | p99 tick-to-receipt ≤ 2s; zero dropped `*.changed`; reconnect storm recovers ≤30s | **MET at 200-client/20s (measured):** 14,200 ticks, p50 **2.01ms**, p99 **12.27ms** (target ≤2s), 35 changed events, **zero dropped** (`TestSSESoakLite`). Full 10-min / 500-client / reconnect-storm soak: harness to be built; deferred to staging (OI-P12-1). |
+| L3 | Import 50k rows within caps | 1k-gate `TestKeysImportSealAndRLS`; extended `TestImportLoad50k` (to be built) | job completes; envelopes sealed; no plaintext; per-row errors non-fatal | **1k-key gate MET (measured):** 1000 keys sealed, **zero plaintext** across provider_keys / audit_log / captured slog, 8.75s (`TestKeysImportSealAndRLS`). 50k-row fixture + RSS budget: deferred to staging (OI-P12-1). |
+| L4 | Rollup fold under 1M synthetic usage_events | 100k `TestTelemetryFoldRefoldIdentical`; extended `TestFold1M` (to be built) | fold within one retention window; refold byte-identical (§3.7); fold lag below alert threshold | **100k-event fold MET (measured):** 100,000 usage_events fold→snapshot→truncate→refold **byte-identical** across 9 rollup tables; incremental additive fold == repair refold; 4.34s for 3 folds (`TestTelemetryFoldRefoldIdentical`). 1M-event scale: deferred to staging (OI-P12-1). |
+| L5 | Admin API p95 under sustained load | `scripts/load/api_load.go -rps 200 -duration 5m` (to be built) | p95 ≤ 250ms, p99 ≤ 750ms at 200 rps; zero 5xx; uniform error bodies | **Not run:** load harness to be built; full run deferred to staging (OI-P12-1). The P12 live-boot smoke drove /healthz /readyz /metrics / and 6 authenticated operator reads + login, observing only expected status codes and uniform error envelopes (doc 12 §5). |
 
-Conversion protocol: each row's measured result is committed in P12 with the harness output
-attached to the phase commit; a miss opens a remediation item in doc 12 §5 evidence — it is never
-silently accepted.
+Conversion protocol: each measured result is committed in P12 with its harness output; the
+smaller-scale P-gate numbers above convert the UNVERIFIED tag *at that scale*, while the
+full-scale / multi-instance targets remain UNVERIFIED-at-scale and are tracked as **OI-P12-1**
+(doc 12 §5) until the staging load-lab run records them here.
 
 ## 7. Chaos tests
 

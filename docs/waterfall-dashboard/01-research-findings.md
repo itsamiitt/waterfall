@@ -1,6 +1,6 @@
 # 01 — Research Findings: Enterprise Control-Plane Patterns
 
-> **Status:** DRAFT · **Owner:** Solutions Architect · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Solutions Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Phase-1 research, adapted into the repo's documentation format. It informs every design
 > decision in docs 02–14; where a research recommendation and the MASTER DESIGN SPEC differ,

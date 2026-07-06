@@ -1,6 +1,6 @@
 # 09 — UI Wireframes & User Flows
 
-> **Status:** DRAFT · **Owner:** Enterprise UX Architect · **Last updated:** 2026-07-02 · **Gated by:** /architecture-review, /security-audit
+> **Status:** ACCEPTED · **Owner:** Enterprise UX Architect · **Last updated:** 2026-07-06 · **Gated by:** /architecture-review, /security-audit
 
 > Wireframes and interaction specs for all **12 modules** of the Management Dashboard. Every
 > panel binds to a real endpoint from [doc 04](04-api-contracts.md) and/or an SSE topic —

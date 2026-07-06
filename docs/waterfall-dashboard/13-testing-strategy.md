@@ -177,7 +177,11 @@ tests) recorded the numbers below and are green in `scripts/run-rls-test.sh`. **
 UNVERIFIED discipline):** a measured smaller-scale number converts the UNVERIFIED tag *for that
 scale only*. The extended single-instance fixtures `TestImportLoad50k` (`internal/dash/keys`) and
 `TestFold1M` (`internal/dash/telemetry`) are now **built and measured on this dev box** (numbers in
-L3/L4 below, labeled dev single instance). The standalone multi-instance load scripts
+L3/L4 below, labeled dev single instance). They are **on-demand** fixtures (they guard on
+`testing.Short()`, and `scripts/run-rls-test.sh` passes `-short` so they SKIP in the routine RLS
+gate — a 15-minute 150k-transaction import can destabilize the shared ephemeral cluster under
+concurrent full-suite load, so it is not an always-run gate test); reproduce the L3/L4 numbers by
+running them **without** `-short`. The standalone multi-instance load scripts
 (`scripts/load/sse_soak.go`, `scripts/load/api_load.go`) are NOT yet built, and the full 10-min /
 500-client / multi-instance / retention-window / RSS-budget runs remain **deferred to a staging
 load-lab** (tracked OI-P12-1 in doc 12 §5). Those full-scale targets remain UNVERIFIED-at-scale

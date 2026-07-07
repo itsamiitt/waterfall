@@ -2,6 +2,7 @@ package adapters_test
 
 import (
 	"net/url"
+	"sort"
 	"strings"
 	"testing"
 
@@ -129,5 +130,62 @@ func TestRegistry_HostsCoverAllAdapters(t *testing.T) {
 	// Sanity: the allow-list is a real filter, not permit-all.
 	if allow.Allowed("evil.example.com") {
 		t.Error("allow-list admitted an unlisted host — it should reject hosts not derived from the registry")
+	}
+}
+
+// TestRegistry_FieldCoverage builds the canonical-field → provider-count matrix across all registered
+// adapters and asserts that EVERY field in the canonical vocabulary has at least one provider — so the
+// router can satisfy a request for any Field, and a Field added to the vocabulary without a mapping
+// provider fails the build rather than being silently unfillable. The 90-adapter rollout currently
+// covers all 33 canonical fields (e.g. funding_stage via crunchbase/coresignal/oceanio; duns_number
+// via dnb; intent_* + buying_signal via 6sense). A curated `essential` subset is checked first so a
+// core-field regression names the exact field.
+func TestRegistry_FieldCoverage(t *testing.T) {
+	// The full canonical vocabulary (mirrors internal/domain/field.go; canonicalFields is unexported).
+	all := []domain.Field{
+		domain.FieldWorkEmail, domain.FieldPersonalEmail, domain.FieldEmailStatus,
+		domain.FieldMobilePhone, domain.FieldDirectDial, domain.FieldOfficePhone, domain.FieldPhoneStatus,
+		domain.FieldLinkedInURL, domain.FieldJobTitle, domain.FieldSeniority, domain.FieldDepartment,
+		domain.FieldCompanyDomain, domain.FieldCompanyName, domain.FieldEmployeeCount, domain.FieldIndustry,
+		domain.FieldCompanyRevenue, domain.FieldFundingStage, domain.FieldCompanyFoundedYear,
+		domain.FieldCompanyHQCountry, domain.FieldCompanyHQCity, domain.FieldCompanyType,
+		domain.FieldCompanyLinkedInURL, domain.FieldCompanyPhone, domain.FieldNAICS, domain.FieldSIC, domain.FieldDUNS,
+		domain.FieldTechnographics, domain.FieldIntentTopics, domain.FieldIntentScore, domain.FieldBuyingSignal,
+		domain.FieldFirstName, domain.FieldLastName, domain.FieldFullName,
+	}
+
+	count := make(map[domain.Field]int, len(all))
+	for _, r := range adapters.Registry() {
+		for _, c := range r.Construct("", nil).Capabilities() {
+			count[c.Field]++
+		}
+	}
+
+	// Essential fields: the router MUST have at least one provider for each of these.
+	essential := []domain.Field{
+		domain.FieldWorkEmail, domain.FieldEmailStatus, domain.FieldMobilePhone, domain.FieldPhoneStatus,
+		domain.FieldLinkedInURL, domain.FieldJobTitle, domain.FieldCompanyName, domain.FieldCompanyDomain,
+		domain.FieldEmployeeCount, domain.FieldIndustry, domain.FieldFirstName, domain.FieldLastName,
+		domain.FieldFullName, domain.FieldTechnographics, domain.FieldNAICS, domain.FieldSIC, domain.FieldDUNS,
+		domain.FieldCompanyRevenue, domain.FieldCompanyFoundedYear, domain.FieldCompanyHQCountry,
+		domain.FieldIntentScore, domain.FieldBuyingSignal, domain.FieldPersonalEmail,
+	}
+	for _, f := range essential {
+		if count[f] == 0 {
+			t.Errorf("essential field %q has NO provider — the router can never fill it", f)
+		}
+	}
+
+	// Every canonical field must have at least one provider — a vocabulary field nothing can fill is
+	// a build-failing gap (either add a provider or remove the field + its doc entry).
+	var uncovered []string
+	for _, f := range all {
+		if count[f] == 0 {
+			uncovered = append(uncovered, string(f))
+		}
+	}
+	sort.Strings(uncovered)
+	if len(uncovered) > 0 {
+		t.Errorf("canonical fields with NO provider (unfillable by any of %d adapters): %v", len(adapters.Registry()), uncovered)
 	}
 }

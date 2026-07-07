@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Verification: full canonical-field provider coverage
+Added `TestRegistry_FieldCoverage` — asserts every one of the 33 canonical `domain.Field`s is
+advertised by ≥1 registered adapter, so the router can satisfy a request for any Field and a
+vocabulary field with no provider fails the build. All 33 are covered by the 90 adapters (e.g.
+funding_stage via crunchbase/coresignal/oceanio, duns_number via dnb, intent_*/buying_signal via
+6sense). A curated `essential` subset is checked first for precise regression messages. `go build
+./...` + `go test ./...` green. This closes the concrete, autonomously-doable Verification gaps
+(async-through-engine, catalog-seed parity, SSRF host coverage, field coverage).
+
 ### 2026-07-07 — Verification: egress SSRF allow-list covers all 90 adapters
 Added `TestRegistry_HostsCoverAllAdapters` — proves the SSRF allow-list the binaries build from
 `adapters.Hosts()` admits every registered adapter's base host **and** every oauth2-cc `TokenURL`

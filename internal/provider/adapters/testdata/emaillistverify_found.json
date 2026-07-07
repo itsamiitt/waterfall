@@ -1,0 +1,13 @@
+{
+  "email": "jane@acme.com",
+  "result": "ok",
+  "internalResult": "mailbox_exists",
+  "mxServer": "aspmx.l.google.com",
+  "esp": "Google",
+  "account": "jane",
+  "isRole": false,
+  "isFree": false,
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "gender": "female"
+}

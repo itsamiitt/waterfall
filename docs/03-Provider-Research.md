@@ -1406,3 +1406,55 @@ enhancement: **Dropcontact** (`POST /batch` → poll `GET /batch/{id}`), **Cogni
 Redeem by `redeemId`, 1 credit), **FullEnrich** (submit → webhook/poll), **Icypeas** + **Enrow**
 (submit → poll), **Snov.io** (OAuth2 client-credentials token exchange → call, also async). Tracked
 as an enhancement item; no fabricated single-call adapter is shipped for them.
+(NOTE: the ADR-0024 async foundation later landed, so every provider named above is now implemented.)
+
+### Wave 9 — additional providers beyond the 200-tool sheet (net-new, 2026-07-07)
+Thirteen further real-API providers researched (each fact cited or UNVERIFIED per `provider-research`)
+and implemented, expanding coverage past the reconciled 200-tool spreadsheet. Each adapter is
+secret-free (`AuthDescriptor` only), maps solely canonical `domain.Field`s, and keeps wire-shapes
+UNVERIFIED until a live key. All 13 use existing auth schemes (api-key-query/header, bearer, basic)
+already accepted by the `providers.auth_scheme` CHECK (migrations 0005+0013) — no new migration.
+
+**Email verify (single-shot):**
+- **QuickEmailVerification** — `GET /v1/verify?email=` (apikey query) → `result` (valid|invalid|unknown)
+  + `domain`. 200-with-error `success:"false"` (string booleans). [docs.quickemailverification.com]
+- **MyEmailVerifier** — `GET /api/validate_single.php?email=` (apikey query) → `Status`
+  (Valid|Invalid|Catch-all|Unknown). JSON error `{status:false,error:CODE}`. [github.com/pat-myemailverifier/myemailverifier-api]
+- **MailboxValidator** — `GET /v2/validation/single?email=` (key query) → `status` (bool) + `email_address`
+  + `domain`; nested `error.error_code` table (10004 credits→QUOTA at HTTP 401). [mailboxvalidator.com/api-single-validation]
+- **Bouncify** — `GET /v1/verify?email=` (apikey query) → `result` (deliverable|undeliverable|unknown|accept_all). [bouncify.readme.io]
+- **EmailListVerify** — `GET /api/verifyEmailDetailed?email=` (x-api-key header) → `result` enum +
+  `firstName`/`lastName`. (Sibling `/api/verifyEmail` returns bare plain text; we use the JSON *Detailed*
+  endpoint.) 400=rate-limit / 403=credit are documented discrepancies vs the shared status map. [api.emaillistverify.com/api-doc]
+
+**Phone validate (single-shot):**
+- **Trestle** — `GET /3.0/phone_intel?phone=` (x-api-key) → `is_valid`+`line_type` → normalized phone_status;
+  200-with-error `error{name,message}`→TRANSIENT, `warnings[]`→no verdict. [docs.trestleiq.com]
+- **NumLookupAPI** — `GET /v1/validate/{number}` (apikey header; number is a PATH segment) →
+  `valid`+`line_type`+`international_format`; invalid = HTTP 200 `valid:false`. [numlookupapi.com/docs/validate]
+
+**Firmographics:**
+- **CompanyEnrich** — `GET /companies/enrich?domain=` (Bearer) → name/domain/type/industry, BUCKETED
+  `employees`+`revenue` (~0.65), `financial.funding_stage`, `founded_year`, `location.{country,city,phone}`,
+  `socials.linkedin_url`, `naics_codes[]`, `technologies[]`. 404 = no-match. [docs.companyenrich.com]
+- **Companies House (UK — official, free)** — match→fetch: `GET /search/companies?q=` → `items[0].company_number`,
+  then `GET /company/{n}` → company_name/type/date_of_creation/`sic_codes[]` (UK SIC 2007, not NAICS)/
+  registered_office_address.{country,locality}. Basic auth = **API key as username, empty password**
+  (pool secret `"<KEY>:"`). GB-only registry. [developer.company-information.service.gov.uk]
+
+**Identity (DEPRIORITIZED — LinkedIn/public-web provenance, ADR-0009):**
+- **Enrich.so** — `POST /api/v3/reverse-lookup/lookup` `{email}` (x-api-key; current v3 host is literally
+  `dev.enrich.so`, verified live) → `data.{displayName,firstName,lastName,profileUrl,companyName,
+  positions.positionHistory[0].title}`. 402=insufficient credits; not charged on no-match. [doc.enrich.so]
+
+**Revisited async deferrals — now implemented (poll path confirmed):**
+- **Surfe** — submit `POST /v2/people/enrich` → `enrichmentID`; poll `GET /v2/people/enrich/{id}` until
+  `status ∈ {COMPLETED,FAILED}` (IN_PROGRESS while running). Bearer. Maps emails[].validationStatus,
+  mobilePhones[], jobTitle, seniorities/departments (normalized), linkedInUrl. 403 = quota OR credits. [developers.surfe.com]
+- **Lemlist** — submit `POST /enrich?findEmail=true&verifyEmail=true&…` → `{id}`; poll `GET /enrich/{id}`
+  until `enrichmentStatus="done"` (202 while in progress). Basic auth = **empty username + key as password**
+  (pool secret `":<KEY>"`). The GET poll body yields `data.email.{email,notFound}` → work_email + email_status;
+  the richer LinkedIn-enrichment fields are **webhook-only** and intentionally not mapped. [developer.lemlist.com]
+- **Voila Norbert** — `POST /search/name` (form fields name,domain; Basic auth = **any username : token**,
+  pool secret `"any:<TOKEN>"`) → `email.{email,is_done,score}`. Single-shot happy path (is_done=true);
+  no documented GET/poll endpoint (async result is webhook-only), so a pending lookup yields no value here. [voilanorbert.com/api]

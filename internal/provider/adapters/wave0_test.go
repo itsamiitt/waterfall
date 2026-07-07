@@ -416,6 +416,71 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			fixture: "testdata/mailfloss_found.json", req: emailReq(),
 			want: map[domain.Field]string{domain.FieldEmailStatus: "passed"},
 		},
+		// Wave 9 — additional email verifiers + phone validators (net-new, beyond the 200-tool sheet).
+		{
+			name: "quickemailverification", newA: adapters.QuickEmailVerification, pool: "quickemailverification:default",
+			fixture: "testdata/quickemailverification_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid", domain.FieldCompanyDomain: "acme.com"},
+		},
+		{
+			name: "myemailverifier", newA: adapters.MyEmailVerifier, pool: "myemailverifier:default",
+			fixture: "testdata/myemailverifier_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "Valid", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
+			name: "mailboxvalidator", newA: adapters.MailboxValidator, pool: "mailboxvalidator:default",
+			fixture: "testdata/mailboxvalidator_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid", domain.FieldWorkEmail: "jane@acme.com", domain.FieldCompanyDomain: "acme.com"},
+		},
+		{
+			name: "bouncify", newA: adapters.Bouncify, pool: "bouncify:default",
+			fixture: "testdata/bouncify_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "deliverable", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
+			name: "emaillistverify", newA: adapters.EmailListVerify, pool: "emaillistverify:default",
+			fixture: "testdata/emaillistverify_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "ok", domain.FieldFirstName: "Jane", domain.FieldLastName: "Doe"},
+		},
+		{
+			name: "trestle", newA: adapters.Trestle, pool: "trestle:default",
+			fixture: "testdata/trestle_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldPhoneStatus: "valid_mobile"},
+		},
+		{
+			name: "numlookupapi", newA: adapters.NumLookupAPI, pool: "numlookupapi:default",
+			fixture: "testdata/numlookupapi_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldPhoneStatus: "valid_mobile", domain.FieldMobilePhone: "+14158586273"},
+		},
+		{
+			name: "companyenrich", newA: adapters.CompanyEnrich, pool: "companyenrich:default",
+			fixture: "testdata/companyenrich_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "Wise",
+				domain.FieldCompanyDomain:      "wise.com",
+				domain.FieldFundingStage:       "post_ipo_debt",
+				domain.FieldCompanyFoundedYear: "2011",
+				domain.FieldCompanyHQCountry:   "Estonia",
+				domain.FieldNAICS:              "522110,522210,522298,522320",
+			},
+		},
+		{
+			name: "enrich-so", newA: adapters.EnrichSo, pool: "enrich-so:default",
+			fixture: "testdata/enrich-so_found.json", req: emailReq(),
+			want: map[domain.Field]string{
+				domain.FieldFullName:    "Emily Zhang",
+				domain.FieldFirstName:   "Emily",
+				domain.FieldLastName:    "Zhang",
+				domain.FieldLinkedInURL: "https://www.linkedin.com/in/emilyzhang",
+				domain.FieldCompanyName: "Figma",
+				domain.FieldJobTitle:    "Staff Product Designer",
+			},
+		},
+		{
+			name: "voila-norbert", newA: adapters.VoilaNorbert, pool: "voila-norbert:default",
+			fixture: "testdata/voila-norbert_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com", domain.FieldEmailStatus: "95"},
+		},
 		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),

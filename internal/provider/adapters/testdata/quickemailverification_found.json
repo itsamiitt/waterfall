@@ -1,0 +1,15 @@
+{
+  "result": "valid",
+  "reason": "accepted_email",
+  "disposable": "false",
+  "accept_all": "false",
+  "role": "false",
+  "free": "false",
+  "email": "jane@acme.com",
+  "user": "jane",
+  "domain": "acme.com",
+  "mx_record": "aspmx.l.google.com",
+  "safe_to_send": "true",
+  "success": "true",
+  "message": ""
+}

@@ -25,3 +25,15 @@ contract, in one place.
 | `hunter_found.json` / `hunter_empty.json` | Hunter.io Email Finder | `GET /v2/email-finder` | UNVERIFIED |
 | `prospeo_found.json` | Prospeo Email Finder | `POST /email-finder` | UNVERIFIED |
 | `twilio_found.json` | Twilio Lookup v2 | `GET /v2/PhoneNumbers/{e164}` | UNVERIFIED |
+| `quickemailverification_found.json` | QuickEmailVerification | `GET /v1/verify` | UNVERIFIED |
+| `myemailverifier_found.json` | MyEmailVerifier | `GET /api/validate_single.php` | UNVERIFIED |
+| `mailboxvalidator_found.json` | MailboxValidator | `GET /v2/validation/single` | UNVERIFIED |
+| `bouncify_found.json` | Bouncify | `GET /v1/verify` | UNVERIFIED |
+| `emaillistverify_found.json` | EmailListVerify | `GET /api/verifyEmailDetailed` | UNVERIFIED |
+| `trestle_found.json` | Trestle Phone Validation | `GET /3.0/phone_intel` | UNVERIFIED |
+| `numlookupapi_found.json` | NumLookupAPI | `GET /v1/validate/{number}` | UNVERIFIED |
+| `companyenrich_found.json` | CompanyEnrich | `GET /companies/enrich` | UNVERIFIED |
+| `companies-house` (async test) | UK Companies House | `GET /search/companies` → `GET /company/{n}` | UNVERIFIED |
+| `enrich-so_found.json` | Enrich.so reverse-lookup | `POST /api/v3/reverse-lookup/lookup` | UNVERIFIED |
+| `voila-norbert_found.json` | Voila Norbert | `POST /search/name` | UNVERIFIED |
+| `surfe` / `lemlist` (async test) | Surfe / Lemlist enrich | submit→poll | UNVERIFIED |

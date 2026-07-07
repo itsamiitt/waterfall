@@ -1,0 +1,10 @@
+{
+  "Address": "jane@acme.com",
+  "catch_all": "false",
+  "Status": "Valid",
+  "Disposable_Domain": "false",
+  "Role_Based": "false",
+  "Free_Domain": "false",
+  "Greylisted": "false",
+  "Diagnosis": "Mailbox Exists and Active"
+}

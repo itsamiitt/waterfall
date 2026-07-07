@@ -1,0 +1,16 @@
+{
+  "email_address": "jane@acme.com",
+  "base_email_address": "jane@acme.com",
+  "domain": "acme.com",
+  "is_free": false,
+  "is_syntax": true,
+  "is_domain": true,
+  "is_smtp": true,
+  "is_verified": true,
+  "is_disposable": false,
+  "is_role": false,
+  "mailboxvalidator_score": 0.85,
+  "status": true,
+  "credits_available": 296,
+  "error": { "error_code": "", "error_message": "" }
+}

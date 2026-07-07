@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "id": "ACoAABk7TGwBfn9oQe3F",
+    "displayName": "Emily Zhang",
+    "firstName": "Emily",
+    "lastName": "Zhang",
+    "headline": "Staff Product Designer at Figma",
+    "companyName": "Figma",
+    "location": "San Francisco, California",
+    "profileUrl": "https://www.linkedin.com/in/emilyzhang",
+    "positions": {
+      "positionsCount": 2,
+      "positionHistory": [
+        { "title": "Staff Product Designer", "companyName": "Figma" },
+        { "title": "Senior Product Designer", "companyName": "Airbnb" }
+      ]
+    }
+  },
+  "meta": { "creditsUsed": 10, "creditsRemaining": 9990 }
+}

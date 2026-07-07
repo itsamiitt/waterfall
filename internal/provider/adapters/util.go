@@ -3,6 +3,7 @@ package adapters
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ func rawStr(r json.RawMessage) string {
 var (
 	errNoJobID     = errors.New("submit returned no job id")
 	errResultsGone = errors.New("job results expired or deleted")
+	errNoMatch     = errors.New("no matching record for the query")
 )
 
 // itoa renders an int64 attribute (employee_count, founded_year) as its decimal string, the form
@@ -102,6 +104,26 @@ func classifyErrMsg(msg string) domain.ErrorClass {
 	default:
 		return domain.ClassAuth
 	}
+}
+
+// setIfQ sets query param k to v only when v is non-empty, so optional match inputs are omitted
+// rather than sent as blank params.
+func setIfQ(q url.Values, k, v string) {
+	if v != "" {
+		q.Set(k, v)
+	}
+}
+
+// bodyErr builds a classified *domain.ProviderError from a vendor's in-body error message (the
+// 200-with-error pattern: QuickEmailVerification, MyEmailVerifier, …). The class is derived from the
+// message via classifyErrMsg; a blank message falls back to a generic text so the error is never
+// empty. Callers that classify by a numeric error CODE instead build the error inline.
+func bodyErr(providerName, msg string) error {
+	m := strings.TrimSpace(msg)
+	if m == "" {
+		m = "provider returned an error"
+	}
+	return domain.NewProviderError(providerName, classifyErrMsg(msg), errors.New(m))
 }
 
 // normList renders a multi-valued attribute (technographics, intent_topics) as the single

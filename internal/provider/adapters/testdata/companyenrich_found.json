@@ -1,0 +1,27 @@
+{
+  "id": "b1e7c0de-0000-4000-8000-000000000000",
+  "name": "Wise",
+  "domain": "wise.com",
+  "website": "https://wise.com",
+  "type": "private",
+  "industry": "Finance",
+  "employees": "5K-10K",
+  "revenue": "over-1b",
+  "founded_year": 2011,
+  "naics_codes": ["522320", "522298", "522210", "522110"],
+  "technologies": ["AWS", "MongoDB", "React"],
+  "location": {
+    "country": { "code": "EE", "name": "Estonia" },
+    "city": { "id": 0, "name": "Tallinn" },
+    "address": "Veerenni 24, 10135",
+    "phone": "+372 5555 0100"
+  },
+  "financial": {
+    "stock_symbol": "LSE:WISE",
+    "total_funding": 1700000000,
+    "funding_stage": "post_ipo_debt"
+  },
+  "socials": {
+    "linkedin_url": "https://www.linkedin.com/company/wise"
+  }
+}

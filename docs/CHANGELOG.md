@@ -5,6 +5,24 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Wave 9: +13 provider adapters beyond the 200-tool sheet (90 → 103)
+Researched (cited) and implemented 13 further real-API providers, expanding coverage past the
+reconciled 200-tool spreadsheet, and resolved the last async deferrals:
+- **Email verify** (single-shot): quickemailverification, myemailverifier, mailboxvalidator, bouncify,
+  emaillistverify (JSON *Detailed* endpoint).
+- **Phone validate** (single-shot): trestle (`/3.0/phone_intel`), numlookupapi (number in path).
+- **Firmographics**: companyenrich (bearer; bucketed size/revenue + funding_stage + naics/tech arrays);
+  **companies-house** (UK official/free) as a match→fetch async adapter (search → `/company/{n}`).
+- **Identity** (DEPRIORITIZED, LinkedIn provenance): enrich-so (`POST /api/v3/reverse-lookup/lookup`).
+- **Revisited async deferrals now implemented**: surfe + lemlist (submit→poll), voila-norbert (single-shot).
+
+Each is secret-free (`AuthDescriptor` only), maps only canonical Fields, carries a `_found.json`
+fixture + wave-test case (sync in `TestWave0_DecodeFixtures`, async in `TestAsyncWave_SubmitPoll`),
+and a registry entry. Basic-auth providers document the exact pool-secret form (`"<key>:"`, `":<key>"`,
+`"any:<token>"`) since egress base64-encodes the pool secret verbatim. All 13 reuse existing auth
+schemes — no new migration. `go build ./...` + `go test ./...` green; catalog-seed parity + field
+coverage + SSRF host-coverage invariants still hold at 103 adapters.
+
 ### 2026-07-07 — Live-Postgres verification + fix: migration 0013 (provider auth schemes)
 Ran the ADR-0023 seeder against a live Postgres (Neon): all 13 migrations apply cleanly, and
 `cmd/providerseed` projects all **90 adapters into the `providers` catalog (one row each)** —

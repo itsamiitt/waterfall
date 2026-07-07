@@ -142,6 +142,37 @@ func TestAsyncWave_SubmitPoll(t *testing.T) {
 				domain.FieldSIC: "47110", domain.FieldCompanyHQCountry: "United Kingdom", domain.FieldCompanyHQCity: "Welwyn Garden City",
 			},
 		},
+		// Wave 9 — additional async providers (net-new + revisited deferrals).
+		{
+			name: "surfe", newA: adapters.Surfe, pool: "surfe:default", secret: "K",
+			submitMethod: "POST", submitPath: "/v2/people/enrich",
+			submitBody: `{"enrichmentID":"enr-1","status":"IN_PROGRESS"}`,
+			pollBody:   `{"status":"COMPLETED","people":[{"firstName":"Jane","lastName":"Doe","companyName":"Acme","companyDomain":"acme.com","linkedInUrl":"https://www.linkedin.com/in/janedoe","jobTitle":"VP Sales","seniorities":["Manager"],"departments":["Sales"],"emails":[{"email":"jane@acme.com","validationStatus":"VALID"}],"mobilePhones":[{"mobilePhone":"+15555550100"}]}]}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldFirstName: "Jane", domain.FieldLastName: "Doe", domain.FieldCompanyDomain: "acme.com"}},
+			want: map[domain.Field]string{
+				domain.FieldWorkEmail: "jane@acme.com", domain.FieldEmailStatus: "VALID", domain.FieldMobilePhone: "+15555550100",
+				domain.FieldJobTitle: "VP Sales", domain.FieldSeniority: "Manager", domain.FieldDepartment: "Sales", domain.FieldLinkedInURL: "https://www.linkedin.com/in/janedoe",
+			},
+		},
+		{
+			name: "lemlist", newA: adapters.Lemlist, pool: "lemlist:default", secret: ":K",
+			submitMethod: "POST", submitPath: "/enrich",
+			submitBody: `{"id":"enr_ABC"}`,
+			pollBody:   `{"enrichmentStatus":"done","data":{"email":{"email":"jane@acme.com","notFound":false}}}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldFirstName: "Jane", domain.FieldLastName: "Doe", domain.FieldCompanyDomain: "acme.com"}},
+			want:       map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com", domain.FieldEmailStatus: "deliverable"},
+		},
+		{
+			name: "companies-house", newA: adapters.CompaniesHouse, pool: "companies-house:default", secret: "K:",
+			submitMethod: "GET", submitPath: "/search/companies",
+			submitBody: `{"items":[{"company_number":"00000006"}]}`,
+			pollBody:   `{"company_name":"EXAMPLE TRADING LIMITED","type":"ltd","date_of_creation":"1872-06-05","sic_codes":["82990"],"registered_office_address":{"locality":"London","country":"England"}}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldCompanyName: "Example Trading"}},
+			want: map[domain.Field]string{
+				domain.FieldCompanyName: "EXAMPLE TRADING LIMITED", domain.FieldCompanyType: "ltd", domain.FieldCompanyFoundedYear: "1872",
+				domain.FieldSIC: "82990", domain.FieldCompanyHQCountry: "England", domain.FieldCompanyHQCity: "London",
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

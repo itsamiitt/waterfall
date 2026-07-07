@@ -53,6 +53,7 @@ var registry = []Registered{
 	// L1 — Source / identity + firmographics.
 	{Slug: "people-data-labs", New: PeopleDataLabs, Category: "identity", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.peopledatalabs.com/docs/reference-person-enrichment-api"},
 	{Slug: "coresignal", New: Coresignal, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://docs.coresignal.com/company-api/multi-source-company-api/enrich"},
+	{Slug: "enrich-so", New: EnrichSo, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://doc.enrich.so/look-up-a-professional-profile-by-email-27483203e0"},
 	{Slug: "fullcontact", New: FullContact, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://docs.fullcontact.com/docs/company-enrich-overview"},
 
 	// L2 — Email finding.
@@ -63,6 +64,9 @@ var registry = []Registered{
 	{Slug: "kaspr", New: Kaspr, Category: "email-find", Status: "DEPRIORITIZED", Regions: []string{"EU", "US"}, DocsURL: "https://docs.developers.kaspr.io/"},
 	{Slug: "contactout", New: ContactOut, Category: "email-find", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://api.contactout.com/"},
 	{Slug: "findymail", New: Findymail, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://app.findymail.com/docs/"},
+	{Slug: "voila-norbert", New: VoilaNorbert, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.voilanorbert.com/api/"},
+	{Slug: "surfe", NewAsync: Surfe, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developers.surfe.com/"},
+	{Slug: "lemlist", NewAsync: Lemlist, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developer.lemlist.com/api-reference/endpoints/enrich/enrich-data"},
 	// Async email finders (ADR-0024 submit→poll) — registered via NewAsync.
 	{Slug: "dropcontact", NewAsync: Dropcontact, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"EU", "global"}, DocsURL: "https://developer.dropcontact.com/"},
 	{Slug: "icypeas", NewAsync: Icypeas, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://api-doc.icypeas.com/getting-started/"},
@@ -103,6 +107,11 @@ var registry = []Registered{
 	{Slug: "debounce", New: DeBounce, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developers.debounce.com/api-reference/endpoint/single-validation"},
 	{Slug: "clearout", New: Clearout, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.clearout.io/developers/api/email-verify"},
 	{Slug: "mailgun-validate", New: MailgunValidate, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"us", "eu"}, DocsURL: "https://documentation.mailgun.com/docs/validate/"},
+	{Slug: "quickemailverification", New: QuickEmailVerification, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.quickemailverification.com/email-verification-api/verify-an-email-address"},
+	{Slug: "myemailverifier", New: MyEmailVerifier, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://github.com/pat-myemailverifier/myemailverifier-api"},
+	{Slug: "mailboxvalidator", New: MailboxValidator, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.mailboxvalidator.com/api-single-validation"},
+	{Slug: "bouncify", New: Bouncify, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://bouncify.readme.io/reference/single-validation-api"},
+	{Slug: "emaillistverify", New: EmailListVerify, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://api.emaillistverify.com/api-doc"},
 
 	// L5 — Phone validation.
 	{Slug: "twilio-lookup", New: Twilio, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.twilio.com/docs/lookup/v2-api"},
@@ -118,6 +127,8 @@ var registry = []Registered{
 	{Slug: "byteplant-phone", New: Byteplant, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.byteplant.com/phone-validator/api.html"},
 	{Slug: "telesign", New: Telesign, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developer.telesign.com/enterprise/docs/phone-id-get-started"},
 	{Slug: "realphonevalidation", New: RealPhoneValidation, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"US"}, DocsURL: "https://realphonevalidation.com/api-documentation/turbo-v3-api-doc/"},
+	{Slug: "trestle", New: Trestle, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"US", "global"}, DocsURL: "https://docs.trestleiq.com/api-reference/phone-validation-api"},
+	{Slug: "numlookupapi", New: NumLookupAPI, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://numlookupapi.com/docs/validate"},
 
 	// L4 — Phone / contact finding.
 	{Slug: "salesintel", New: SalesIntel, Category: "phone-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"US", "global"}, DocsURL: "https://developer.salesintel.io/salesintel-api-documentation/people-contact-apis"},
@@ -147,6 +158,8 @@ var registry = []Registered{
 	{Slug: "infobelpro", New: InfobelPRO, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://getdata.infobelpro.com/Help"},
 	{Slug: "abstract-company", New: AbstractCompany, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.abstractapi.com/api/company-enrichment"},
 	{Slug: "extruct", New: Extruct, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.extruct.ai/api-reference/company-lookup"},
+	{Slug: "companyenrich", New: CompanyEnrich, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.companyenrich.com/reference/get_companies-enrich"},
+	{Slug: "companies-house", NewAsync: CompaniesHouse, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"GB"}, DocsURL: "https://developer.company-information.service.gov.uk/"},
 	{Slug: "predictleads", New: PredictLeads, Category: "technographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.predictleads.com/v3"},
 
 	// L1 — Identity resolution / contact append.

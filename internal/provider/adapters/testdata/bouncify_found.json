@@ -1,0 +1,13 @@
+{
+  "result": "deliverable",
+  "message": "This address can receive emails.",
+  "email": "jane@acme.com",
+  "user": "jane",
+  "domain": "acme.com",
+  "accept_all": 0,
+  "role": 0,
+  "free_email": 0,
+  "disposable": 0,
+  "spamtrap": 0,
+  "success": true
+}

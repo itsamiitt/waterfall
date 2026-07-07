@@ -1,0 +1,8 @@
+{
+  "email": "jane@acme.com",
+  "status": "valid",
+  "company_name": "Acme",
+  "company_size": "51-200",
+  "company_industry": "Software",
+  "credits_consumed": 1
+}

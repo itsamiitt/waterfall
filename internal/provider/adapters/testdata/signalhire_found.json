@@ -1,0 +1,19 @@
+[
+  {
+    "item": "https://www.linkedin.com/in/janedoe",
+    "status": "success",
+    "candidate": {
+      "fullName": "Jane Doe",
+      "headLine": "VP Sales at Acme",
+      "contacts": [
+        { "type": "email", "subType": "work", "value": "jane@acme.com", "rating": 100 },
+        { "type": "email", "subType": "personal", "value": "jane.doe@gmail.com", "rating": 70 },
+        { "type": "phone", "subType": "mobile", "value": "+15555550100", "rating": 70 }
+      ],
+      "experience": [
+        { "position": "VP Sales", "company": "Acme", "website": "acme.com", "companyUrl": "https://www.linkedin.com/company/acme", "current": true }
+      ],
+      "social": [{ "type": "li", "link": "https://www.linkedin.com/in/janedoe" }]
+    }
+  }
+]

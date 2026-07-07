@@ -1,0 +1,6 @@
+{
+  "reference_id": "0123456789ABCDEF",
+  "phone_type": { "code": "2", "description": "MOBILE" },
+  "status": { "code": 300, "description": "Transaction successfully completed" },
+  "carrier": { "name": "T-Mobile USA" }
+}

@@ -47,6 +47,60 @@ func request(jobID, subjectID string, target domain.Confidence, ceiling domain.C
 	}
 }
 
+// budgetCapturingAdapter wraps a Fake, implements provider.PolicyOverrider, and records the
+// per-call deadline the engine actually granted — so a test can prove the override won.
+type budgetCapturingAdapter struct {
+	*providertest.Fake
+	policy    provider.CallPolicy
+	gotBudget time.Duration
+}
+
+func (b *budgetCapturingAdapter) CallPolicy() provider.CallPolicy { return b.policy }
+
+func (b *budgetCapturingAdapter) Fetch(ctx context.Context, req provider.Request) (provider.Result, error) {
+	if dl, ok := ctx.Deadline(); ok {
+		b.gotBudget = time.Until(dl)
+	}
+	return b.Fake.Fetch(ctx, req)
+}
+
+// TestPolicyOverride_AsyncBudget proves ADR-0024 Phase 1: an adapter that implements
+// PolicyOverrider with a longer Timeout is called under that budget, not the engine's
+// (short) default — while a plain adapter keeps the default.
+func TestPolicyOverride_AsyncBudget(t *testing.T) {
+	ctx := ctxFor("t1")
+	st := store.NewMemory()
+	fake := providertest.New("slowco", "jane@acme.com", 0.9, 5, domain.FieldWorkEmail)
+	a := &budgetCapturingAdapter{
+		Fake:   fake,
+		policy: provider.CallPolicy{Timeout: 30 * time.Second, MaxAttempts: 1},
+	}
+	// Engine default is the 1s fastPolicy; the override must win.
+	eng := newEngine(st, a)
+
+	req := request("jobP", "subjP", 0.85, 100, domain.FieldWorkEmail)
+	plan := router.New(a).Plan(req)
+	if _, err := eng.Run(ctx, req, plan); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if a.gotBudget < 5*time.Second {
+		t.Fatalf("policy override not honored: per-call budget was %s, want ~30s (>5s)", a.gotBudget)
+	}
+}
+
+// TestPolicyOverride_ZeroKeepsDefault proves an HTTPAdapter with no Policy (the zero
+// CallPolicy) does NOT override the engine default — the backward-compatible path.
+func TestPolicyOverride_ZeroKeepsDefault(t *testing.T) {
+	var h provider.Adapter = &provider.HTTPAdapter{NameV: "x"}
+	po, ok := h.(provider.PolicyOverrider)
+	if !ok {
+		t.Fatal("HTTPAdapter should implement PolicyOverrider")
+	}
+	if got := po.CallPolicy(); got.Timeout != 0 {
+		t.Fatalf("unset Policy should yield zero (no override), got Timeout=%s", got.Timeout)
+	}
+}
+
 // TestG5_HappyPathRecordsProvenance proves a filled value carries complete provenance
 // and the charge is accounted.
 func TestG5_HappyPathRecordsProvenance(t *testing.T) {

@@ -1,0 +1,16 @@
+{
+  "about": {
+    "name": "Acme",
+    "industry": "internet",
+    "businessType": "privately-held",
+    "yearFounded": 2012,
+    "totalEmployees": "200-500",
+    "totalEmployeesExact": 300
+  },
+  "finances": { "revenue": "10m-50m" },
+  "locations": { "headquarters": { "city": "Frisco", "country": "United States" } },
+  "socials": { "linkedin": { "url": "https://www.linkedin.com/company/acme" } },
+  "technologies": { "active": ["nginx", "react"], "categories": ["cdn"] },
+  "codes": { "naics": ["5182"], "sic": ["7372"] },
+  "contacts": { "phones": ["+1-555-0100"], "emails": ["contact@acme.com"] }
+}

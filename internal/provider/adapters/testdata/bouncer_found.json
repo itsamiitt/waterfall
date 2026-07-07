@@ -1,0 +1,10 @@
+{
+  "email": "jane@acme.com",
+  "status": "deliverable",
+  "reason": "accepted_email",
+  "domain": { "name": "acme.com", "acceptAll": "no", "disposable": "no", "free": "no" },
+  "provider": "google.com",
+  "score": 100,
+  "toxic": "unknown",
+  "toxicity": 0
+}

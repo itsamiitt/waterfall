@@ -1,0 +1,14 @@
+{
+  "email": "jane@acme.com",
+  "state": "deliverable",
+  "reason": "accepted_email",
+  "score": 100,
+  "free": false,
+  "role": false,
+  "disposable": false,
+  "domain": "acme.com",
+  "first_name": "Jane",
+  "last_name": "Doe",
+  "full_name": "Jane Doe",
+  "duration": 0.42
+}

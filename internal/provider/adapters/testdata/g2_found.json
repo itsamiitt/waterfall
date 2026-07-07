@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "id": "8946dc8ba416f746d926f401cb4885e3",
+      "type": "buyer_intent",
+      "attributes": {
+        "total_activity": 150,
+        "signal_type": "pricing",
+        "category_name": "CRM",
+        "company_name": "Enterprise Corp",
+        "company_domain": "enterprise.com",
+        "company_industry": "Software",
+        "company_country": "US",
+        "company_employees": 500
+      }
+    }
+  ],
+  "links": { "self": "http://data.example.com/api/v2/buyer_intent", "next": null, "prev": null }
+}

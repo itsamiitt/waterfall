@@ -1,0 +1,11 @@
+{
+  "domain": "acme.com",
+  "name": "Acme",
+  "companySize": "51-200",
+  "primaryCountry": "US",
+  "revenue": "10-50M",
+  "yearFounded": 2012,
+  "industries": ["SaaS", "B2B"],
+  "technologies": ["HubSpot", "Salesforce"],
+  "fundingRound": { "type": "Series A", "moneyRaisedInUsd": 5000000, "announcedOn": "2021-06-01" }
+}

@@ -1,0 +1,19 @@
+{
+  "api_id": "e4a25a0a-a19f-4ff6-b8b5-1841bea253f6",
+  "phone_number": "+15555550100",
+  "country": { "name": "United States", "iso2": "US", "iso3": "USA" },
+  "format": {
+    "e164": "+15555550100",
+    "national": "(555) 555-0100",
+    "international": "+1 555-555-0100",
+    "rfc3966": "tel:+1-555-555-0100"
+  },
+  "carrier": {
+    "mobile_country_code": "310",
+    "mobile_network_code": "260",
+    "name": "T-Mobile USA, Inc.",
+    "type": "mobile",
+    "ported": "no"
+  },
+  "resource_uri": "/v1/Number/+15555550100?type=carrier"
+}

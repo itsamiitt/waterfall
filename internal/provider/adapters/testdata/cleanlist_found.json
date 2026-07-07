@@ -1,0 +1,10 @@
+{
+  "company": {
+    "name": "Acme",
+    "domain": "acme.com",
+    "industry": "Software",
+    "linkedin_url": "https://www.linkedin.com/company/acme",
+    "revenue_range": "$10M-$50M",
+    "employee_count": 1200
+  }
+}

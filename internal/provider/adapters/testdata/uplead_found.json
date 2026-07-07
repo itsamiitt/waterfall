@@ -1,0 +1,15 @@
+{
+  "email": "jane@acme.com",
+  "email_status": "Valid",
+  "mobile_directdial": "(415) 426-8562",
+  "linkedin_url": "https://www.linkedin.com/in/janedoe",
+  "title": "VP Sales",
+  "management_level": "VP",
+  "company_name": "Acme",
+  "domain": "acme.com",
+  "industry": "Software",
+  "employees": 3200,
+  "revenue": "$50M-$100M",
+  "first_name": "Jane",
+  "last_name": "Doe"
+}

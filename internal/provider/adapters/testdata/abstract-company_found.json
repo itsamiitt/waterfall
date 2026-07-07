@@ -1,0 +1,10 @@
+{
+  "name": "Acme",
+  "domain": "acme.com",
+  "employees_count": 3200,
+  "industry": "Software",
+  "year_founded": 2012,
+  "country": "United States",
+  "type": "public",
+  "linkedin_url": "linkedin.com/company/acme"
+}

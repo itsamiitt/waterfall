@@ -53,6 +53,19 @@ type Option func(*Engine)
 // WithPolicy overrides the default bounded call policy (G3).
 func WithPolicy(p provider.CallPolicy) Option { return func(e *Engine) { e.policy = p } }
 
+// policyFor returns the bounded CallPolicy to use for one adapter (G3). An adapter that
+// implements provider.PolicyOverrider and returns a policy with Timeout>0 gets that budget
+// (ADR-0024 Phase 1 — e.g. async submit→poll); otherwise the engine default applies. The
+// override is still fully bounded + breaker-guarded, so G3 holds regardless.
+func (e *Engine) policyFor(a provider.Adapter) provider.CallPolicy {
+	if po, ok := a.(provider.PolicyOverrider); ok {
+		if p := po.CallPolicy(); p.Timeout > 0 {
+			return p
+		}
+	}
+	return e.policy
+}
+
 // WithClock injects a clock for deterministic provenance timestamps / breaker timing.
 func WithClock(now func() time.Time) Option { return func(e *Engine) { e.now = now } }
 
@@ -213,7 +226,7 @@ func (e *Engine) fillField(ctx context.Context, tenantID string, req domain.Enri
 			Known:          req.Subject.Known,
 			Fields:         []domain.Field{field},
 			IdempotencyKey: key,
-		}, e.policy, e.breakers[step.Provider], nil)
+		}, e.policyFor(adapter), e.breakers[step.Provider], nil)
 		e.recordCall(step.Provider, field, res, callErr, e.now().Sub(callStart))
 		if e.bandit != nil {
 			_, hasVal := res.Values[field]

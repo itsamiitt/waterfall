@@ -1219,3 +1219,190 @@ Full rationale in **[ADR-0009](../adr/0009-provider-inclusion-exclusion-criteria
 **Gate recommendation:** `GATE-PASS` with **one item explicitly routed to the human** (PR-EXCL-1);
 all other opens are `ACCEPTED-RISK`. **Awaiting human approval to advance to Phase 4 (System
 Architecture)** — and a decision on PR-EXCL-1.
+
+---
+
+## 7. Implemented Adapter Ledger (200-provider rollout — ADR-0023)
+
+This section is the running RESEARCH record for the code adapters (`internal/provider/adapters`).
+Each row's **auth scheme** + **status→error-class** mapping is the VERIFIED, load-bearing contract
+(exercised by the adapter tests); the request/response **field names** are taken from the cited
+official docs but pinned **`UNVERIFIED`** until confirmed against a live authorized call
+(`testdata/README_UNVERIFIED.md`). Verified date: **2026-07-06** unless noted. Rows are added as
+each provider is implemented; EXCLUDED providers are in §6, never coded.
+
+| Provider (slug) | Layer | Status | Endpoint (default) | Auth | Canonical Fields filled | Source |
+|---|---|---|---|---|---|---|
+| Hunter (`hunter`) | email-find | ACTIVE-CANDIDATE | `GET api.hunter.io/v2/email-finder` | api-key-query `api_key` | work_email, email_status | hunter.io/api-documentation/v2 |
+| Prospeo (`prospeo`) | email-find | ACTIVE-CANDIDATE | `POST api.prospeo.io/email-finder` | api-key-header `X-KEY` | work_email, email_status | docs.prospeo.io |
+| Twilio Lookup (`twilio-lookup`) | phone-validate | ACTIVE-CANDIDATE | `GET lookups.twilio.com/v2/PhoneNumbers/{e164}` | basic (SID:token) | phone_status | twilio.com/docs/lookup/v2-api |
+| People Data Labs (`people-data-labs`) | identity | ACTIVE-CANDIDATE | `GET api.peopledatalabs.com/v5/person/enrich` | api-key-header `X-Api-Key` | work_email, mobile_phone, job_title, linkedin_url, full_name, company_name, company_domain, industry, employee_count | docs.peopledatalabs.com/docs/reference-person-enrichment-api |
+| NeverBounce (`neverbounce`) | email-verify | ACTIVE-CANDIDATE | `GET api.neverbounce.com/v4/single/check` | api-key-query `key` | email_status | developers.neverbounce.com/reference/single-check |
+| Kickbox (`kickbox`) | email-verify | ACTIVE-CANDIDATE | `GET api.kickbox.com/v2/verify` | api-key-query `apikey` | email_status (conf from `sendex`) | docs.kickbox.com |
+| ZeroBounce (`zerobounce`) | email-verify | ACTIVE-CANDIDATE | `GET api.zerobounce.net/v2/validate` | api-key-query `api_key` | email_status, first_name, last_name | zerobounce.net/docs/email-validation-api-quickstart/v2-validate-emails |
+| Apollo (`apollo`) | email-find | **DEPRIORITIZED** | `POST api.apollo.io/api/v1/people/match` | api-key-header `X-Api-Key` | work_email, email_status, linkedin_url, job_title, seniority, full_name, company_name/domain, employee_count, industry, office_phone | docs.apollo.io/reference/people-enrichment |
+| Clearbit (`clearbit`) | firmographics | ACTIVE-CANDIDATE | `GET company.clearbit.com/v2/companies/find` | bearer | company_name, industry, sic/naics, employee_count, company_revenue, technographics, hq country/city, founded_year, type, company_linkedin_url | dashboard.clearbit.com/docs |
+| BuiltWith (`builtwith`) | technographics | ACTIVE-CANDIDATE | `GET api.builtwith.com/v23/api.json` | api-key-query `KEY` | technographics, company_name, industry, hq country, employee_count, company_revenue | api.builtwith.com/domain-api |
+| TheirStack (`theirstack`) | technographics | ACTIVE-CANDIDATE | `POST api.theirstack.com/v1/companies/technologies` | bearer | technographics (job-posting derived) | theirstack.com/en/docs/api-reference |
+| G2 (`g2`) | intent | ACTIVE-CANDIDATE | `GET data.g2.com/api/v2/buyer_intent` | bearer | buying_signal, intent_topics, company_name/domain, industry, hq country, employee_count | data.g2.com/api/v2/docs |
+| 6sense (`6sense`) | intent | ACTIVE-CANDIDATE | `POST scribe.6sense.com/v2/people/full` (form-urlencoded) | api-key-header `Authorization: Token <token>` | intent_score, buying_signal (buying stage), intent_topics (segments), company firmographics + naics/sic | api.6sense.com/docs |
+| SalesIntel (`salesintel`) | phone-find | ACTIVE-CANDIDATE | `GET api.salesintel.io/service/people` | api-key-header `X-CB-ApiKey` | work/personal email, mobile/direct/office phone (by type), job_title/seniority/dept, LinkedIn, firmographics, naics/sic | developer.salesintel.io |
+| Lusha (`lusha`) | email-find | **DEPRIORITIZED** | `POST api.lusha.com/v3/contacts/search-and-enrich` | api-key-header `api_key` | work/personal email, mobile/direct phone, job_title/seniority/dept, LinkedIn, company name/domain | docs.lusha.com |
+| Kaspr (`kaspr`) | email-find | **DEPRIORITIZED** | `POST api.developers.kaspr.io/profile/linkedin` | api-key-header `Authorization` (raw) + `accept-version: v2.0` | work/personal email, mobile_phone, first/last name, LinkedIn | docs.developers.kaspr.io |
+| ContactOut (`contactout`) | email-find | **DEPRIORITIZED** | `GET api.contactout.com/v1/people/linkedin?profile=` | api-key-header `token` | work/personal email, email_status (per-address map), mobile_phone, LinkedIn | api.contactout.com |
+| Diffbot (`diffbot`) | firmographics | ACTIVE-CANDIDATE | `GET kg.diffbot.com/kg/v3/enhance?type=Organization&url=` | api-key-query `token` | company name/domain, employees, revenue, founded year, LinkedIn, naics/sic | docs.diffbot.com/reference/enhanceget |
+| HG Insights (`hg-insights`) | technographics | ACTIVE-CANDIDATE | `POST api.hginsights.com/data-api/v2/companies/enrich` | bearer (`hg_v2_…`) | technographics (install base), company name/domain, hq country, employees, revenue | data-docs.hginsights.com/v2 |
+| Vainu (`vainu`) | firmographics | ACTIVE-CANDIDATE | `GET api.vainu.io/api/v2/companies/?domain__in=` | api-key-header `API-Key` | registry firmo (name/domain/country/city, employees, revenue, industry_code, legal form, founded, LinkedIn, phone) + technographics | developers.vainu.com |
+| Global Database (`global-database`) | firmographics | ACTIVE-CANDIDATE | `POST api.globaldatabase.com/v2/enrichment/url` | api-key-header `Authorization: Token <key>` | registry firmo (name/domain/phone/size/founded/industry/sic/country/city/legal form/LinkedIn) | api.globaldatabase.com/docs/v2 |
+| Data Axle (`data-axle`) | firmographics | ACTIVE-CANDIDATE | `POST api.data-axle.com/v2/places/match` | api-key-header `X-AUTH-TOKEN` | company name/phone, hq city/country, LinkedIn, type, founded year (US/CA compiled) | platform.data-axle.com/places/docs |
+| Owler (`owler`) | firmographics | **DEPRIORITIZED** | `GET api.owler.com/v1/companypremium/url/{domain}` | api-key-header `user_key` | name/domain, industry, employees, revenue, founded, type, hq country/city/phone, LinkedIn | developers.owler.com |
+| Leadspace (`leadspace`) | firmographics | **DEPRIORITIZED** | `POST apigw.leadspace.com/enrichment/enrich/single` | bearer | name/domain, industry, employees, revenue, hq country/city, LinkedIn, phone, type, technographics | support.leadspace.com |
+| NinjaPear (`ninjapear`) | firmographics | **DEPRIORITIZED** | `GET nubela.co/api/v1/company/details?website=` | bearer | name/domain, industry (GICS code), type, founded year, employees, hq country/city | nubela.co/docs |
+| Dun & Bradstreet (`dnb`) | firmographics | ACTIVE-CANDIDATE | **async match→fetch**: `GET plus.dnb.com/v1/match/cleanseMatch` → `GET /v1/data/duns/{duns}` | **oauth2-cc** (`/v2/token`, Bearer) | **duns_number**, name, domain, hq country/city, employees, revenue, SIC, industry | directplus.documentation.dnb.com |
+| MixRank (`mixrank`) | firmographics | **DEPRIORITIZED** | `GET api.mixrank.com/v2/json/{key}/companies/match` | **api-key-path** (key is a URL path segment) | name, domain, employees, industry, SIC, NAICS, founded year, hq country/city, type, company LinkedIn | mixrank.com/api/documentation |
+| Verifalia (`verifalia`) | email-verify | ACTIVE-CANDIDATE | **async submit→poll**: `POST api.verifalia.com/v2.6/email-validations` → `GET …/{id}` | basic | email_status (classification), work_email | verifalia.com/developers |
+| Dropcontact (`dropcontact`) | email-find | ACTIVE-CANDIDATE | **async submit→poll**: `POST api.dropcontact.com/v1/enrich/all` → `GET …/{request_id}` | api-key-header `X-Access-Token` | work_email, email_status, first/last/full name, company name/domain, LinkedIn, job title | developer.dropcontact.com |
+| Icypeas (`icypeas`) | email-find | ACTIVE-CANDIDATE | **async submit→poll**: `POST app.icypeas.com/api/email-search` → `POST …/bulk-single-searchs/read` (token in body) | api-key-header `Authorization` (raw) | work_email, email_status (certainty), first/last/full name | api-doc.icypeas.com |
+| Enrow (`enrow`) | email-find | ACTIVE-CANDIDATE | **async submit→poll**: `POST api.enrow.io/email/find/single` → `GET …?id=` | api-key-header `x-api-key` | work_email, email_status (qualification), company domain/name, first/last/full name | docs.enrow.io |
+| Snov.io (`snov`) | email-find | ACTIVE-CANDIDATE | **async submit→poll**: `POST api.snov.io/v2/emails-by-domain-by-name/start` → `GET …/result?task_hash=` | **oauth2-cc** (body-form creds) | work_email, email_status (smtp_status), full_name | snov.io/api |
+| SignalHire (`signalhire`) | email-find | **DEPRIORITIZED** | single-shot `POST signalhire.com/api/v1/candidate/search` (`withoutWaterfall=true`) | api-key-header `apikey` | full_name, work/personal email, mobile/office phone, job_title, company name/domain, LinkedIn | docs.signalhire.com |
+| Explorium (`explorium`) | firmographics | ACTIVE-CANDIDATE | **async match→fetch**: `POST api.explorium.ai/v1/businesses/match` → `POST …/firmographics/enrich` | api-key-header `api_key` | name, domain, industry, naics, sic, employees (range), revenue (range), hq country/city, company LinkedIn | developers.explorium.ai |
+| Endole (`endole`) | firmographics | ACTIVE-CANDIDATE | **async match→fetch**: `GET api.endole.co.uk/search/companies?q=` → `GET /company/{number}` | basic (`appId:appKey`) | name, SIC, founded year, hq country/city, company type (UK Companies House) | endole.co.uk/developers |
+| BetterContact (`bettercontact`) | orchestration | ACTIVE-CANDIDATE | **async submit→poll**: `POST app.bettercontact.rocks/api/v2/async` → `GET …/{id}` (status=terminated) | api-key-header `X-API-Key` | work_email, email_status, first/last name, job_title (waterfall aggregator) | doc.bettercontact.rocks |
+| FullEnrich (`fullenrich`) | orchestration | ACTIVE-CANDIDATE | **async submit→poll**: `POST app.fullenrich.com/api/v2/contact/enrich/bulk` → `GET …/{id}` (status=FINISHED) | bearer | work/personal email, email_status, mobile, LinkedIn, job_title, name, company name/domain/employees/industry/type/founded/hq/LinkedIn | docs.fullenrich.com |
+| Wiza (`wiza`) | email-find | **DEPRIORITIZED** | **async submit→poll**: `POST wiza.co/api/individual_reveals` → `GET …/{id}` (data.status=finished) | bearer | work_email, email_status, mobile, phone_status, name, title, LinkedIn, company firmo | docs.wiza.co |
+| RocketReach (`rocketreach`) | email-find | **DEPRIORITIZED** | **async submit→poll**: `GET api.rocketreach.co/api/v2/person/lookup` → `GET /person/checkStatus?ids=` (status=complete) | api-key-header `Api-Key` | work/personal email, email_status (grade), mobile, LinkedIn, job_title, company, name | docs.rocketreach.co |
+
+**All 12 async-wave providers implemented** (submit→poll, match→fetch, oauth2 basic+body, single-shot,
+path-key): none EXCLUDED — SignalHire fit as single-shot (`withoutWaterfall=true`), all others as
+`AsyncHTTPAdapter`s.
+
+| Cleanlist (`cleanlist`) | firmographics | ACTIVE-CANDIDATE | `POST api.cleanlist.ai/api/v2/enrichment/company` (company endpoint; sync) | bearer (`clapi_`) | name, domain, industry, revenue_range, employees, company LinkedIn | docs.cleanlist.ai |
+| Demandbase (`demandbase`) | firmographics | ACTIVE-CANDIDATE | **async match→fetch**: `POST uapi.demandbase.com/data/b2b/v1/match` → `GET /company/{id}` | **oauth2-cc** (JSON creds, `/auth/v1/token`) | name, domain, industry, employees, revenue, hq country/city, naics, sic | developer.demandbase.com |
+| PredictLeads (`predictleads`) | technographics | ACTIVE-CANDIDATE | single-shot `GET predictleads.com/api/v3/companies/{domain}` | **api-key-dual-header** (`X-Api-Key` + `X-Api-Token`) | company_name, company_domain, hq country | docs.predictleads.com |
+| InfobelPRO (`infobelpro`) | firmographics | ACTIVE-CANDIDATE | single-shot `POST getdata.infobelpro.com/api/search` (`returnFirstPage=true`) | **oauth2-cc password grant** (`/api/token`) | name, domain, phone, employees, revenue, industry, founded, hq country/city, type | getdata.infobelpro.com/Help |
+
+**Final deferred/excluded batch:** **Cognism** — deferred: real API but base host unconfirmed (two
+candidates) AND every redeem value-key is inferred from `has*` flags only (below the UNVERIFIED-field
+bar — a wrong host is non-functional); revisit with a live key. **Bombora** — deferred (DEPRIORITIZED):
+partner-gated Basic auth + it's an async *batch Surge report* over an account list (weekly data,
+derived buying-signal), an awkward single-subject fit. **InfobelPRO** — IMPLEMENTED (added
+oauth2 password-grant TokenStyle; single-shot via `returnFirstPage=true`). **Cleanlist person/bulk**
+endpoints deferred (stateful lead_list_id + signed quote_id).
+
+**Wave 7 — coverage-audit gap-fill (2026-07-07):** a diff of the 200-tool spreadsheet's Tool column
+(209 rows) against the registry surfaced a missed L2/L3 long-tail. Added 8 adapters — **leadmagic**
+(X-API-Key), **getprospect** (`apiKey` hdr), **skrapp** (`X-Access-Key`), **tomba** (dual-header
+`X-Tomba-Key`+`X-Tomba-Secret`), **cufinder** (`x-api-key`, form-encoded /tep) [L2 email-find];
+**bounceban** (raw `Authorization`) [L3 verify]; **realphonevalidation** (`token` query) [L5];
+**abstract-company** (`api_key` query) [L6]; **reverse-contact** (Bearer, `POST /v2/enrich/persons`
+email→person, DEPRIORITIZED LinkedIn provenance, 404=free no-match) [L1 identity]. Wave-7 **EXCLUDED**: **FindThatLead** (vendor states "no
+API available" — Zapier-only), **TrueMail** (defunct — domain + docs 301-redirect to GetProspect).
+Wave-7 **deferred**: **Voila Norbert** (async finder whose completion is webhook-only — no documented
+poll endpoint to build a pull loop against).
+
+**Wave 8 — residual-row audit (2026-07-07):** ~15 rows dismissed in Wave 7 without cited research
+were verified. Added 7: **uplead** (raw `Authorization`), **adapt-io** (dual-header `email`+`apiKey`,
+200-with-APP-200-002 no-match), **aeroleads** (`api_key` query) [L2 email-find]; **scrubby**
+(`x-api-key`), **enrichley** (`X-Api-Key`), **mailfloss** (Bearer) [L3 verify]; **extruct** (Bearer,
+`GET /v1/companies/{domain}`) [L6 firmo]. Wave-8 **EXCLUDED** (cited): **Datanyze** (ZoomInfo-owned,
+Chrome-extension only, ToS bans automation), **Persana AI** (MCP/agent, sunsetting→Rox), **Octave**
+(agentic GTM — returns ICP-fit not enrichment), **Rift** (AI-SDR, no enrich API), **BookYourData**
+(list-purchase, API undocumented/sales-gated), **Leadyfy** (no verifiable product — DNS fails).
+Wave-8 **deferred**: **Surfe** + **Lemlist** (async enrich, poll-results path unverified — like Voila
+Norbert), **Autobound** (Signal API — endpoint+auth verified but enrich response schema unconfirmed,
+readme `/reference` pages 404'd).
+
+**Rollout closeout:** every spreadsheet provider with a documented, self-serve REST API and an auth
+model the egress supports is now implemented (90 adapters). The only remaining non-implemented
+providers are documented EXCLUDED (scraping/no-API/OSINT/infra per ADR-0002/0009) or the two genuine
+deferrals above (Cognism — unconfirmed host + fully-inferred schema; Bombora — partner-gated batch
+report), both revisitable with live credentials.
+| Pipl (`pipl`) | identity | **DEPRIORITIZED** | `GET api.pipl.com/search/?email=` | api-key-query `key` | full/first/last name, work/personal email, LinkedIn, mobile, job title, company name | docs.pipl.com |
+| Versium (`versium`) | identity | **DEPRIORITIZED** | `GET api.versium.com/v2/contact?first=&last=` | api-key-header `x-versium-api-key` | first/last name, personal email, mobile phone (US B2B2C append) | api-documentation.versium.com |
+
+**Wave-6 deferred/excluded (cont.):** **Endole** — deferred: UK-registry API is search→fetch
+(two-step) with HTTP Basic → task #8. **Sales.Rocks** — EXCLUDED (ADR-0009): no documented
+self-serve REST enrichment endpoint (platform/no-discoverable-API).
+
+**Wave-6 (resolved via ADR-0024):** **D&B (Direct+)** — IMPLEMENTED as an async `match→fetch` +
+`oauth2-cc` adapter (see ledger row `dnb`). **MixRank** — IMPLEMENTED once ADR-0024 Phase 4a added
+`api-key-path` (its key is a mandatory URL **path segment**, now injected at egress). **Explorium** —
+match→enrich (two-step) still pending the async wave (task #8).
+
+**Wave-5 EXCLUDED / deferred:** **Swordfish** + **Nimbler** — EXCLUDED (ADR-0009): no documented
+self-serve REST API (access is sales/account-gated; no discoverable base URL, endpoint, auth, or
+response schema — implementing would be fabrication). **Deferred — async (task #8):** **Wiza**
+(create→poll), **SignalHire** (POST→callback). **Deferred — mandatory account-config query param:**
+**Enlyft** (every call needs a `solution_id` subscription UUID not derivable from a canonical field,
+like Sinch's projectId; + unverified response envelope). **Deferred — session/multi-step auth +
+unverified schema:** **Lead411** (login→JWT→reuse; response schema entirely undocumented). Still to
+verify/triage: infobelpro, vainu, global-database (vainu + global-database research ran with the
+safety classifier unavailable — verify citations before implementing).
+| Findymail (`findymail`) | email-find | ACTIVE-CANDIDATE | `POST app.findymail.com/api/search/name` | bearer | work_email, full_name, company_domain | app.findymail.com/docs |
+| Anymail Finder (`anymailfinder`) | email-find | ACTIVE-CANDIDATE | `POST api.anymailfinder.com/v5.1/find-email/person` | api-key-header `Authorization` (raw) | work_email, email_status, full_name, job_title | anymailfinder.com/email-finder-api/docs |
+| Datagma (`datagma`) | email-find | ACTIVE-CANDIDATE | `GET gateway.datagma.net/api/ingress/v8/findEmail` | api-key-query `apiId` | work_email, email_status, company_domain | datagmaapi.readme.io |
+| Emailable (`emailable`) | email-verify | ACTIVE-CANDIDATE | `GET api.emailable.com/v1/verify` | api-key-query `api_key` | email_status (`state`), first/last/full name | emailable.com/docs/api |
+| Bouncer (`bouncer`) | email-verify | ACTIVE-CANDIDATE | `GET api.usebouncer.com/v1.1/email/verify` | api-key-header `x-api-key` | email_status (`status`) | docs.usebouncer.com |
+| MillionVerifier (`millionverifier`) | email-verify | ACTIVE-CANDIDATE | `GET api.millionverifier.com/api/v3/` | api-key-query `api` | email_status (`result`) — 200-with-`error` → AUTH/QUOTA | developer.millionverifier.com |
+| DeBounce (`debounce`) | email-verify | ACTIVE-CANDIDATE | `GET api.debounce.io/v1/` | api-key-query `api` | email_status (`debounce.result`) — `success:"0"`+error → AUTH/QUOTA/RATE_LIMIT | developers.debounce.com |
+| Clearout (`clearout`) | email-verify | ACTIVE-CANDIDATE | `POST api.clearout.io/v2/email_verify/instant` | bearer | email_status (`data.status`) — `status:"failure"` → AUTH/QUOTA | docs.clearout.io |
+| Mailgun (`mailgun-validate`) | email-verify | ACTIVE-CANDIDATE | `GET api.mailgun.net/v4/address/validate` | basic (`api:key`) | email_status (`result`) | documentation.mailgun.com/docs/validate |
+| Brandfetch (`brandfetch`) | firmographics | ACTIVE-CANDIDATE | `GET api.brandfetch.io/v2/brands/{domain}` | bearer | company_name, employee_count, founded_year, industry, company_type (`kind`), hq city/country, company_linkedin_url | docs.brandfetch.com/brand-api |
+| Wappalyzer (`wappalyzer`) | technographics | ACTIVE-CANDIDATE | `GET api.wappalyzer.com/v2/lookup/?urls=` | api-key-header `x-api-key` | technographics (frontend tech) | wappalyzer.com/docs/api/v2/lookup |
+| Telnyx (`telnyx`) | phone-validate | ACTIVE-CANDIDATE | `GET api.telnyx.com/v2/number_lookup/{e164}?type=carrier,caller-name` | bearer | phone_status (carrier.type), mobile_phone | developers.telnyx.com/docs/identity/number-lookup |
+| Vonage (`vonage`) | phone-validate | ACTIVE-CANDIDATE | `GET api.nexmo.com/ni/standard/json?number=` | basic (`key:secret`) | phone_status (network_type; status!=0 → AUTH/QUOTA/RATE_LIMIT) | developer.vonage.com/api/number-insight |
+| MessageBird (`messagebird`) | phone-validate | ACTIVE-CANDIDATE | `GET rest.messagebird.com/lookup/{e164}` | api-key-header `Authorization: AccessKey <key>` | phone_status (`type`), mobile_phone | developers.messagebird.com/api/lookup |
+| IPQualityScore (`ipqualityscore`) | phone-validate | ACTIVE-CANDIDATE | `GET ipqualityscore.com/api/json/phone/{phone}` | api-key-header `IPQS-KEY` | phone_status (valid+line_type; 200-`success:false` → AUTH/QUOTA), mobile_phone | ipqualityscore.com/documentation/phone-number-validation-api |
+| Plivo (`plivo`) | phone-validate | ACTIVE-CANDIDATE | `GET lookup.plivo.com/v1/Number/{e164}?type=carrier` | basic (`authid:token`) | phone_status (carrier.type), mobile_phone | plivo.com/docs/lookup |
+| Infobip (`infobip`) | phone-validate | ACTIVE-CANDIDATE | `POST api.infobip.com/number/1/query` | api-key-header `Authorization: App <key>` | phone_status (HLR status+error → valid/invalid/unreachable) | infobip.com/docs/number-lookup |
+| NumVerify (`numverify`) | phone-validate | ACTIVE-CANDIDATE | `GET apilayer.net/api/validate?number=` | api-key-query `access_key` | phone_status (valid+line_type), mobile_phone; 200-`success:false` → classified | docs.apilayer.com/numverify |
+| AbstractAPI (`abstract-phone`) | phone-validate | ACTIVE-CANDIDATE | `GET phonevalidation.abstractapi.com/v1/?phone=` | api-key-query `api_key` | phone_status (valid+`type`), mobile_phone (`format.international`) | docs.abstractapi.com/api/phone-validation |
+| Veriphone (`veriphone`) | phone-validate | ACTIVE-CANDIDATE | `GET api.veriphone.io/v2/verify?phone=` | bearer | phone_status (phone_valid+phone_type), mobile_phone (`e164`) | veriphone.io/docs/v2 |
+| Byteplant (`byteplant-phone`) | phone-validate | ACTIVE-CANDIDATE | `GET api.phone-validator.net/api/v2/verify?PhoneNumber=` | api-key-query `APIKey` | phone_status (status+linetype; API_KEY/RATE/DELAYED classified), mobile_phone | byteplant.com/phone-validator/api |
+| Telesign (`telesign`) | phone-validate | ACTIVE-CANDIDATE | `GET rest-ww.telesign.com/v1/phoneid/{phone}` | basic (`customerid:apikey`) | phone_status (phone_type.description) | developer.telesign.com/enterprise/docs/phone-id |
+| Crunchbase (`crunchbase`) | firmographics | ACTIVE-CANDIDATE | `POST api.crunchbase.com/api/v4/searches/organizations` (by website_url) | api-key-header `X-cb-user-key` | company_name/domain, LinkedIn, founded year, industry (categories), company_type, funding_stage, company_phone | data.crunchbase.com/docs |
+| OpenCorporates (`opencorporates`) | firmographics | ACTIVE-CANDIDATE | `GET api.opencorporates.com/v0.4/companies/search?q=` | api-key-query `api_token` | company_name, founded year (incorporation), hq country (jurisdiction), company_type, hq city | api.opencorporates.com/documentation |
+| Ocean.io (`ocean-io`) | firmographics | ACTIVE-CANDIDATE | `POST api.ocean.io/v2/enrich/company` | api-key-header `X-Api-Token` | company_name/domain, employees, industry, revenue, founded year, hq country, funding_stage, technographics | app.ocean.io/docs |
+| The Companies API (`the-companies-api`) | firmographics | ACTIVE-CANDIDATE | `GET api.thecompaniesapi.com/v2/companies/{domain}` | api-key-header `Authorization: Basic <raw-token>` | company_name, industry, employees, revenue, founded year, type, hq city/country, LinkedIn, naics/sic, technographics, company_phone | thecompaniesapi.com/api |
+| Coresignal (`coresignal`) | identity | **DEPRIORITIZED** | `GET api.coresignal.com/cdapi/v2/company_multi_source/enrich?website=` | api-key-header `apikey` (raw) | company_name/domain, industry, employees, founded year, hq city/country, type, LinkedIn, naics/sic, funding_stage | docs.coresignal.com |
+| FullContact (`fullcontact`) | identity | **DEPRIORITIZED** | `POST api.fullcontact.com/v3/company.enrich` | bearer | company_name/domain, LinkedIn, employees, founded year, industry, hq city/country, company_phone, sic/naics | docs.fullcontact.com |
+| Store Leads (`storeleads`) | firmographics | ACTIVE-CANDIDATE | `GET storeleads.app/json/api/v1/all/domain/{domain}` | bearer | company_domain/name, hq city/country, employees, revenue (cents→$), technographics (platform+apps+tech), industry | storeleads.app/api |
+
+**Wave-4 EXCLUDED / deferred:** **TechTarget Priority Engine** — EXCLUDED (ADR-0009): no self-serve
+REST enrichment endpoint; intent is delivered only via CRM connectors / SFTP / a one-way push to
+6sense, no developer-facing API. **Cargo** — EXCLUDED: a GTM data-orchestration *platform* (peer to
+our waterfall), not a data vendor — its REST API exposes workflow/connector management, no single
+endpoint that returns canonical person/company fields. **Deferred — visitor-ID / IP-reverse-lookup
+flow (not modeled):** **Albacross**, **Clearbit Reveal** (input is a visitor IPv4 — no canonical
+`ip` Field in the enrichment-subject vocabulary) and **Leadfeeder/Dealfront** (an account-scoped,
+date-ranged visitor *feed*, not a by-domain enrich). These are a distinct integration pattern from
+by-identity enrichment; modeling them needs an IP/visitor-session input the subject model doesn't
+carry. **Deferred — async/OAuth (task #8):** **Bombora** (submit→poll, CSV report), **Demandbase**
+(oauth2-cc + async), **BetterContact** + **Cleanlist** (submit→poll waterfalls). **Deferred —
+schema unverified:** **TrustRadius** (REST API + x-api-key auth confirmed, but the response JSON
+schema is a JS-SPA doc the researcher could only infer — held until a schema is confirmable rather
+than ship guessed field paths).
+
+**Wave-3 EXCLUDED / deferred:** **UserGems** — EXCLUDED (ADR-0009): its public API is a write-only
+ingestion/tracking API (POST/DELETE /v1/contact|account) that returns only a queue-confirmation
+message; job-change signals are delivered via CRM sync/webhook, so there is no synchronous
+request/response enrich call to back an adapter. **PredictLeads** — deferred: auth requires TWO
+distinct headers (`X-Api-Key` + `X-Api-Token`), which the one-credential-per-descriptor egress
+injector cannot inject (an egress-seam enhancement, tracked with task #8). **RocketReach** — deferred:
+async lookup (returns `checking`→`complete`), needs the poll-capable adapter (task #8).
+
+Notes: PDL per-value confidence is derived from the response `likelihood` (1–10). Apollo work_email
+confidence is lifted to 0.90 when `email_status=="verified"`. ZeroBounce/BuiltWith return in-body
+errors on HTTP 200 (bad key / out-of-credits) — their Decode returns a **classified**
+`*domain.ProviderError` (AUTH/QUOTA), which the enhanced `HTTPAdapter.Fetch` now preserves so the
+engine can failover the key. `technographics`/`intent_topics`/`buying_signal` are stored as a single
+sorted, comma-joined value (`adapters.normList`, ADR-0023).
+
+### Deferred — multi-step / async providers (need a poll/redeem-capable adapter)
+The single-shot `HTTPAdapter` (one Build+Decode) cannot express a two-call flow, so these Wave-0
+providers are researched (docs/03 specs captured) but **not yet coded**, pending an async-adapter
+enhancement: **Dropcontact** (`POST /batch` → poll `GET /batch/{id}`), **Cognism** (Enrich preview →
+Redeem by `redeemId`, 1 credit), **FullEnrich** (submit → webhook/poll), **Icypeas** + **Enrow**
+(submit → poll), **Snov.io** (OAuth2 client-credentials token exchange → call, also async). Tracked
+as an enhancement item; no fabricated single-call adapter is shipped for them.

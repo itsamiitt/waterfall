@@ -1,0 +1,8 @@
+{
+  "email": "jane@acme.com",
+  "valid": true,
+  "result": "catch_all_validated",
+  "mx_domain": "acme.com",
+  "email_type": "business",
+  "credits_consumed": true
+}

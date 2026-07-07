@@ -1,0 +1,9 @@
+{
+  "email": "jane@acme.com",
+  "quality": { "status": "valid", "status_message": "Verified deliverable" },
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "name": "Jane Doe",
+  "company": "Acme",
+  "domain": "acme.com"
+}

@@ -1,0 +1,9 @@
+[
+  {
+    "url": "https://acme.com",
+    "technologies": [
+      { "slug": "nginx", "name": "Nginx", "categories": [{ "id": 22, "name": "Web servers" }] },
+      { "slug": "react", "name": "React", "categories": [{ "id": 12, "name": "JavaScript frameworks" }] }
+    ]
+  }
+]

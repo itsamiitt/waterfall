@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "data": {
+    "person": {
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "currentPositionTitle": "VP Sales",
+      "linkedinUrl": "https://www.linkedin.com/in/janedoe",
+      "currentCompanyName": "Acme",
+      "publicId": "janedoe"
+    }
+  },
+  "metadata": { "requestId": "req-1", "executionTimeMs": 120 }
+}

@@ -1,0 +1,20 @@
+{
+  "companyId": 123456,
+  "domain": "acme.com",
+  "name": "Acme Corporation",
+  "country": "United States",
+  "countryISOCode": "US",
+  "city": "San Francisco",
+  "companyPhone": "+1-415-555-0100",
+  "industry": "Software",
+  "employeeRange": "1,000 - 4,999",
+  "employeeCount": 3200,
+  "revenueRange": "$500M - $1B",
+  "annualRevenue": 750000000,
+  "siccode": "7372",
+  "naicscode": "511210",
+  "scores": [
+    { "product": "Default", "company_intent_score": 82, "company_buying_stage": "Decision", "company_profile_fit": "Strong" }
+  ],
+  "segments": { "ids": [101, 102], "names": ["Enterprise Target Accounts", "Cloud Migration Intent"] }
+}

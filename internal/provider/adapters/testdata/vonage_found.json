@@ -1,0 +1,12 @@
+{
+  "status": 0,
+  "status_message": "Success",
+  "national_format_number": "(555) 555-0100",
+  "international_format_number": "15555550100",
+  "current_carrier": {
+    "network_code": "310260",
+    "name": "T-Mobile USA Inc",
+    "country": "US",
+    "network_type": "mobile"
+  }
+}

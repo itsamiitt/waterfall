@@ -1,0 +1,13 @@
+{
+  "data": {
+    "email": "jane@acme.com",
+    "verification": { "status": "valid", "date": "2026-07-07" },
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "full_name": "Jane Doe",
+    "company": "Acme",
+    "website_url": "acme.com",
+    "linkedin": "https://www.linkedin.com/in/janedoe",
+    "score": 95
+  }
+}

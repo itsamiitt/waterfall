@@ -1,0 +1,16 @@
+{
+  "@persons_count": 1,
+  "@http_status_code": 200,
+  "person": {
+    "@id": "x",
+    "@match": 1.0,
+    "names": [{ "first": "Jane", "last": "Doe", "display": "Jane Doe" }],
+    "emails": [
+      { "@type": "work", "address": "jane@acme.com" },
+      { "@type": "personal", "address": "jane.doe@gmail.com" }
+    ],
+    "phones": [{ "@type": "mobile", "display_international": "+1 555-555-0100" }],
+    "jobs": [{ "title": "VP Sales", "organization": "Acme" }],
+    "urls": [{ "@domain": "linkedin.com", "@name": "LinkedIn", "url": "https://www.linkedin.com/in/janedoe" }]
+  }
+}

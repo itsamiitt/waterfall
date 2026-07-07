@@ -1,0 +1,21 @@
+{
+  "count": 1,
+  "results": [
+    {
+      "company_name": "Acme Oy",
+      "domain": "acme.com",
+      "business_id": "25578642",
+      "country": "FI",
+      "city": "Helsinki",
+      "staff_number": 39,
+      "turn_over": "895766",
+      "currency_code": "EUR",
+      "industry_code": "62010",
+      "form_of_company": "Limited company",
+      "foundation_date": "2013-08-07",
+      "linkedin_link": "https://www.linkedin.com/company/acme",
+      "phone": "+358401234567",
+      "technologies": ["HubSpot", "AWS"]
+    }
+  ]
+}

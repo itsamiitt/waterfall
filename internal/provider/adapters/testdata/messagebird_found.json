@@ -1,0 +1,13 @@
+{
+  "href": "https://rest.messagebird.com/lookup/15555550100",
+  "countryCode": "US",
+  "countryPrefix": 1,
+  "phoneNumber": 15555550100,
+  "type": "mobile",
+  "formats": {
+    "e164": "+15555550100",
+    "international": "+1 555-555-0100",
+    "national": "(555) 555-0100",
+    "rfc3966": "tel:+1-555-555-0100"
+  }
+}

@@ -29,10 +29,27 @@ type HTTPAdapter struct {
 	Build func(ctx context.Context, base string, req Request) (*http.Request, error)
 	// Decode maps a 2xx response body into a Result.
 	Decode func(body []byte) (Result, error)
+	// Policy, when non-nil, overrides the engine's default CallPolicy for this adapter
+	// (ADR-0024 Phase 1) — e.g. a longer bounded budget for a slow provider. Nil leaves the
+	// engine default in force, so existing adapters are unaffected.
+	Policy *CallPolicy
 }
 
 func (h *HTTPAdapter) Name() string               { return h.NameV }
 func (h *HTTPAdapter) Capabilities() []Capability { return h.Caps }
+
+// Base and AuthDescriptor satisfy Introspectable (used by the registry seeder / SSRF allow-list).
+func (h *HTTPAdapter) Base() string                   { return h.BaseURL }
+func (h *HTTPAdapter) AuthDescriptor() AuthDescriptor { return h.Auth }
+
+// CallPolicy implements PolicyOverrider. It returns h.Policy when set, else the zero policy
+// (Timeout==0) which the engine reads as "no override — use my default".
+func (h *HTTPAdapter) CallPolicy() CallPolicy {
+	if h.Policy != nil {
+		return *h.Policy
+	}
+	return CallPolicy{}
+}
 
 func (h *HTTPAdapter) Fetch(ctx context.Context, req Request) (Result, error) {
 	client := h.Client
@@ -85,6 +102,15 @@ func (h *HTTPAdapter) Fetch(ctx context.Context, req Request) (Result, error) {
 	}
 	res, err := h.Decode(body)
 	if err != nil {
+		// Many providers return a 2xx with an in-body error flag (e.g. ZeroBounce/BuiltWith signal
+		// a bad key or exhausted credits as HTTP 200 + {"error":...}). Such a Decode returns an
+		// already-classified *domain.ProviderError (AUTH/QUOTA/…) that must be preserved so the
+		// engine can failover the key rather than treating it as a generic BAD_REQUEST. A plain
+		// decode failure (malformed JSON) still maps to BAD_REQUEST.
+		var pe *domain.ProviderError
+		if errors.As(err, &pe) {
+			return Result{}, pe
+		}
 		return Result{}, domain.NewProviderError(h.NameV, domain.ClassBadRequest, err)
 	}
 	return res, nil
@@ -99,6 +125,8 @@ func classifyStatus(code int) (domain.ErrorClass, bool) {
 	case code == http.StatusUnauthorized: // 401
 		return domain.ClassAuth, false
 	case code == http.StatusPaymentRequired: // 402 -> credits exhausted
+		return domain.ClassQuota, false
+	case code == http.StatusLocked: // 423 -> account/subscription locked or paused (e.g. Findymail)
 		return domain.ClassQuota, false
 	case code == http.StatusForbidden: // 403 — some providers (Hunter) use this to throttle
 		return domain.ClassRateLimit, false

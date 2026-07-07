@@ -1,0 +1,12 @@
+{
+  "status_code": 200,
+  "profile": {
+    "url": "https://www.linkedin.com/in/janedoe",
+    "email": ["jane@acme.com", "jane.doe@gmail.com"],
+    "work_email": ["jane@acme.com"],
+    "work_email_status": { "jane@acme.com": "Verified" },
+    "personal_email": ["jane.doe@gmail.com"],
+    "phone": ["+15555550100"],
+    "github": ["janedev"]
+  }
+}

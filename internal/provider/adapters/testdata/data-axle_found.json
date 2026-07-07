@@ -1,0 +1,18 @@
+{
+  "count": 1,
+  "document": {
+    "infogroup_id": "404501993",
+    "score": "0.93",
+    "attributes": {
+      "place_type": "headquarters",
+      "in_business": "yes",
+      "name": "Acme Inc",
+      "phone": "+15555550100",
+      "city": "Hilton Head Island",
+      "state": "SC",
+      "country_code": "US",
+      "linked_in_url": "https://www.linkedin.com/company/acme",
+      "opened_for_business_on": "2001-05-15"
+    }
+  }
+}

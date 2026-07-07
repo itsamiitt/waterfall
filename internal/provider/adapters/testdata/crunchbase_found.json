@@ -1,0 +1,16 @@
+{
+  "entities": [
+    {
+      "properties": {
+        "name": "Acme",
+        "website_url": "https://acme.com",
+        "company_type": "for_profit",
+        "funding_stage": "series_a",
+        "phone_number": "+1-555-0100",
+        "linkedin": { "value": "https://www.linkedin.com/company/acme" },
+        "founded_on": { "value": "2012-02-01", "precision": "day" },
+        "categories": [{ "value": "Software" }, { "value": "SaaS" }]
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Implementation Progress
 
-**Last updated:** 2026-07-06 · Legend: `DRAFT` / `IN-REVIEW` / `APPROVED` / `BLOCKED` · gate = human approval required.
+**Last updated:** 2026-07-06 (provider adapter rollout started) · Legend: `DRAFT` / `IN-REVIEW` / `APPROVED` / `BLOCKED` · gate = human approval required.
 
 ## Phase status
 | Phase | Scope | Doc(s) | Status | Gate |
@@ -30,6 +30,111 @@
 | 22 | Future roadmap | `22` | ✅ **IN-REVIEW** (backlog captured) | auto-advance ✅ recorded |
 | — | **Planning Completion Gate** | all | ✅ **PASS** — 5 reviewers; **5 blocking FAILs fixed**, WARNs addressed; see ledger §PCG | **awaiting human approval** |
 | — | Implementation | code | ⛔ not allowed until human approves the Planning Completion Gate | — |
+
+## Provider adapter rollout (200-tool architecture — ADR-0023, started 2026-07-06)
+Turning `Closo_Enrichment_Architecture_200_Tools` into researched, tested, wired adapters. Bridge
+(Phase A) complete: Field vocabulary 18→33 (doc-first, `docs/00 §7`), append-only adapter registry
+(`internal/provider/adapters/registry.go`), code→catalog seeder (`cmd/providerseed` +
+`providers.Seed`), binaries wired to `adapters.All(egress)`. Per-provider discipline: docs-cited
+research (§7 ledger `docs/03`), secret-free adapter on the `hunter.go` pattern, `<slug>_found.json`
+fixture, table-driven decode test, registry entry; wire-shapes `UNVERIFIED` until a live key. Build
+stays green after every provider.
+
+| Wave | Scope | Implemented | Status |
+|------|-------|-------------|--------|
+| — | pre-existing | hunter, prospeo, twilio-lookup | ✅ (fixtures UNVERIFIED) |
+| 0 | Recommended Starting Stack | people-data-labs, apollo, zerobounce, clearbit, builtwith, theirstack, g2 | ✅ synchronous set done |
+| 1 | L2 email-find | findymail, anymailfinder, datagma (+ hunter/prospeo/apollo) | ✅ (icypeas/enrow/snov deferred-async) |
+| 1 | L3 email-verify | neverbounce, kickbox, zerobounce, emailable, bouncer, millionverifier, debounce, clearout, mailgun-validate | ✅ (verifalia deferred-async) |
+| — | deferred (multi-step/async) | dropcontact, cognism, fullenrich, icypeas, enrow, snov, verifalia | ⏸ researched; need async/redeem/oauth adapter enhancement (docs/03 §7) |
+
+**74 adapters live** across L1(5)/L2(16)/L3(10)/L4(1)/L5(12)/L6(21)/L7(5)/L8(2)/L9(2). **ADR-0024
+is fully implemented (all phases 1–4)**: per-adapter CallPolicy, oauth2-cc (basic/body/json/password
+token styles + access_token/accessToken parsing), AsyncHTTPAdapter (submit→poll + match→fetch),
+api-key-path, and api-key-dual-header.
+
+**90 adapters** by category: email-find 24, firmographics 23, email-verify 14, phone-validate 13,
+identity 6, technographics 5, orchestration 2, intent 2, phone-find 1. **Wave 8 (task #14) COMPLETE**
+— verified the ~15 rows Wave 7 dismissed without cited research; added uplead/adapt-io/aeroleads (L2),
+scrubby/enrichley/mailfloss (L3), extruct (L6). EXCLUDED (cited): Datanyze, Persana AI, Octave, Rift,
+BookYourData, Leadyfy. Deferred: Surfe, Lemlist, Autobound (async/unverified schema). Every
+spreadsheet row now has a cited verdict. **Wave 7 (task #13) COMPLETE**
+— coverage audit of the 200-tool spreadsheet (2026-07-07) caught a missed L2/L3 long-tail; added
+leadmagic/getprospect/skrapp/tomba/cufinder (L2), bounceban (L3), realphonevalidation (L5),
+abstract-company (L6), reverse-contact (L1). Wave-7 EXCLUDED: FindThatLead (no API), TrueMail
+(defunct). Deferred: Voila Norbert (webhook-only async). Remaining non-implemented spreadsheet
+rows are EXCLUDED (docs/03 §6: scraping/no-API/OSINT/infra, visitor-ID, enterprise-gated, no-code) or
+live-key-gated deferrals (Cognism, Bombora). Providers on it: D&B/Explorium/Endole/Demandbase (match→fetch), Snov (oauth2
+body), Cleanlist (company sync), MixRank (path-key), PredictLeads (dual-header), SignalHire
+(single-shot), verifalia/dropcontact/icypeas/enrow/wiza/rocketreach (submit→poll), bettercontact/
+fullenrich (L9 waterfall). `go build ./...` +
+`go test ./...` green. **Waves 0–6 COMPLETE.** Wave 6 (11 researched) added data-axle, owler,
+leadspace, ninjapear (L6) + pipl, versium (L1). Wave-6 EXCLUDED: Sales.Rocks (no self-serve API).
+Deferred: D&B (oauth2-cc + match→fetch), Explorium (match→enrich), Endole (search→fetch + Basic) →
+task #8; MixRank (path-segment API key, incompatible with header/query egress injector).
+
+**The cleanly-implementable synchronous single-shot provider set across L1–L8 is now complete
+(56 adapters).** All further implementable providers are blocked on **task #8** — the
+async/multi-step + multi-credential + non-header-auth egress enhancement. **ADR-0024** now records
+the full design (phased). **Phases 1–3 DONE:** (1) per-adapter `CallPolicy`
+(`provider.PolicyOverrider` + `HTTPAdapter.Policy` + engine `policyFor` — a slow provider declares a
+longer *bounded* budget, G3 preserved); (2) `oauth2-cc` token exchange + caching in `AuthInjector`
+(`AuthDescriptor.TokenURL`); (3) `provider.AsyncHTTPAdapter` (submit→poll + match→fetch, ctx-bounded
+poll loop, egress auth per round-trip). All tested + green. **First async provider WIRED: D&B
+Direct+** (`dnb`, 57th adapter) — match→fetch + oauth2-cc + bounded budget, all three phases proven
+end-to-end (`TestDNB_MatchFetchOAuth2`/`_NoMatch`). The registry now carries `New` **or** `NewAsync`
+and routes through `Registered.Construct` → `provider.Introspectable` (both adapter kinds satisfy it),
+so async adapters seed + wire identically. NEXT async consumers: a submit→poll verifier
+(Verifalia/Dropcontact/Icypeas/Enrow/Snov), Explorium/Endole (match→fetch). Remaining infra phase:
+4 (path-segment key for MixRank, two-header auth for PredictLeads — deferred niche). Deferred
+provider set:
+dropcontact, cognism, fullenrich,
+cleanlist, bettercontact, bombora, demandbase, icypeas, enrow, snov, verifalia, rocketreach, wiza,
+signalhire, infobelpro, predictleads, D&B, Explorium, Endole (async/multi-step); MixRank
+(path-segment key). Plus a thin not-yet-researched tail (a few L8/L9 platforms, mostly EXCLUDED
+orchestration/no-code per ADR-0009). Wave 5 (15 researched) added SalesIntel (L4),
+Lusha/Kaspr/ContactOut (L2 DEPRIORITIZED), Diffbot/Vainu/GlobalDatabase (L6), HG Insights (L7).
+Wave-5 EXCLUDED: Nimbler, Swordfish. Deferred: Lead411 (JWT session), Wiza/SignalHire/InfobelPro
+(async), Enlyft (solution_id config).
+
+**Rollout status:** the cleanly-implementable **synchronous by-identity** providers across L1–L8 are
+now done (50 adapters). Remaining implementable work is:
+- **Task #8 — async / multi-credential egress enhancement** (~16 providers blocked): dropcontact,
+  cognism, fullenrich, cleanlist, bettercontact, bombora, demandbase, icypeas, enrow, snov, verifalia,
+  rocketreach, wiza, signalhire, infobelpro, predictleads. Needs the engine per-call-timeout +
+  multi-cred-egress design decision (touches gate G3) — a deliberate plan pass, not a mid-loop edit.
+- **Long tail, sync, not yet researched:** L1 (Pipl, Versium, Data Axle, Explorium, MixRank, Owler),
+  L6 (D&B, Leadspace, NinjaPear, Sales.Rocks, Endole), a few L8/L9.
+- **EXCLUDED (docs/03 §6):** defunct/no-API/scraping/infra/no-code + visitor-ID/IP-flow providers. Helpers: `classifyErrMsg`, `phoneStatusFromType`, `yearOf`, `bareDomain`.
+
+**What remains, by category:**
+- **Async / multi-credential (task #8 — needs the engine per-call-timeout + multi-cred-egress design
+  decision):** dropcontact, cognism (enrich→redeem), fullenrich, icypeas, enrow, snov (oauth2-cc),
+  verifalia, bettercontact, cleanlist, bombora (submit→poll CSV), demandbase, rocketreach,
+  predictleads (two headers). ~13 providers.
+- **EXCLUDED (documented in docs/03 §6, ADR-0002/0009):** Proxycurl (defunct), LinkedIn Sales Nav
+  (no API), UserGems + TechTarget + Cargo (no field-returning REST enrich), OSS OSINT CLIs
+  (theHarvester/Sherlock/…), infra/libraries (libphonenumber, Reacher, Redis, Postgres, PSL), no-code
+  scrapers (Zapier/n8n/PhantomBuster/Bardeen/Apify/Bright Data).
+- **Deferred — visitor-ID/IP flow not modeled:** Albacross, Clearbit Reveal, Leadfeeder (input is a
+  visitor IP / a feed, not a canonical enrichment key).
+- **Long tail still to research/implement (sync, by-identity):** L4 phone-find (Swordfish, Nimbler,
+  Nymblr, SalesIntel, Lead411), DEPRIORITIZED contact finders (Lusha, Kaspr, ContactOut, Wiza,
+  SignalHire, LeadIQ, Seamless, Surfe, Evaboot, Reverse Contact), more L6 firmo (D&B, Diffbot,
+  InfobelPRO, Vainu, Global Database, Leadspace, NinjaPear), L7 (HG Insights, Enlyft), L1 (Pipl,
+  Versium, Data Axle, Explorium, MixRank, Owler).
+**L5 phone-validation complete (12):** twilio-lookup, telnyx, vonage, messagebird, ipqualityscore,
+plivo, infobip, numverify, abstract-phone, veriphone, byteplant-phone, telesign — all normalized to
+one `phone_status` vocabulary via `phoneStatusFromType`. Engine helpers: `classifyErrMsg`
+(200-with-error → AUTH/QUOTA/RATE_LIMIT), `423 → QUOTA`, `phoneStatusFromType`. **Deferred**: sinch
+(projectId path config), diffbot (KG schema), async/OAuth multi-step set (task #8). Next: **L4
+phone-find** (Swordfish, Nimbler, Nymblr, SalesIntel, Lead411 — mostly DEPRIORITIZED), then **L8
+intent** (Bombora, 6sense, Demandbase, TechTarget, TrustRadius, UserGems…), **L9 orchestration**
+(BetterContact, Cleanlist, Cargo), and L1/L6 remainder (Coresignal, D&B, Crunchbase, OpenCorporates,
+Ocean.io, PredictLeads…).
+**Task #8 (async-adapter enhancement)** intentionally deferred: it changes the engine G3 timeout
+policy, so it needs a deliberate plan pass (not an autonomous rush) before dropcontact/cognism/
+fullenrich/icypeas/enrow/snov/verifalia can be coded.
 
 ## PCG — Planning Completion Gate ledger (2026-07-01)
 Adversarial review `wf_15689f67-653`: 5 reviewers (gap-analysis, correctness-gates, security, consistency,

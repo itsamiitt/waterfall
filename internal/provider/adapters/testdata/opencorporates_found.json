@@ -1,0 +1,19 @@
+{
+  "api_version": "0.4",
+  "results": {
+    "companies": [
+      {
+        "company": {
+          "name": "ACME LTD",
+          "company_number": "07444723",
+          "jurisdiction_code": "gb",
+          "incorporation_date": "2010-11-18",
+          "company_type": "Private Limited Company",
+          "current_status": "Active",
+          "registered_address": { "locality": "London", "country": "United Kingdom" }
+        }
+      }
+    ],
+    "total_count": 1
+  }
+}

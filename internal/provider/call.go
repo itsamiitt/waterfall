@@ -27,6 +27,17 @@ func DefaultPolicy() CallPolicy {
 	return CallPolicy{Timeout: 3 * time.Second, MaxAttempts: 3, Backoff: 50 * time.Millisecond, MaxBackoff: time.Second}
 }
 
+// PolicyOverrider lets an adapter request a bounded call budget different from the engine
+// default (ADR-0024 Phase 1). G3 stays in force — the override is still a hard timeout +
+// breaker + capped retry; only the bound changes, per adapter. Async / match→fetch adapters
+// (submit→poll, token-exchange) declare a longer Timeout and usually MaxAttempts=1 (they poll
+// internally within the budget rather than resubmitting). The engine consults this via a type
+// assertion and falls back to its own policy when the adapter does not implement it OR returns
+// a zero policy (Timeout==0), so existing adapters are unaffected.
+type PolicyOverrider interface {
+	CallPolicy() CallPolicy
+}
+
 // sleepFn is injectable so tests advance backoff without real waiting.
 type sleepFn func(context.Context, time.Duration) error
 

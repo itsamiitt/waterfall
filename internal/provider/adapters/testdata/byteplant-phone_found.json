@@ -1,0 +1,9 @@
+{
+  "status": "VALID_CONFIRMED",
+  "linetype": "MOBILE",
+  "countrycode": "US",
+  "formatnational": "(555) 555-0100",
+  "formatinternational": "+1 555-555-0100",
+  "mcc": "310",
+  "mnc": "260"
+}

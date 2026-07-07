@@ -1,0 +1,17 @@
+{
+  "domain": {
+    "name": "acme.com",
+    "merchant_name": "Acme",
+    "platform": "shopify",
+    "plan": "Shopify Plus",
+    "country_code": "US",
+    "city": "Roanoke",
+    "employee_count": 1390,
+    "estimated_sales": 2649093661,
+    "estimated_sales_yearly": 31789123932,
+    "currency_code": "USD",
+    "categories": ["Apparel & Accessories"],
+    "apps": [{ "name": "Klaviyo", "token": "klaviyo" }],
+    "technologies": [{ "name": "Cloudflare" }]
+  }
+}

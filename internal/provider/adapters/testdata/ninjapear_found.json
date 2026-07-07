@@ -1,0 +1,22 @@
+{
+  "websites": ["https://acme.com", "https://acme.dev"],
+  "description": "Acme builds economic infrastructure for the internet.",
+  "industry": 45102010,
+  "company_type": "PRIVATELY_HELD",
+  "founded_year": 2010,
+  "name": "Acme",
+  "tagline": "Financial infrastructure for the internet",
+  "employee_count": 8000,
+  "addresses": [
+    {
+      "address_type": "HEADQUARTERS",
+      "line1": "354 Oyster Point Blvd",
+      "city": "South San Francisco",
+      "state": "CA",
+      "country_code": "US",
+      "country": "United States",
+      "is_primary": true
+    }
+  ],
+  "updates": "https://nubela.co/api/v1/company/updates?website=https%3A%2F%2Facme.com"
+}

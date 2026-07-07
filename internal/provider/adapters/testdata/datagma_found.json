@@ -1,0 +1,9 @@
+{
+  "email": "jane@acme.com",
+  "emailDomain": "acme.com",
+  "status": "valid",
+  "patterns": ["{first}.{last}"],
+  "mxfound": true,
+  "smtpCheck": true,
+  "cachAll": false
+}

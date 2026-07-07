@@ -1,0 +1,11 @@
+{
+  "address": "jane@acme.com",
+  "status": "valid",
+  "sub_status": "",
+  "free_email": false,
+  "did_you_mean": null,
+  "domain": "acme.com",
+  "firstname": "jane",
+  "lastname": "doe",
+  "processed_at": "2026-06-18 07:05:00.033"
+}

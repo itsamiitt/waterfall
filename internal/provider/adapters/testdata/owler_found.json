@@ -1,0 +1,12 @@
+{
+  "company_id": 12345,
+  "name": "Acme",
+  "website": "acme.com",
+  "company_type": "Public",
+  "employee_count": "10000+",
+  "revenue": "$50B+",
+  "founded_date": "1970",
+  "industries": ["Aerospace & Defense"],
+  "hq_address": { "city": "Leiden", "country": "Netherlands", "phone": "+31 71 524 5600" },
+  "linkedin_link": "https://www.linkedin.com/company/acme"
+}

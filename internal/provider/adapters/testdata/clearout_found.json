@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "data": {
+    "email_address": "jane@acme.com",
+    "safe_to_send": "yes",
+    "status": "valid",
+    "sub_status": { "code": 200, "desc": "Success" },
+    "detail_info": { "account": "jane", "domain": "acme.com" },
+    "disposable": "no",
+    "free": "no",
+    "role": "no"
+  }
+}

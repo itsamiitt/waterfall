@@ -1,0 +1,18 @@
+{
+  "status": 1,
+  "data": {
+    "person": {
+      "email": "jane@acme.com",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "full_name": "Jane Doe",
+      "job_title": "VP Sales",
+      "linkedin_url": "https://www.linkedin.com/in/janedoe",
+      "company_name": "Acme",
+      "company_website": "https://acme.com",
+      "company_industry": "Software",
+      "company_size": "1,001-5,000"
+    }
+  },
+  "credit_count": 10
+}

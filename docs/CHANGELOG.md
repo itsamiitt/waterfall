@@ -5,6 +5,299 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Wave 8 residual-row audit (90 adapters)
+Verified the ~15 spreadsheet rows Wave 7 had dismissed without cited research. Added 7 sync
+adapters: **uplead**, **adapt-io** (dual-header), **aeroleads** [L2 email-find]; **scrubby**,
+**enrichley**, **mailfloss** [L3 verify]; **extruct** [L6 firmo]. EXCLUDED with citations (docs/03):
+Datanyze (ZoomInfo, Chrome-ext only), Persana AI (MCP/agent), Octave (ICP-fit not enrichment), Rift
+(AI-SDR), BookYourData (no documented API), Leadyfy (no product). Deferred: Surfe, Lemlist (async,
+poll path unverified), Autobound (enrich response schema unverified). `go build ./...` +
+`go test ./...` green (each adapter has a wave0 fixture-decode case). 90 real adapters — the
+spreadsheet is now fully reconciled with *cited* verdicts for every row.
+
+### 2026-07-07 — Wave 7 coverage-audit gap-fill (83 adapters)
+A diff of the actual 200-tool spreadsheet (sheet1 Tool column) against the registry caught a missed
+L2/L3 long-tail — earlier "rollout complete" was premature. Added 8 sync adapters: **leadmagic**,
+**getprospect**, **skrapp**, **tomba** (dual-header), **cufinder** (form-encoded /tep) [L2 email-find];
+**bounceban** [L3 verify]; **realphonevalidation** [L5 phone-validate]; **abstract-company** [L6
+firmographics]; **reverse-contact** [L1 identity, DEPRIORITIZED — reverse-email→person]. EXCLUDED
+(docs/03): FindThatLead (no API — Zapier-only), TrueMail (defunct → redirects to GetProspect).
+Deferred: Voila Norbert (webhook-only async, no poll endpoint). `go build ./...` + `go test ./...`
+green (each new adapter has a wave0 fixture-decode case). 83 real adapters.
+
+### 2026-07-07 — InfobelPRO + oauth2 password grant (74 adapters) — rollout closeout
+Added **infobelpro** (L6 firmographics, ACTIVE-CANDIDATE) — single-shot `POST /api/search`
+(`returnFirstPage=true`) authed by a new oauth2-cc **password-grant** TokenStyle (form-encoded
+`grant_type=password&username&password`, pool secret "username:password"). The oauth2 injector now
+covers all four token styles (basic/body/json/password). Test `TestInfobelPRO_PasswordGrant` (token
+exchanged once + firmographics decoded). **This is the last cleanly-implementable provider** — the
+200-provider rollout is complete: 74 real adapters spanning L1–L9; every remaining spreadsheet entry
+is documented EXCLUDED (ADR-0002/0009) or a live-key-gated deferral (Cognism, Bombora). `go build
+./...` + `go test ./...` green.
+
+### 2026-07-07 — ADR-0024 complete: Cleanlist/Demandbase/PredictLeads + Phase 4b (73 adapters)
+Final deferred-batch research (cognism, cleanlist, bombora, demandbase, infobelpro, predictleads) →
+implemented 3: **cleanlist** (L6, company endpoint, sync Bearer — person/bulk deferred, stateful
+lead_list_id), **demandbase** (L6, match→fetch + oauth2-cc **JSON** token style, ACTIVE-CANDIDATE),
+**predictleads** (L7, single-shot, **two-header** `X-Api-Key`+`X-Api-Token`). This completes
+**ADR-0024 Phase 4b** (`AuthAPIKeyDualHeader` + `AuthDescriptor.SecondHeaderName`) and adds oauth2
+TokenStyle "json" + `accessToken` response parsing — so **all ADR-0024 phases (1–4) are now
+implemented**. Deferred (documented docs/03): **Cognism** (base host unconfirmed + redeem schema
+fully inferred), **Bombora** (partner-gated batch Surge report, DEPRIORITIZED), **InfobelPRO**
+(needs oauth2 password-grant + search flow — next). Tests: `TestAuthInjector_OAuth2CC` (now covers
+json/basic/body), demandbase in the async table, cleanlist + predictleads in wave0. `go build ./...`
++ `go test ./...` green.
+
+### 2026-07-07 — Async wave complete: BetterContact/FullEnrich/Wiza/RocketReach (70 adapters)
+Wired the final 4 submit→poll providers: **bettercontact** + **fullenrich** (L9 waterfall
+orchestration aggregators, ACTIVE-CANDIDATE), **wiza** + **rocketreach** (L2 contact finders,
+DEPRIORITIZED — LinkedIn provenance). All `AsyncHTTPAdapter`s with `NewAsync` registry entries;
+each handles non-success terminal states (FINISHED/terminated/finished/complete = done;
+CREDITS_INSUFFICIENT→QUOTA; failed→empty-terminal). Extended `TestAsyncWave_SubmitPoll` (+4 cases,
+now 11 async providers). **The entire 12-provider async wave is done** — none EXCLUDED. `go build
+./...` + `go test ./...` green. Only ADR-0024 Phase 4b (two-header creds, PredictLeads — unresearched)
+remains deferred.
+
+### 2026-07-07 — Async wave cont.: Snov/Explorium/Endole/SignalHire (66 adapters)
+Completed the distinct-shape async providers: **snov** (L2, submit→poll + **oauth2-cc body-form**
+creds — generalized the Phase-2 injector with `AuthDescriptor.TokenStyle` "body" vs "basic"),
+**explorium** (L6, match→fetch, business_id token in the enrich BODY, employee/revenue as min-max
+ranges), **endole** (L6, match→fetch, UK Companies House, Basic `appId:appKey`, token in the fetch
+PATH), **signalhire** (L2 DEPRIORITIZED, actually **single-shot** via `withoutWaterfall=true` — its
+async mode is callback-only with no poll endpoint — a plain HTTPAdapter with a top-level-array
+response). `AuthInjector` oauth2-cc now supports both Basic (D&B) and body-form (Snov) token
+exchange. Tests extended (`TestAsyncWave_SubmitPoll` +3 cases incl. token routing; SignalHire in the
+wave0 fixture-decode table). `go build ./...` + `go test ./...` green. Remaining async: bettercontact,
+fullenrich, wiza, rocketreach (vanilla submit→poll).
+
+### 2026-07-07 — Async wave: 4 submit→poll email finders/verifiers (62 adapters)
+Wired the first submit→poll `AsyncHTTPAdapter` consumers from the async-wave research: **verifalia**
+(L3 email-verify, basic auth, `POST /email-validations`→poll `overview.status`), **dropcontact**
+(L2, `X-Access-Token`, `POST /enrich/all`→poll `success`), **icypeas** (L2, raw `Authorization`,
+poll token in the POST body, status enum DEBITED/…/NONE), **enrow** (L2, `x-api-key`,
+`POST /email/find/single`→GET `?id=`, qualification ongoing/valid/invalid) — all ACTIVE-CANDIDATE,
+clean API-first. Registered via `NewAsync`; each maps work_email/email_status + identity/company
+fields. Table test `TestAsyncWave_SubmitPoll` drives submit→token→poll-terminal→decode for all four.
+`go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — Task #8 Phase 4a: path-segment key + MixRank (58 adapters)
+`AuthInjector` now handles `AuthAPIKeyPath` (ADR-0024 Phase 4a): the adapter's Build writes a
+letters-only `PathPlaceholder` sentinel where the key belongs; the injector substitutes the leased
+key into `URL.Path` (adapter still holds no secret). First consumer: **MixRank** (`mixrank`, L6
+firmographics, DEPRIORITIZED) — `GET api.mixrank.com/v2/json/{key}/companies/match`, key as a path
+segment; fills name/domain/employees/industry/SIC/NAICS/founded/hq/type/LinkedIn. Tests
+`TestAuthInjector_APIKeyPath` (leased key lands in the path) + a MixRank fixture-decode case.
+`go build ./...` + `go test ./...` green. Only Phase 4b (two-header credential for PredictLeads)
+remains deferred.
+
+### 2026-07-07 — Task #8: first async provider — Dun & Bradstreet (57 adapters)
+Wired **D&B Direct+** (`dnb`, L6 firmographics, ACTIVE-CANDIDATE) — the first `AsyncHTTPAdapter`,
+exercising all three ADR-0024 phases at once: **match→fetch** (cleanseMatch by name/country/domain →
+top-candidate DUNS → data-block by DUNS), **oauth2-cc** (token exchanged at `/v2/token`, cached and
+injected as Bearer on both round-trips), and a **30s bounded budget** (PolicyOverrider). Fills the
+genuine **DUNS** + name/domain/hq/employees/revenue/SIC/industry; empty match → NOT_FOUND (refund +
+failover), data-block never hit. To carry async adapters, the registry now holds `New` **or**
+`NewAsync`, and `All`/`Hosts`/the seeder/invariant-test route through a `Registered.Construct` helper
+returning `provider.Introspectable` (new interface — `Base()`+`AuthDescriptor()`, satisfied by both
+`HTTPAdapter` and `AsyncHTTPAdapter`); all 56 existing entries unchanged. Tests
+`TestDNB_MatchFetchOAuth2` + `TestDNB_NoMatch`. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — Task #8 Phase 3: AsyncHTTPAdapter (ADR-0024)
+New `provider.AsyncHTTPAdapter` — a multi-round-trip adapter for **submit→poll** (Dropcontact,
+Icypeas, Enrow, Wiza, SignalHire, BetterContact, Verifalia batch, InfobelPro) and **match→fetch**
+(D&B cleanseMatch→data-block, Explorium, Endole; the degenerate one-poll case). It holds no secret
+(each round-trip carries only the AuthDescriptor; the egress injector — incl. Phase-2 oauth2-cc —
+places the credential), implements `PolicyOverrider` for a longer *bounded* budget (default 60s /
+1 attempt), and its poll loop honours ctx cancellation/deadline on every sleep (never sleeps past
+`ctx.Done()`), so G3 holds. Error taxonomy mirrors `HTTPAdapter` (SSRF→BAD_REQUEST, deadline→
+TRANSIENT, `classifyStatus` on non-2xx, preserves classified in-body errors from ParseSubmit/Decode).
+Tests: `TestAsyncHTTPAdapter_SubmitPoll` (pending→done loop + key injected on every hop),
+`_PollBudgetExpires` (bounded — unfinished job abandoned at the deadline, TRANSIENT), `_PolicyOverride`.
+`go build ./...` + `go test ./...` green. **Task #8 Phases 1–3 done** — the async/multi-credential
+egress foundation is complete; real async providers (D&B, verifalia, dropcontact, …) can now be
+wired on top.
+
+### 2026-07-07 — Task #8 Phase 2: oauth2-cc token exchange (ADR-0024)
+`AuthInjector` now handles the `oauth2-cc` scheme (previously declared but unhandled): on first use
+for a pool it exchanges the pool secret (`clientId:clientSecret`) at `AuthDescriptor.TokenURL`
+(POST `{"grant_type":"client_credentials"}` + `Basic` header), **caches** the `access_token` until
+shortly before expiry (handles both `expiresIn` camelCase and `expires_in`), and injects
+`Authorization: Bearer <token>` on the data call. The exchange runs through the base (SSRF-checked,
+non-re-entrant) transport, so the TokenURL host must be allow-listed; the mutex-guarded cache is
+shared by the plain and rotation-lease paths. Secret containment preserved — the adapter still only
+names the pool. Unblocks D&B Direct+'s auth. Test `TestAuthInjector_OAuth2CC` (token exchanged once,
+reused across two data calls, Bearer injected). `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — Task #8 Phase 1: per-adapter CallPolicy (ADR-0024)
+Opened the async/multi-credential egress enhancement with **ADR-0024** (full design: async
+submit→poll, match→fetch, oauth2-cc token exchange, path/multi-header creds — phased). Landed
+**Phase 1 — per-adapter `CallPolicy`**: new `provider.PolicyOverrider` interface; `HTTPAdapter`
+gains an optional `Policy *CallPolicy` field (nil = engine default, so all 56 existing adapters are
+unchanged); the engine selects the budget per adapter via `policyFor` at the G3 Call site. G3 stays
+in force — the override is still a hard timeout + breaker + capped retry; only the bound changes.
+This unblocks the async wave (a slow provider can declare e.g. `{Timeout: 90s, MaxAttempts: 1}` and
+poll internally). Tests: `TestPolicyOverride_AsyncBudget` (override wins over the engine default),
+`TestPolicyOverride_ZeroKeepsDefault` (unset Policy = no override). `go build ./...` +
+`go test ./...` green. Phases 2–4 (oauth2-cc injection, AsyncHTTPAdapter, path/multi-header) scoped
+in the ADR for subsequent iterations.
+
+### 2026-07-07 — 200-provider rollout, Wave 6 complete — 56 adapters live
+Added **ninjapear** (L6 firmo, Bearer, Nubela public-web aggregation, DEPRIORITIZED), **pipl** (L1
+identity, `key` query, identity graph, DEPRIORITIZED), **versium** (L1 identity, `x-versium-api-key`,
+US B2B2C append, DEPRIORITIZED). **Wave 6 fully processed** (11 researched): 6 implemented, 1
+EXCLUDED (Sales.Rocks — no self-serve API), 4 deferred (D&B oauth2-cc+match→fetch, Explorium
+match→enrich, Endole search→fetch+Basic → task #8; MixRank path-segment API key incompatible with
+egress). **56 real adapters** now span L1/L2/L3/L4/L5/L6/L7/L8 — the cleanly-implementable
+synchronous single-shot provider set is complete. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, Wave 6 (L6 firmo long tail) — 53 adapters live
+Added **data-axle** (`X-AUTH-TOKEN`, US/CA compiled Places match), **owler** (`user_key` header,
+crowdsourced firmo, DEPRIORITIZED), **leadspace** (Bearer, AI-graph firmo + technographics,
+DEPRIORITIZED). Wave-6 deferred: **D&B** (oauth2-cc + match→data-block) and **Explorium**
+(match→enrich) → task #8; **MixRank** deferred — its API key is a mandatory URL **path segment**,
+incompatible with the header/query-only egress key-injector under secret containment. Still
+researching: pipl, versium, ninjapear, sales-rocks, endole. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, Wave 5 complete — 50 adapters live
+Added **vainu** (L6 firmographics — `API-Key` header, registry-backed Nordics/EU firmo + tech) and
+**global-database** (L6 firmographics — `Authorization: Token <key>`, official company-registry
+firmo + SIC). Both were verified against their real official docs (developers.vainu.com,
+api.globaldatabase.com/docs/v2) despite their research agents running with the safety classifier
+unavailable — citations checked, no fabrication (UNVERIFIED items flagged). **Wave 5 fully
+processed** (15 researched): 8 implemented, 2 EXCLUDED (Nimbler, Swordfish — no public API), 5
+deferred (Lead411 JWT-session, Wiza/SignalHire async, Enlyft solution_id-config, InfobelPro async).
+**50 real adapters** now span L1/L2/L3/L4/L5/L6/L7/L8. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, Wave 5 cont. — 48 adapters live
+Added **contactout** (L2 email-find, DEPRIORITIZED — `token` header, per-address email_status map),
+**diffbot** (L6 firmographics — KG Enhance `type=Organization`, `token` query, foundingDate→year),
+**hg-insights** (L7 technographics — Bearer, install-base products + firmographics). Wave-5 research
+completed 15/15. Additional triage: **Wiza + SignalHire deferred** (async), **Enlyft deferred**
+(mandatory `solution_id` account-config query param + unverified envelope). Remaining to verify:
+infobelpro, vainu, global-database. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, Wave 5 (L4 phone-find + contact finders) — 45 adapters live
+Implemented 3 by-identity contact/phone providers: **salesintel** (L4 — `X-CB-ApiKey`, human-verified
+contacts + phones by type mobile/direct/office, ACTIVE-CANDIDATE), **lusha** + **kaspr** (L2 —
+single-shot contact finders, DEPRIORITIZED LinkedIn provenance; Kaspr needs a raw-`Authorization` +
+`accept-version: v2.0` header pair). Wave-5 triage: **EXCLUDED** — Nimbler & Swordfish (no
+public/self-serve REST API — access is account-gated with no discoverable endpoint/schema).
+**Deferred** — Lead411 (two-step JWT session auth the egress model doesn't do + fully-undocumented
+response schema). `go build ./...` + `go test ./...` green. Still researching: contactout, wiza,
+signalhire, hg-insights, enlyft, diffbot, infobelpro, vainu, global-database.
+
+### 2026-07-07 — 200-provider rollout, Wave 4 (L8 intent) — 42 adapters live
+Implemented **6sense** (L8 intent — the one Wave-4 provider keying on a canonical identity:
+form-urlencoded POST, `Authorization: Token <token>`, returns intent_score + buying stage + segment
+topics + firmographics). Wave-4 triage (honest, ADR-0009): **EXCLUDED** — TechTarget (no REST enrich
+API; CRM/SFTP delivery only) and Cargo (orchestration platform, no field-returning endpoint).
+**Deferred — visitor-ID/IP flow not modeled** — Albacross, Clearbit Reveal (input is a visitor IPv4;
+no canonical `ip` Field), Leadfeeder (account visitor feed, not by-domain). **Deferred — async/OAuth
+(task #8)** — Bombora (submit→poll CSV), Demandbase (oauth2-cc+async), BetterContact, Cleanlist.
+**Deferred — schema unverified** — TrustRadius (API confirmed but response JSON schema only inferable
+from JS-SPA docs; not shipping guessed field paths). `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — Verification hardening: extended-vocabulary engine integration test
+Added `TestNewAdapters_EngineIntegration` driving clearbit (firmographics incl. the multi-valued
+`technographics`) + zerobounce (email_status) through the full Router→Engine→Store spine — proving
+the ADR-0023 canonical Fields survive Field.Valid() + the G5 provenance store and the router selects
+the right provider per wanted Field. Complements the existing hunter+twilio spine test. Wave-4
+research (intent/orchestration) in flight; the async/multi-credential set (task #8) remains deferred
+pending the engine per-call-timeout design decision. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, Wave 3 complete — 41 adapters live
+Added the last 2 single-shot Wave-3 providers: **fullcontact** (L1 identity, Bearer POST
+company.enrich, DEPRIORITIZED) and **storeleads** (L6 firmographics, Bearer, e-commerce firmo +
+technographics; revenue cents→dollars). Wave-3 verdicts finalized: **UserGems EXCLUDED** (write-only
+ingestion API — no enrich response, ADR-0009), **PredictLeads deferred** (two distinct auth headers
+`X-Api-Key`+`X-Api-Token` — egress injects one credential/descriptor; egress-seam enhancement),
+**RocketReach deferred** (async lookup). `go build ./...` + `go test ./...` green. Next: L8 intent
+(Bombora, 6sense, Demandbase, TechTarget, TrustRadius, PredictLeads-events), L9 orchestration
+(BetterContact, Cleanlist, Cargo), L4 phone-find, and the deferred async/multi-cred set (task #8).
+
+### 2026-07-07 — 200-provider rollout, Wave 3 (L6 firmographics + L1 identity) — 39 adapters live
+Implemented 5 firmographics/identity providers from the Wave-3 research: **crunchbase** (POST
+search-by-website_url so a domain enriches in one call, `X-cb-user-key`), **opencorporates**
+(official registry search, `api_token` query), **ocean-io** (`X-Api-Token`, POST enrich, funding +
+tech), **the-companies-api** (`Authorization: Basic <raw-token>`, full firmo + naics/sic + tech),
+**coresignal** (`apikey` header, DEPRIORITIZED — LinkedIn-derived). Added `yearOf` (ISO→year) and
+`bareDomain` (URL→domain) helpers. Each docs-cited, fixtured, decode-tested, registered.
+`go build ./...` + `go test ./...` green. Remaining Wave-3 (still researching): predictleads,
+fullcontact, storeleads, usergems, rocketreach. Next: L8 intent (Bombora, 6sense, Demandbase,
+TechTarget…), L9 orchestration (BetterContact, Cleanlist, Cargo), L4 phone-find.
+
+### 2026-07-07 — 200-provider rollout, Wave 2 L5 complete — 34 adapters live
+Implemented the 5 previously session-limited phone validators (researched directly): **numverify**
+(`access_key` query, 200-`success:false` classified), **abstract-phone** (`api_key` query,
+`type`+`format.international`), **veriphone** (Bearer, phone_valid+phone_type), **byteplant-phone**
+(`APIKey` query, `status`/`linetype` with API_KEY/RATE/DELAYED classified), **telesign** (Basic
+`customerid:apikey`, phone_type.description). **L5 phone-validation now covers 12 providers** (all
+but Sinch, which needs a `{projectId}` path config). Added `fixed-line` to `phoneStatusFromType`.
+`go build ./...` + `go test ./...` green. Remaining: L4 phone-find (mostly DEPRIORITIZED), L8 intent,
+L9 orchestration, L1/L6 remainder, and the deferred async set (task #8).
+
+### 2026-07-07 — 200-provider rollout, Wave 2 (L5 phone validation) — 29 adapters live
+Implemented 6 of 7 ready phone-validation providers from the Wave-2 research: **telnyx** (Bearer,
+carrier.type), **vonage** (Basic `key:secret`, `network_type` gated by `status` int → AUTH/QUOTA/
+RATE_LIMIT classified), **messagebird** (`Authorization: AccessKey <key>`, `type`), **ipqualityscore**
+(`IPQS-KEY` header, `valid`+`line_type`, 200-`success:false` classified), **plivo** (Basic
+`authid:token`, carrier.type), **infobip** (`Authorization: App <key>`, HLR status/error →
+valid/invalid/unreachable). All normalize to a single **phone_status** vocabulary
+(valid_mobile|valid_landline|valid_voip|valid_other|valid_unknown|invalid|unreachable|unknown) via a
+new shared `phoneStatusFromType` helper; carrier/line-type adapters echo the normalized E.164 back to
+`mobile_phone`. Providers whose auth needs a header prefix (MessageBird `AccessKey `, Infobip `App `)
+store the secret WITH the prefix (like Twilio/Mailgun composite secrets). **Sinch deferred** (mandatory
+`{projectId}` path config, no account-agnostic variant). **5 providers pending research** — telesign,
+abstract-phone, numverify, byteplant-phone, veriphone — hit a session limit mid-workflow; will
+re-research when it resets. `go build ./...` + `go test ./...` green.
+
+### 2026-07-07 — 200-provider rollout, L6/L7 fill — 23 adapters live
+Added **wappalyzer** (L7 technographics — `x-api-key`, top-level-array response, frontend tech
+stack) and **brandfetch** (L6 firmographics — Bearer, `GET /v2/brands/{domain}`: company_name,
+employees, founded year, industry, `kind`→company_type, HQ city/country, LinkedIn from links[]).
+Both researched from official docs (cited docs/03 §7), single-shot, fixtures + decode tests +
+registry entries. Diffbot deferred (Knowledge-Graph entity schema needs a live sample to map
+reliably). `go build ./...` + `go test ./...` green. Wave-2 phone-validation research in flight.
+
+### 2026-07-07 — 200-provider rollout, Wave 1 (L2 email-find + L3 verify) — 21 adapters live
+Completed the Wave-1 research (13/13 specs, 0 errors) and implemented all **9 single-shot** providers
+from it:
+- L2 email-find: **findymail** (Bearer), **anymailfinder** (raw-key `Authorization`), **datagma**
+  (`apiId` query — work_email + email_status + company_domain).
+- L3 email-verify: **emailable** (`state`), **bouncer** (`x-api-key`, `status`), **mailgun-validate**
+  (Basic `api:key`, `result`), **millionverifier** (`result`), **debounce** (`debounce.result`),
+  **clearout** (Bearer POST, `data.status`).
+
+Added `423 Locked → QUOTA` to the shared `classifyStatus` (Findymail paused-subscription). Added a
+shared **`classifyErrMsg`** helper that maps a vendor's in-body error message to AUTH/QUOTA/RATE_LIMIT
+— used by MillionVerifier, DeBounce, and Clearout, which all return bad-key/out-of-credits as HTTP
+200 with an error field (now correctly failed-over via the `HTTPAdapter` classified-error path,
+proven by an expanded `TestWave0_InBodyErrorClassified` table). Deferred as async/OAuth multi-step
+(researched, not coded): icypeas, enrow (submit→poll), snov (oauth2-cc), verifalia (submit→poll) —
+joining dropcontact/cognism/fullenrich under the async-adapter enhancement (task #8). `go build ./...`
++ `go test ./...` green.
+
+### 2026-07-06 — 200-provider rollout, Phase B (adapters, wave-by-wave) — in progress
+**12 real adapters** now on the ADR-0023 bridge, each researched from official docs (cited in
+`docs/03 §7`), secret-free on the `hunter.go` pattern, with a pinned `UNVERIFIED` fixture +
+table-driven decode test + registry entry:
+- L1: **people-data-labs** (`X-Api-Key`, likelihood-derived confidence).
+- L2: **hunter**, **prospeo**, **apollo** (DEPRIORITIZED — LinkedIn/web provenance; work_email conf lifted when `email_status==verified`).
+- L3: **neverbounce**, **kickbox** (conf from `sendex`), **zerobounce**.
+- L5: **twilio-lookup**.
+- L6: **clearbit** (firmographics — name/industry/sic/naics/employees/revenue/tech/geo/founded/type/linkedin).
+- L7: **builtwith**, **theirstack** (technographics; job-posting-derived for TheirStack).
+- L8: **g2** (buyer intent — buying_signal, intent_topics, buyer-org firmographics).
+
+Wave-0 research workflow completed 11/11 specs (0 errors) from official docs. Added a general
+**`HTTPAdapter` enhancement**: a `Decode` that returns a classified `*domain.ProviderError` is now
+preserved (not flattened to BAD_REQUEST), so the widespread **200-with-in-body-error** pattern
+(ZeroBounce/BuiltWith bad-key/out-of-credits) maps correctly to AUTH/QUOTA for key failover. New
+`adapters.normList` normalizes multi-valued technographics/intent into one sorted comma-joined value
+(ADR-0023). **Deferred** (need an async/redeem-capable adapter): dropcontact, cognism, fullenrich
+(two-step flows) — researched, not shipped as fabricated single-call adapters. `go build ./...` +
+`go test ./...` green throughout.
+
 ### 2026-07-06 — 200-provider rollout, Phase A (groundwork bridge) — ADR-0023
 Built the bridge that makes real API-first adapters runnable at scale, ahead of the per-provider
 waves (`Closo_Enrichment_Architecture_200_Tools`). **Field vocabulary** extended doc-first

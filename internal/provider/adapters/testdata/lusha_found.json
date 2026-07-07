@@ -1,0 +1,23 @@
+{
+  "contacts": [
+    {
+      "id": "4415824633",
+      "data": {
+        "firstName": "Jane",
+        "lastName": "Doe",
+        "fullName": "Jane Doe",
+        "jobTitle": { "title": "VP Sales", "seniority": "Vice President", "departments": ["Sales"] },
+        "emailAddresses": [
+          { "email": "jane@acme.com", "emailType": "work", "emailConfidence": "A+" },
+          { "email": "jane.doe@gmail.com", "emailType": "personal" }
+        ],
+        "phoneNumbers": [
+          { "number": "+15555550100", "phoneType": "mobile", "doNotCall": false },
+          { "number": "+15555550111", "phoneType": "direct" }
+        ],
+        "socialLinks": { "linkedin": "https://www.linkedin.com/in/janedoe" },
+        "company": { "name": "Acme", "fqdn": "acme.com" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "data": {
+    "phone_number": "+15555550100",
+    "record_type": "number_lookup",
+    "caller_name": { "caller_name": "ACME LLC", "error_code": "10001" },
+    "carrier": {
+      "error_code": null,
+      "mobile_country_code": "310",
+      "mobile_network_code": "260",
+      "name": "T-Mobile USA",
+      "type": "mobile"
+    },
+    "portability": { "line_type": "mobile" }
+  }
+}

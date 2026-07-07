@@ -1,0 +1,9 @@
+{
+  "email": "jane@acme.com",
+  "domain": "acme.com",
+  "status": "passed",
+  "passed": true,
+  "role": false,
+  "disposable": false,
+  "free": false
+}

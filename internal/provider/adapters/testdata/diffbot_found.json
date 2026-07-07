@@ -1,0 +1,21 @@
+{
+  "version": 3,
+  "hits": 1,
+  "kgversion": "253",
+  "data": [
+    {
+      "score": 0.78,
+      "entity": {
+        "type": "Organization",
+        "name": "Acme",
+        "homepageUri": "acme.com",
+        "linkedInUri": "https://www.linkedin.com/company/acme",
+        "nbEmployees": 3200,
+        "revenue": { "currency": "USD", "value": 62753000000 },
+        "foundingDate": { "str": "d2012-06-01", "precision": 3 },
+        "naicsClassification": [{ "code": "511210", "name": "Software Publishers" }],
+        "sicClassification": [{ "code": "7372", "name": "Prepackaged Software" }]
+      }
+    }
+  ]
+}

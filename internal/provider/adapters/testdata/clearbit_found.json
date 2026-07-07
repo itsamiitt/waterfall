@@ -1,0 +1,12 @@
+{
+  "name": "Acme",
+  "domain": "acme.com",
+  "category": { "industry": "Internet Software & Services", "sicCode": "48", "naicsCode": "51" },
+  "metrics": { "employees": 60, "estimatedAnnualRevenue": "$10M-$50M" },
+  "tech": ["nginx", "mongodb", "aws_route_53"],
+  "geo": { "country": "United States", "city": "Frisco" },
+  "foundedYear": 2012,
+  "type": "private",
+  "phone": null,
+  "linkedin": { "handle": "company/acme-corp" }
+}

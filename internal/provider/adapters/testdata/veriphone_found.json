@@ -1,0 +1,14 @@
+{
+  "status": "success",
+  "phone": "+15555550100",
+  "phone_valid": true,
+  "phone_type": "mobile",
+  "phone_region": "California",
+  "country": "United States",
+  "country_code": "US",
+  "country_prefix": "1",
+  "international_number": "+1 555-555-0100",
+  "local_number": "(555) 555-0100",
+  "e164": "+15555550100",
+  "carrier": "T-Mobile USA, Inc."
+}

@@ -1,0 +1,18 @@
+{
+  "status": "success",
+  "data": {
+    "enrichment_status": "Company Enriched",
+    "company": {
+      "name": "Acme",
+      "website": "acme.com",
+      "industry": "Software",
+      "ownership": "Private",
+      "phone": "+15555550100",
+      "linkedin_profile": "https://www.linkedin.com/company/acme",
+      "size": { "exact": 1200, "range": "1001-5000" },
+      "revenue": { "exact": 250000000, "range": "$100M-$500M" },
+      "address": { "country": "United States", "city": "San Francisco" },
+      "analytics": { "installed_base_technologies": ["Salesforce", "AWS"] }
+    }
+  }
+}

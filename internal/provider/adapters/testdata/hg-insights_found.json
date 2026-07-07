@@ -1,0 +1,21 @@
+{
+  "companies": [
+    {
+      "id": "1698C53EBC888758570396E0334965C1",
+      "firmographics": {
+        "name": "Acme",
+        "domain": "acme.com",
+        "country_code": "US",
+        "employees_total": 3200,
+        "revenue_total": 680985000
+      },
+      "technographics": {
+        "installs": [
+          { "product": "Salesforce", "vendor": "Salesforce", "category": "CRM", "usage_intensity": "High" },
+          { "product": "AWS", "vendor": "Amazon", "category": "Cloud" }
+        ],
+        "installs_count": 5900
+      }
+    }
+  ]
+}

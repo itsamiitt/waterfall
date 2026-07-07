@@ -1,0 +1,16 @@
+{
+  "name": "Acme",
+  "domain": "acme.com",
+  "description": "Acme makes everything.",
+  "company": {
+    "employees": 500,
+    "foundedYear": 2012,
+    "kind": "PRIVATELY_HELD",
+    "industries": [{ "score": 0.9, "name": "Software", "slug": "software" }],
+    "location": { "city": "Frisco", "country": "United States", "countryCode": "US" }
+  },
+  "links": [
+    { "name": "twitter", "url": "https://twitter.com/acme" },
+    { "name": "linkedin", "url": "https://www.linkedin.com/company/acme" }
+  ]
+}

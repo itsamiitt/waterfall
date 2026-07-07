@@ -1,0 +1,14 @@
+{
+  "debounce": {
+    "email": "jane@acme.com",
+    "code": "5",
+    "role": "false",
+    "free_email": "false",
+    "result": "Safe to Send",
+    "reason": "Deliverable",
+    "send_transactional": "1",
+    "did_you_mean": ""
+  },
+  "success": "1",
+  "balance": "329918"
+}

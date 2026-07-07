@@ -1,0 +1,5 @@
+{
+  "name": "Jane Doe",
+  "company_url": "acme.com",
+  "emails": [{ "email": "jane@acme.com", "status": "1.0" }]
+}

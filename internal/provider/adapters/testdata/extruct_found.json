@@ -1,0 +1,10 @@
+{
+  "company_name": "Acme",
+  "domain": "acme.com",
+  "context": {
+    "company_name": "Acme",
+    "domain": "acme.com",
+    "employee_count": 3200,
+    "short_description": "Acme builds economic infrastructure for the internet."
+  }
+}

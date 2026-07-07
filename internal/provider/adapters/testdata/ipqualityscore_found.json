@@ -1,0 +1,18 @@
+{
+  "message": "Phone is valid.",
+  "success": true,
+  "formatted": "+15555550100",
+  "local_format": "(555) 555-0100",
+  "valid": true,
+  "fraud_score": 0,
+  "recent_abuse": false,
+  "VOIP": false,
+  "prepaid": false,
+  "risky": false,
+  "active": true,
+  "carrier": "T-Mobile USA",
+  "line_type": "Wireless",
+  "country": "US",
+  "active_status": "Active Line",
+  "request_id": "XXXX"
+}

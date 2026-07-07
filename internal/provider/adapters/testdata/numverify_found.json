@@ -1,0 +1,12 @@
+{
+  "valid": true,
+  "number": "15555550100",
+  "local_format": "5555550100",
+  "international_format": "+15555550100",
+  "country_prefix": "+1",
+  "country_code": "US",
+  "country_name": "United States of America",
+  "location": "",
+  "carrier": "T-Mobile USA",
+  "line_type": "mobile"
+}

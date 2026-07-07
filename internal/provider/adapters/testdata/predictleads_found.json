@@ -1,0 +1,12 @@
+{
+  "data": {
+    "type": "company",
+    "attributes": {
+      "company_name": "Acme",
+      "domain": "acme.com",
+      "location_data": [
+        { "category": "headquarters", "country": "United States", "city": "San Francisco" }
+      ]
+    }
+  }
+}

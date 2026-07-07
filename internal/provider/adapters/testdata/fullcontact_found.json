@@ -1,0 +1,17 @@
+{
+  "name": "Acme, Inc.",
+  "location": "Denver, Colorado, United States",
+  "linkedin": "https://www.linkedin.com/company/acme",
+  "website": "https://www.acme.com",
+  "founded": 2010,
+  "employees": 350,
+  "category": "Software",
+  "details": {
+    "industries": [
+      { "type": "SIC", "name": "Computer Programming", "code": "737" },
+      { "type": "NAICS", "name": "Data Processing", "code": "5182" }
+    ],
+    "phones": [{ "value": "+1-555-0100", "label": "other" }],
+    "locations": [{ "label": "Headquarters", "city": "Denver", "region": "Colorado", "country": "United States" }]
+  }
+}

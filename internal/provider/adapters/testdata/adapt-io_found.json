@@ -1,0 +1,23 @@
+{
+  "code": "APP-200-001",
+  "message": "Success",
+  "data": {
+    "email": "jane@acme.com",
+    "phoneNumber": [
+      { "type": "mobile_number", "number": "+15555550100" },
+      { "type": "direct_line", "number": "+15555550111" }
+    ],
+    "linkedin": "https://www.linkedin.com/in/janedoe",
+    "title": "VP Sales",
+    "level": "VP",
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "company": {
+      "name": "Acme",
+      "website": "https://acme.com",
+      "headCount": 3200,
+      "industry": "Software",
+      "revenue": "50000000"
+    }
+  }
+}

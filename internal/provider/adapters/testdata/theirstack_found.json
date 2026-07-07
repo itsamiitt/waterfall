@@ -1,0 +1,7 @@
+{
+  "data": [
+    { "technology": { "name": "Kafka", "slug": "kafka" }, "confidence": "high" },
+    { "technology": { "name": "Elasticsearch", "slug": "elasticsearch" }, "confidence": "medium" }
+  ],
+  "metadata": { "total_results": 37, "total_companies": 1 }
+}

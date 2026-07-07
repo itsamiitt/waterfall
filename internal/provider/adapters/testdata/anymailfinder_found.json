@@ -1,0 +1,11 @@
+{
+  "credits_charged": 1,
+  "email": "jane@acme.com",
+  "email_status": "valid",
+  "valid_email": "jane@acme.com",
+  "mx_domain": "outlook.com",
+  "mx_host": "acme-com.mail.protection.outlook.com",
+  "person_company_name": null,
+  "person_full_name": null,
+  "person_job_title": null
+}

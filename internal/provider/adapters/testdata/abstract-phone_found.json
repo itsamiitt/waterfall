@@ -1,0 +1,9 @@
+{
+  "phone": "+15555550100",
+  "valid": true,
+  "format": { "international": "+15555550100", "local": "(555) 555-0100" },
+  "country": { "code": "US", "name": "United States", "prefix": "+1" },
+  "location": "California",
+  "type": "mobile",
+  "carrier": "T-Mobile USA, Inc."
+}

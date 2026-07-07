@@ -1,0 +1,34 @@
+{
+  "page": 0,
+  "page_size": 50,
+  "total_count": 1,
+  "result_count": 1,
+  "is_preview": false,
+  "search_results": [
+    {
+      "match_id": "m1",
+      "person_id": 42,
+      "display_name": "Jane Doe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "email": "jane@acme.com",
+      "personal_email": "jane.doe@gmail.com",
+      "phone_numbers": [
+        { "type": "mobile", "value": "+15555550100" },
+        { "type": "work", "value": "+15555550111" },
+        { "type": "work_hq", "value": "+15555550199" }
+      ],
+      "job_title": "VP Sales",
+      "job_level": "vp",
+      "job_department": "sale",
+      "social_profiles": [{ "type": "linkedin", "url": "https://www.linkedin.com/in/janedoe" }],
+      "company_name": "Acme",
+      "company_domains": ["acme.com"],
+      "company_size": 1200,
+      "industry": "Software",
+      "naics_code": "511210",
+      "sic_code": "7372",
+      "verified": true
+    }
+  ]
+}

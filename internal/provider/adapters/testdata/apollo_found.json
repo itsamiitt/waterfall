@@ -1,0 +1,21 @@
+{
+  "person": {
+    "first_name": "jane",
+    "last_name": "doe",
+    "name": "Jane Doe",
+    "linkedin_url": "http://www.linkedin.com/in/janedoe",
+    "title": "VP Sales",
+    "email_status": "verified",
+    "email": "jane@acme.com",
+    "seniority": "vp",
+    "organization": {
+      "name": "Acme",
+      "primary_domain": "acme.com",
+      "phone": "+1 415-830-6265",
+      "industry": "software",
+      "estimated_num_employees": 900,
+      "founded_year": 2015,
+      "country": "United States"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": 17937983,
+  "name": "Acme PLC",
+  "registration_number": "00445790",
+  "country_code": "GB",
+  "company_phone": ["+441992632222"],
+  "company_email": [],
+  "company_website": "http://www.acme.com",
+  "company_legal_form": "Public Limited Company",
+  "status": "Active",
+  "address_city": "Welwyn Garden City",
+  "zip_code": "AL7 1GA",
+  "country_name": "United Kingdom",
+  "size": "10001",
+  "founding_date": "1947-11-27",
+  "industry": [{ "id": 4592033, "type": "industry_focus", "value": "Retail" }],
+  "sic": [{ "id": 3969852, "type": "sic_code_gb", "value": "47110" }],
+  "linkedin": "linkedin.com/company/-acme"
+}

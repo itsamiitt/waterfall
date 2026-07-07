@@ -1,0 +1,27 @@
+{
+  "Results": [
+    {
+      "Lookup": "acme.com",
+      "IsDB": "True",
+      "SalesRevenue": 29853826,
+      "Result": {
+        "Paths": [
+          {
+            "Domain": "acme.com",
+            "Technologies": [
+              { "Name": "nginx" },
+              { "Name": "React" },
+              { "Name": "Cloudflare" }
+            ]
+          }
+        ]
+      },
+      "Meta": {
+        "CompanyName": "Acme",
+        "Country": "US",
+        "Vertical": "Technology and Computing"
+      },
+      "Attributes": { "Employees": 100 }
+    }
+  ]
+}

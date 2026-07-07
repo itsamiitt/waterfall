@@ -20,20 +20,23 @@ func TestRegistry_Invariants(t *testing.T) {
 	}
 	seen := make(map[string]struct{}, len(reg))
 	for _, r := range reg {
-		if r.Slug == "" || r.New == nil {
-			t.Fatalf("registry entry has empty Slug or nil New: %+v", r)
+		if r.Slug == "" || (r.New == nil && r.NewAsync == nil) {
+			t.Fatalf("registry entry has empty Slug or no constructor (New/NewAsync): %+v", r)
+		}
+		if r.New != nil && r.NewAsync != nil {
+			t.Fatalf("%s: entry sets both New and NewAsync (exactly one expected)", r.Slug)
 		}
 		if _, dup := seen[r.Slug]; dup {
 			t.Fatalf("duplicate slug %q", r.Slug)
 		}
 		seen[r.Slug] = struct{}{}
 
-		a := r.New("", nil)
+		a := r.Construct("", nil)
 
 		// Slug is the stable id used as the catalog row id and key-pool prefix; it MUST equal
-		// the adapter's own NameV or provenance/metrics and the catalog would disagree.
-		if a.NameV != r.Slug {
-			t.Errorf("%s: adapter NameV %q != registry Slug %q", r.Slug, a.NameV, r.Slug)
+		// the adapter's own Name() or provenance/metrics and the catalog would disagree.
+		if a.Name() != r.Slug {
+			t.Errorf("%s: adapter Name %q != registry Slug %q", r.Slug, a.Name(), r.Slug)
 		}
 
 		// ADR-0009: EXCLUDED providers are never registered; only these two verdicts are valid.
@@ -45,16 +48,17 @@ func TestRegistry_Invariants(t *testing.T) {
 
 		// Key-pool selector convention "<slug>:<pool>" (rotation.splitSelector) — the seeder
 		// creates the "<slug>:default" pool, so the prefix must be the slug.
-		if sel := a.Auth.KeyPoolSelector; sel != "" && !strings.HasPrefix(sel, r.Slug+":") {
+		if sel := a.AuthDescriptor().KeyPoolSelector; sel != "" && !strings.HasPrefix(sel, r.Slug+":") {
 			t.Errorf("%s: KeyPoolSelector %q must be prefixed %q:", r.Slug, sel, r.Slug)
 		}
 
 		// Every advertised capability Field must be in the canonical vocabulary, else the
 		// router silently drops it (router.Plan matches on Field via provider.Can).
-		if len(a.Caps) == 0 {
+		caps := a.Capabilities()
+		if len(caps) == 0 {
 			t.Errorf("%s: adapter advertises no capabilities", r.Slug)
 		}
-		for _, c := range a.Caps {
+		for _, c := range caps {
 			if !c.Field.Valid() {
 				t.Errorf("%s: capability Field %q is not canonical (extend internal/domain/field.go + docs/00 §7)", r.Slug, c.Field)
 			}
@@ -67,9 +71,9 @@ func TestRegistry_Invariants(t *testing.T) {
 		}
 
 		// Default BaseURL must be a well-formed https URL (SSRF egress is HTTPS-only).
-		u, err := url.Parse(a.BaseURL)
+		u, err := url.Parse(a.Base())
 		if err != nil || u.Scheme != "https" || u.Hostname() == "" {
-			t.Errorf("%s: default BaseURL %q must be a valid https URL", r.Slug, a.BaseURL)
+			t.Errorf("%s: default BaseURL %q must be a valid https URL", r.Slug, a.Base())
 		}
 	}
 }

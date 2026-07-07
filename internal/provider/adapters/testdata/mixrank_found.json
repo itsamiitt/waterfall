@@ -1,0 +1,15 @@
+{
+  "id": 81760867,
+  "name": "Acme Inc",
+  "employees": 540,
+  "address": { "city": "San Francisco", "region": "CA", "country": "US" },
+  "linkedin": {
+    "url": "https://www.linkedin.com/company/acme",
+    "website": "acme.com",
+    "type": "Privately Held",
+    "founded": 2008
+  },
+  "industries": [{ "id": 6, "name": "Internet" }],
+  "sic": [{ "id": "7372", "name": "Prepackaged Software" }],
+  "naics": [{ "id": "511210", "name": "Software Publishers" }]
+}

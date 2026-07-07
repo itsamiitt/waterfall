@@ -5,6 +5,14 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Verification: egress SSRF allow-list covers all 90 adapters
+Added `TestRegistry_HostsCoverAllAdapters` — proves the SSRF allow-list the binaries build from
+`adapters.Hosts()` admits every registered adapter's base host **and** every oauth2-cc `TokenURL`
+host (the token exchange runs through the same SSRF-checked base transport). A provider whose host
+were missing would have all its calls — or its token exchange — silently refused at egress and be
+un-callable; this makes that a build-failing invariant. Also asserts the list rejects an unlisted
+host (it's a real filter, not permit-all). `go build ./...` + `go test ./...` green.
+
 ### 2026-07-07 — Verification: catalog-seed parity for all 90 adapters
 Added `TestSeedInputFor_AllRegistered` (cmd/providerseed) — asserts EVERY registered adapter,
 including the `NewAsync` entries and the dual-header / oauth2-cc / api-key-path auth variants (which

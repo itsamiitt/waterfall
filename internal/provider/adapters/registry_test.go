@@ -102,3 +102,32 @@ func TestRegistry_AllConstructs(t *testing.T) {
 		t.Fatal("sanity: work_email should be canonical")
 	}
 }
+
+// TestRegistry_HostsCoverAllAdapters proves the egress SSRF allow-list the binaries build from
+// adapters.Hosts() admits EVERY registered adapter: a provider whose base host is missing from the
+// list — or an oauth2-cc adapter whose TokenURL host is missing — would have all its calls (or its
+// token exchange) SSRF-refused at egress and be silently un-callable. The token-host check matters
+// because the oauth2 token exchange runs through the same SSRF-checked base transport.
+func TestRegistry_HostsCoverAllAdapters(t *testing.T) {
+	allow := provider.NewHostAllowList(adapters.Hosts()...)
+	for _, r := range adapters.Registry() {
+		a := r.Construct("", nil)
+		u, err := url.Parse(a.Base())
+		if err != nil || u.Hostname() == "" {
+			t.Errorf("%s: base %q has no parseable host", r.Slug, a.Base())
+			continue
+		}
+		if !allow.Allowed(u.Hostname()) {
+			t.Errorf("%s: base host %q is NOT in the egress allow-list (adapters.Hosts()) — provider would be SSRF-refused", r.Slug, u.Hostname())
+		}
+		if d := a.AuthDescriptor(); d.Scheme == provider.AuthOAuth2CC && d.TokenURL != "" {
+			if tu, err := url.Parse(d.TokenURL); err == nil && tu.Hostname() != "" && !allow.Allowed(tu.Hostname()) {
+				t.Errorf("%s: oauth2 token host %q is NOT in the allow-list — token exchange would be SSRF-refused", r.Slug, tu.Hostname())
+			}
+		}
+	}
+	// Sanity: the allow-list is a real filter, not permit-all.
+	if allow.Allowed("evil.example.com") {
+		t.Error("allow-list admitted an unlisted host — it should reject hosts not derived from the registry")
+	}
+}

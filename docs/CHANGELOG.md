@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Live-Postgres verification + fix: migration 0013 (provider auth schemes)
+Ran the ADR-0023 seeder against a live Postgres (Neon): all 13 migrations apply cleanly, and
+`cmd/providerseed` projects all **90 adapters into the `providers` catalog (one row each)** —
+inserts succeeding under FORCE RLS via the platform-tenant context (write-path RLS verified). The
+run **caught a real schema/code drift**: the migration-0005 `providers_auth_scheme_check` predated
+the ADR-0024 egress schemes, so seeding `tomba` failed (23514 — `api-key-dual-header` rejected).
+**Fix: migration `0013_provider_auth_schemes.sql`** widens the constraint to include `api-key-path`
+and `api-key-dual-header`; re-seed then completed 90/90. Added a regression guard in
+`TestSeedInputFor_AllRegistered` — every adapter's auth scheme must be in the catalog-accepted set,
+turning this drift into a build failure. (The read-path RLS integration test — non-superuser sees
+only the tenant_readable projection — can't run on Neon: it password-authenticates a SQL-created
+role, which Neon's managed-role model rejects; it still runs on standard Postgres/CI.) `go build
+./...` + `go test ./...` green.
+
 ### 2026-07-07 — Verification: full canonical-field provider coverage
 Added `TestRegistry_FieldCoverage` — asserts every one of the 33 canonical `domain.Field`s is
 advertised by ≥1 registered adapter, so the router can satisfy a request for any Field and a

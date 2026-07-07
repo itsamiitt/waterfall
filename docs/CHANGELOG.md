@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Verification: ADR-0024 async path proven through the engine
+Added `TestAsyncAdapter_EngineIntegration` — drives a registered submit→poll adapter (Enrow) through
+the full Router→Engine→Store spine, proving the async path end-to-end (not just in isolation): the
+engine's `policyFor` selects the adapter's longer *bounded* budget (its AsyncHTTPAdapter CallPolicy
+override, not the 3s default), the internal submit→poll loop resolves the email inside one
+`provider.Call`, and the terminal value lands in the G5 provenance store with a committed cost (G4).
+Closes the gap where async adapters + policy-selection were only tested separately. `go build ./...`
++ `go test ./...` green.
+
 ### 2026-07-07 — Wave 8 residual-row audit (90 adapters)
 Verified the ~15 spreadsheet rows Wave 7 had dismissed without cited research. Added 7 sync
 adapters: **uplead**, **adapt-io** (dual-header), **aeroleads** [L2 email-find]; **scrubby**,

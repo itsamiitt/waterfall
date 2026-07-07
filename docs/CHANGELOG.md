@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-07 — Verification: catalog-seed parity for all 90 adapters
+Added `TestSeedInputFor_AllRegistered` (cmd/providerseed) — asserts EVERY registered adapter,
+including the `NewAsync` entries and the dual-header / oauth2-cc / api-key-path auth variants (which
+reach the seeder via `Registered.Construct` → `provider.Introspectable`), projects to a well-formed,
+catalog-insertable `SeedInput`: matching id, seedable ADR-0009 status, https base host, ≥1 canonical
+capability, non-empty auth scheme, display name, unit cost. Catches ADR-0023 registry↔catalog drift
+(a missing base host = SSRF-refused calls; a non-canonical cap = silently dropped) without a Postgres
+test DB. `go build ./...` + `go test ./...` green.
+
 ### 2026-07-07 — Verification: ADR-0024 async path proven through the engine
 Added `TestAsyncAdapter_EngineIntegration` — drives a registered submit→poll adapter (Enrow) through
 the full Router→Engine→Store spine, proving the async path end-to-end (not just in isolation): the

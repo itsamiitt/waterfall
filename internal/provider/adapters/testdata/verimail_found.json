@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "email": "jane@acme.com",
+  "result": "deliverable",
+  "deliverable": true,
+  "user": "jane",
+  "domain": "acme.com",
+  "did_you_mean": ""
+}

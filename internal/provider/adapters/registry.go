@@ -120,6 +120,8 @@ var registry = []Registered{
 	{Slug: "mails-so", New: MailsSo, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.mails.so/intro"},
 	{Slug: "emailhippo", New: EmailHippo, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://email-verify-api-docs.readthedocs.io/en/latest/"},
 	{Slug: "truelist", New: Truelist, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://truelist.io/docs/api"},
+	{Slug: "verimail", New: Verimail, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://verimail.io/docs/v3"},
+	{Slug: "sendpulse-verifier", NewAsync: SendPulseVerifier, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://sendpulse.com/integrations/api/verifier"},
 
 	// L5 — Phone validation.
 	{Slug: "twilio-lookup", New: Twilio, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.twilio.com/docs/lookup/v2-api"},
@@ -174,6 +176,7 @@ var registry = []Registered{
 	{Slug: "gleif", New: GLEIF, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://documenter.getpostman.com/view/7679680/SVYrrxuU"},
 	{Slug: "recherche-entreprises", New: RechercheEntreprises, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"FR"}, DocsURL: "https://recherche-entreprises.api.gouv.fr/docs/"},
 	{Slug: "north-data", New: NorthData, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"DE", "EU"}, DocsURL: "https://github.com/northdata/api/blob/master/doc/data-api-userguide/data-api-userguide.md"},
+	{Slug: "nz-companies", NewAsync: NZCompanies, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"NZ"}, DocsURL: "https://portal.api.business.govt.nz/api/nzbn"},
 	{Slug: "opensanctions", New: OpenSanctions, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://www.opensanctions.org/docs/api/"},
 	{Slug: "predictleads", New: PredictLeads, Category: "technographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.predictleads.com/v3"},
 

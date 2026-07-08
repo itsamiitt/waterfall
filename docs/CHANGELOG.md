@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 11 (part 3): NZ registry + verifiers (118 → 121) + TokenFromRequest
+- **ADR-0024 extension: `AsyncHTTPAdapter.TokenFromRequest`** — derives the poll token from the
+  ORIGINAL request when the submit body carries no job id (ParseSubmit, if set, still validates the
+  submit body). First consumer: SendPulse, whose status endpoint is keyed by the submitted email.
+- **sendpulse-verifier** (async, oauth2-cc JSON token style; pool "<client_id>:<client_secret>"):
+  paired send-single-to-verify → get-single-result?email=; {"result":false} = pending.
+- **nz-companies** (official MBIE NZBN v5, match→fetch): search-term → /entities/{nzbn};
+  Ocp-Apim-Subscription-Key header; live-verified field names (Xero); ANZSIC description mapped to
+  industry (code NOT mapped to naics/sic); city rides in address3 by NZBN convention (~0.65).
+- **verimail** (single-shot, key query): result enum incl. inbox_full/hardbounce/softbounce; in-body
+  status success|error checked independently of HTTP code; 403 = quota (documented discrepancy).
+
 ### 2026-07-08 — Wave 11 (part 2): registry aggregators (116 → 118) + ABN Lookup exclusion
 - **north-data** (DEPRIORITIZED — clean OpenAPI'd European-register data, but manual key issuance at
   €500/mo minimum): `/company/v1/company?name=&fuzzyMatch=true&financials=true&extras=true`;

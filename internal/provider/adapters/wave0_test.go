@@ -595,6 +595,11 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			},
 		},
 		{
+			name: "verimail", newA: adapters.Verimail, pool: "verimail:default",
+			fixture: "testdata/verimail_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "deliverable", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

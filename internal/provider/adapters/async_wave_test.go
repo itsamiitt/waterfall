@@ -175,6 +175,26 @@ func TestAsyncWave_SubmitPoll(t *testing.T) {
 		},
 		// Wave 11 — official open-data registries (AuthNone: no credential, egress passthrough).
 		{
+			name: "sendpulse-verifier", newA: adapters.SendPulseVerifier, pool: "sendpulse-verifier:default", secret: "cid:csec",
+			submitMethod: "POST", submitPath: "/verifier-service/send-single-to-verify/",
+			submitBody: `{"result":true}`,
+			pollBody:   `{"result":true,"data":{"email":"jane@acme.com","checks":{"status":1,"valid_format":1,"disposable":0,"webmail":0,"gibberish":0,"status_text":"Valid address"}}}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com"}},
+			want:       map[domain.Field]string{domain.FieldEmailStatus: "Valid address", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
+			name: "nz-companies", newA: adapters.NZCompanies, pool: "nz-companies:default", secret: "K",
+			submitMethod: "GET", submitPath: "/entities",
+			submitBody: `{"pageSize":1,"page":0,"totalItems":1,"items":[{"entityName":"XERO LIMITED","nzbn":"9429034042984"}]}`,
+			pollBody:   `{"entityStatusCode":"50","entityName":"XERO LIMITED","nzbn":"9429034042984","entityTypeCode":"LTD","entityTypeDescription":"NZ Limited Company","registrationDate":"2006-07-06T00:00:00.000+1200","addresses":{"addressList":[{"address1":"19-23 Taranaki St, Te Aro","address3":"Wellington","postCode":"6011","countryCode":"NZ","addressType":"REGISTERED"}]},"industryClassifications":[{"classificationCode":"J542010","classificationDescription":"Computer software publishing"}],"phoneNumbers":[],"websites":[{"url":"www.xero.com"}]}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldCompanyName: "Xero"}},
+			want: map[domain.Field]string{
+				domain.FieldCompanyName: "XERO LIMITED", domain.FieldCompanyType: "NZ Limited Company", domain.FieldCompanyFoundedYear: "2006",
+				domain.FieldCompanyHQCountry: "NZ", domain.FieldCompanyHQCity: "Wellington", domain.FieldIndustry: "Computer software publishing",
+				domain.FieldCompanyDomain: "xero.com",
+			},
+		},
+		{
 			name: "brreg", newA: adapters.Brreg, pool: "brreg:default", secret: "UNUSED",
 			submitMethod: "GET", submitPath: "/enheter",
 			submitBody: `{"_embedded":{"enheter":[{"organisasjonsnummer":"923609016","navn":"EQUINOR ASA"}]},"page":{"totalElements":1}}`,

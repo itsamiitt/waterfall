@@ -40,6 +40,12 @@ type AsyncHTTPAdapter struct {
 	// ParseSubmit extracts the poll token (job id / DUNS / status URL) from the submit 2xx body.
 	// It may return an already-classified *domain.ProviderError for a 200-with-error body.
 	ParseSubmit func(body []byte) (pollToken string, err error)
+	// TokenFromRequest derives the poll token from the ORIGINAL request instead of the submit body,
+	// for providers whose submit response carries no job id and whose status endpoint is keyed by an
+	// input field (SendPulse verifier: poll by the submitted email). When set it takes precedence;
+	// ParseSubmit is then optional and, if non-nil, is still invoked to validate the submit body
+	// (catching a 200-with-error submit) with its returned token ignored.
+	TokenFromRequest func(req Request) string
 	// Poll builds the status/fetch request from the poll token.
 	Poll func(ctx context.Context, base, pollToken string) (*http.Request, error)
 	// Decode maps a poll 2xx body into a Result and a done flag. done=false means "still pending,
@@ -83,9 +89,21 @@ func (h *AsyncHTTPAdapter) Fetch(ctx context.Context, req Request) (Result, erro
 	if err != nil {
 		return Result{}, err
 	}
-	token, err := h.ParseSubmit(body)
-	if err != nil {
-		return Result{}, h.classifyDecodeErr(err)
+	var token string
+	if h.TokenFromRequest != nil {
+		// Poll token comes from the input (no job id in the submit body); ParseSubmit, when
+		// present, still validates the submit body for a 200-with-error.
+		if h.ParseSubmit != nil {
+			if _, err := h.ParseSubmit(body); err != nil {
+				return Result{}, h.classifyDecodeErr(err)
+			}
+		}
+		token = h.TokenFromRequest(req)
+	} else {
+		token, err = h.ParseSubmit(body)
+		if err != nil {
+			return Result{}, h.classifyDecodeErr(err)
+		}
 	}
 
 	// 2. Poll until Decode reports done, or the bounded ctx expires.

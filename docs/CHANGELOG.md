@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 12 (part 3, final): nymblr + kendo (131 → 133); Wave 12 closed
+- **nymblr** (DEPRIORITIZED, bearer): US B2B contact database (POST /append/contact) — a full
+  24-field person+company enrich; marked DEPRIORITIZED per ADR-0009 (public-web/LinkedIn PII
+  provenance, consistent with Apollo/Lusha/ContactOut). Overlapping schema fields (personalEmail vs
+  contactPersonalEmail, companySic vs companySICCode6) mapped best-fit + down-weighted.
+- **kendo** (ACTIVE-CANDIDATE, api-key-query): email finder by name+domain (/emailbyname → work_email
+  + private_email→personal_email). Errors carry no JSON body (status line only); 405 reused for
+  out-of-credit (documented discrepancy).
+
+**Wave 12 final tally (12 researched):** 9 implemented (ares-cz, cro-ie, sendgrid-validation, proofy,
+captainverify, data8-phone, charity-commission-uk, nymblr, kendo), 2 deferred (sec-edgar — needs a
+ParseSubmit-with-request + bulk-file cache; cvr-dk — http-only endpoint incompatible with the
+https-only egress), 1 excluded (kbo-be — no REST/JSON API). Registry now at **133 adapters**.
+
 ### 2026-07-08 — Wave 12 (part 2): verifiers + phone + charity register (126 → 131)
 - **sendgrid-validation** (bearer, dedicated Email-Validation key): result.verdict Valid|Risky|Invalid.
 - **proofy** (api-key-query): reads status at $.status OR $.result.status (documented schema/example

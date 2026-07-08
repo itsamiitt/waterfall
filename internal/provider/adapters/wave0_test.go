@@ -676,6 +676,24 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			want: map[domain.Field]string{domain.FieldPhoneStatus: "valid_mobile", domain.FieldMobilePhone: "+447700900123"},
 		},
 		{
+			name: "nymblr", newA: adapters.Nymblr, pool: "nymblr:default",
+			fixture: "testdata/nymblr_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldWorkEmail:     "jane@acme.com",
+				domain.FieldDirectDial:    "+14155550111",
+				domain.FieldJobTitle:      "VP Sales",
+				domain.FieldCompanyName:   "Acme",
+				domain.FieldEmployeeCount: "3200",
+				domain.FieldNAICS:         "541511",
+				domain.FieldSIC:           "7372",
+			},
+		},
+		{
+			name: "kendo", newA: adapters.Kendo, pool: "kendo:default",
+			fixture: "testdata/kendo_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com", domain.FieldPersonalEmail: "jane.doe@gmail.com"},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

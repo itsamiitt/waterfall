@@ -694,6 +694,16 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			want: map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com", domain.FieldPersonalEmail: "jane.doe@gmail.com"},
 		},
 		{
+			name: "evaboot", newA: adapters.Evaboot, pool: "evaboot:default",
+			fixture: "testdata/evaboot_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldWorkEmail:   "jane@acme.com",
+				domain.FieldEmailStatus: "safe",
+				domain.FieldFullName:    "Jane Doe",
+				domain.FieldCompanyName: "Acme",
+			},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

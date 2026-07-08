@@ -56,6 +56,7 @@ var registry = []Registered{
 	{Slug: "enrich-so", New: EnrichSo, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://doc.enrich.so/look-up-a-professional-profile-by-email-27483203e0"},
 	{Slug: "enformion", New: Enformion, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"US"}, DocsURL: "https://enformiongo.readme.io/reference/contact-enrichment"},
 	{Slug: "nymblr", New: Nymblr, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"US"}, DocsURL: "https://app.swaggerhub.com/apis/NYMBLR/NymblrDataAPIv1/1.0.0"},
+	{Slug: "amplemarket", NewAsync: Amplemarket, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://docs.amplemarket.com/api-reference/introduction"},
 	{Slug: "fullcontact", New: FullContact, Category: "identity", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://docs.fullcontact.com/docs/company-enrich-overview"},
 
 	// L2 — Email finding.
@@ -68,6 +69,7 @@ var registry = []Registered{
 	{Slug: "findymail", New: Findymail, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://app.findymail.com/docs/"},
 	{Slug: "voila-norbert", New: VoilaNorbert, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.voilanorbert.com/api/"},
 	{Slug: "kendo", New: Kendo, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://kendoemailapp.com/swagger"},
+	{Slug: "evaboot", New: Evaboot, Category: "email-find", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://docs.evaboot.com/"},
 	{Slug: "surfe", NewAsync: Surfe, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developers.surfe.com/"},
 	{Slug: "lemlist", NewAsync: Lemlist, Category: "email-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://developer.lemlist.com/api-reference/endpoints/enrich/enrich-data"},
 	// Async email finders (ADR-0024 submit→poll) — registered via NewAsync.

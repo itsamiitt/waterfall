@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "prospect": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "full_name": "Jane Doe",
+    "company_name": "Acme",
+    "company_domain": "acme.com",
+    "found_email": "jane@acme.com",
+    "email_validity": "safe",
+    "status": "complete",
+    "error_message": null
+  }
+}

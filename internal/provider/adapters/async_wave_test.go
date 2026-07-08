@@ -173,6 +173,18 @@ func TestAsyncWave_SubmitPoll(t *testing.T) {
 				domain.FieldSIC: "82990", domain.FieldCompanyHQCountry: "England", domain.FieldCompanyHQCity: "London",
 			},
 		},
+		{
+			name: "amplemarket", newA: adapters.Amplemarket, pool: "amplemarket:default", secret: "K",
+			submitMethod: "POST", submitPath: "/people/enrichment-requests",
+			submitBody: `{"id":"enr-1","object":"person_enrichment","status":"queued"}`,
+			pollBody:   `{"id":"enr-1","status":"completed","results":[{"status":"enriched","result":{"email":"jane@acme.com","name":"Jane Doe","first_name":"Jane","last_name":"Doe","title":"VP Sales","linkedin_url":"https://www.linkedin.com/in/janedoe","phone_numbers":[{"number":"+15555550100","type":"mobile"}],"company":{"name":"Acme","website":"https://acme.com","industry":"Software","estimated_number_of_employees":250,"estimated_revenue":"$10M-$50M","founded_year":2015,"latest_funding_stage":"Series B","naics_codes":["541511"],"sic_codes":["7372"]}}}]}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldFullName: "Jane Doe", domain.FieldCompanyDomain: "acme.com"}},
+			want: map[domain.Field]string{
+				domain.FieldWorkEmail: "jane@acme.com", domain.FieldMobilePhone: "+15555550100", domain.FieldJobTitle: "VP Sales",
+				domain.FieldCompanyName: "Acme", domain.FieldCompanyDomain: "acme.com", domain.FieldEmployeeCount: "250",
+				domain.FieldCompanyFoundedYear: "2015", domain.FieldFundingStage: "Series B", domain.FieldNAICS: "541511",
+			},
+		},
 		// Wave 11 — official open-data registries (AuthNone: no credential, egress passthrough).
 		{
 			name: "sendpulse-verifier", newA: adapters.SendPulseVerifier, pool: "sendpulse-verifier:default", secret: "cid:csec",

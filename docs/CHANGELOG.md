@@ -5,6 +5,24 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 13: remaining 200-sheet rows triaged (133 → 135)
+Researched the 20 remaining spreadsheet rows that plausibly had a self-serve API. Honest outcome:
+**2 implemented, 7 deferred, 11 EXCLUDED** — most of the "big name" contact DBs have real APIs but
+do NOT publish their response schemas (behind logins/enterprise gates), so building an accurate
+Decode would mean fabricating field names, which this rollout never does.
+- **Implemented:** `evaboot` (DEPRIORITIZED; clean OpenAPI email-finder, LinkedIn/scraping provenance),
+  `amplemarket` (DEPRIORITIZED; submit→poll people-enrichment — the ONE big DB with a fully rendered
+  response example, so its envelope is confirmed).
+- **Deferred (real API, but response/request schema unverifiable without a live enterprise key, or a
+  mandatory workspace-config param):** `zoominfo` (OAuth2 GTM; outputFields mechanism + response
+  wrapper inferred), `cognism` (enrich→redeem; field keys inferred from CRM-mapping docs),
+  `seamless-ai` (OpenAPI exists but poll-response envelope unconfirmed), `lead411` (schema fully
+  inferred + non-standard login→JWT→query-param auth), `leadiq` (GraphQL; searchPeople input schema
+  not captured), `databar` (mandatory workspace `waterfall_id` + per-waterfall variable schema),
+  `octave` (mandatory workspace `agentOId`).
+- **EXCLUDED (no self-serve API / enterprise-portal-only / no public API):** swordfish, bookyourdata,
+  sales-rocks, truemail, netline, demandscience, techtarget, intentsify, rollworks, persana, g2-stack.
+
 ### 2026-07-08 — Wave 12 (part 3, final): nymblr + kendo (131 → 133); Wave 12 closed
 - **nymblr** (DEPRIORITIZED, bearer): US B2B contact database (POST /append/contact) — a full
   24-field person+company enrich; marked DEPRIORITIZED per ADR-0009 (public-web/LinkedIn PII

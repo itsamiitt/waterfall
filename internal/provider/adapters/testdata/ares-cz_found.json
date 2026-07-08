@@ -1,0 +1,19 @@
+{
+  "ekonomickeSubjekty": [
+    {
+      "ico": "26439395",
+      "obchodniJmeno": "První certifikační autorita, a.s.",
+      "sidlo": {
+        "kodStatu": "CZ",
+        "nazevStatu": "Česká republika",
+        "nazevObce": "Praha",
+        "psc": 19000
+      },
+      "pravniForma": "121",
+      "datumVzniku": "2001-03-12",
+      "dic": "CZ26439395",
+      "czNace": ["62", "47780"]
+    }
+  ],
+  "pocetCelkem": 1
+}

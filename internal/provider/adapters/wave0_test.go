@@ -624,6 +624,28 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 				domain.FieldMobilePhone: "+15555550100",
 			},
 		},
+		// Wave 12 — official registries (Czech ARES no-auth, Ireland CRO Basic).
+		{
+			name: "ares-cz", newA: adapters.AresCZ, pool: "ares-cz:default",
+			fixture: "testdata/ares-cz_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "První certifikační autorita, a.s.",
+				domain.FieldCompanyHQCountry:   "Česká republika",
+				domain.FieldCompanyHQCity:      "Praha",
+				domain.FieldCompanyType:        "121",
+				domain.FieldCompanyFoundedYear: "2001",
+				domain.FieldIndustry:           "47780,62",
+			},
+		},
+		{
+			name: "cro-ie", newA: adapters.CroIE, pool: "cro-ie:default",
+			fixture: "testdata/cro-ie_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "GOOGLE IRELAND LIMITED",
+				domain.FieldCompanyType:        "Private Company Limited by Shares",
+				domain.FieldCompanyFoundedYear: "2003",
+			},
+		},
 		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),

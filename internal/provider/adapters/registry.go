@@ -178,6 +178,8 @@ var registry = []Registered{
 	{Slug: "brreg", NewAsync: Brreg, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"NO"}, DocsURL: "https://data.brreg.no/enhetsregisteret/api/dokumentasjon/en/index.html"},
 	{Slug: "gleif", New: GLEIF, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://documenter.getpostman.com/view/7679680/SVYrrxuU"},
 	{Slug: "recherche-entreprises", New: RechercheEntreprises, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"FR"}, DocsURL: "https://recherche-entreprises.api.gouv.fr/docs/"},
+	{Slug: "ares-cz", New: AresCZ, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"CZ"}, DocsURL: "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/v3/api-docs"},
+	{Slug: "cro-ie", New: CroIE, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"IE"}, DocsURL: "https://services.cro.ie/cws/help"},
 	{Slug: "north-data", New: NorthData, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"DE", "EU"}, DocsURL: "https://github.com/northdata/api/blob/master/doc/data-api-userguide/data-api-userguide.md"},
 	{Slug: "nz-companies", NewAsync: NZCompanies, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"NZ"}, DocsURL: "https://portal.api.business.govt.nz/api/nzbn"},
 	{Slug: "opensanctions", New: OpenSanctions, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://www.opensanctions.org/docs/api/"},

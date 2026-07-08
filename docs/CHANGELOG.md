@@ -5,6 +5,22 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 12 (part 1): Czech ARES + Ireland CRO registries (124 → 126)
+Final-sweep registries batch 1 — 2 implemented, 2 deferred, 1 excluded:
+- **ares-cz** (ACTIVE-CANDIDATE, AuthNone): official Czech Ministry of Finance register; POST
+  /ekonomicke-subjekty/vyhledat by name (live-verified no-auth); coded legal-form/CZ-NACE stored as
+  codes.
+- **cro-ie** (DEPRIORITIZED, Basic auth "<email>:<api-key>"): Ireland CRO Open Services; bare-array
+  response; register fields only (name/type/reg-date).
+- **DEFERRED sec-edgar** — the name→CIK match needs the ~1MB company_tickers.json resolved
+  client-side against the *input name* (needs both request + fetched file — an async shape the
+  current match→fetch doesn't express) and covers only SEC-registered public filers.
+- **DEFERRED cvr-dk** — every source documents `http://distribution.virk.dk` (TLS UNVERIFIED); the
+  egress SSRF gate is https-only, so an http-only endpoint is un-callable. Also: 3-week manual
+  credential approval + Elasticsearch query DSL.
+- **EXCLUDED kbo-be** — Belgium CBE/KBO exposes no REST/JSON API (SOAP web service + monthly file
+  download only); matches ADR-0002/0009 exclusion criteria.
+
 ### 2026-07-08 — Wave 11 (part 4, final): mailboxlayer + Melissa + Loqate (121 → 124)
 Wave 11 closes at 12/12 researched — 11 implemented, 1 excluded (abn-lookup):
 - **mailboxlayer** (APILayer legacy host apilayer.net, access_key query): ALL errors are HTTP 200

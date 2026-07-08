@@ -1,0 +1,15 @@
+[
+  {
+    "company_num": 368847,
+    "company_bus_ind": "C",
+    "company_name": "GOOGLE IRELAND LIMITED",
+    "company_addr_1": "Gordon House",
+    "company_addr_2": "Barrow Street",
+    "company_addr_3": "Dublin 4",
+    "company_reg_date": "2003-09-23",
+    "company_status_desc": "Normal",
+    "comp_type_desc": "Private Company Limited by Shares",
+    "company_type_code": 1,
+    "eircode": "D04 V4X7"
+  }
+]

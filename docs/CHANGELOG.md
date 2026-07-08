@@ -5,6 +5,23 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 10: +10 provider adapters (103 → 113)
+Twelve more providers researched (cited); 10 implemented, 1 deferred, 1 excluded:
+- **Email verify**: cloudmersive (bare-JSON-string body), abstract-email, mailercheck, reoon,
+  mails-so ({data,error} envelope), emailhippo (api-key-PATH — second AuthAPIKeyPath consumer),
+  truelist (query param on POST).
+- **Phone validate**: neutrinoapi (dual-header User-ID+API-Key; kebab-case keys).
+- **Firmographics**: bigpicture (raw key as whole Authorization value; 202 = queued re-request).
+- **Identity** (DEPRIORITIZED, public-records provenance): enformion (dual-header galaxy-ap-* +
+  static galaxy-search-type routing header; 200-with-isError body).
+- **Deferred**: sinch — v2 endpoint needs an account-specific {projectId} URL segment (mandatory
+  config, same blocker class as Enlyft's solution_id).
+- **EXCLUDED**: findthatlead — vendor's own help center: "Sorry, we don't have an API available."
+
+All reuse existing auth schemes (incl. both ADR-0024 Phase-4 variants) — no migration. Each has a
+fixture + wave-test + registry entry. `go build ./...` + `go test ./...` green; registry invariants
+(seed parity, SSRF hosts, field coverage) hold at 113 adapters.
+
 ### 2026-07-07 — Wave 9: +13 provider adapters beyond the 200-tool sheet (90 → 103)
 Researched (cited) and implemented 13 further real-API providers, expanding coverage past the
 reconciled 200-tool spreadsheet, and resolved the last async deferrals:

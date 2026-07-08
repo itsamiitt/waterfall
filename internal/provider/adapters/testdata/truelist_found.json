@@ -1,0 +1,13 @@
+{
+  "emails": [
+    {
+      "address": "jane@acme.com",
+      "domain": "acme.com",
+      "canonical": "jane",
+      "mx_record": "aspmx.l.google.com",
+      "email_state": "ok",
+      "email_sub_state": "email_ok",
+      "verified_at": "2026-07-08T12:00:00Z"
+    }
+  ]
+}

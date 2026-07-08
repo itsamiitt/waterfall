@@ -37,3 +37,13 @@ contract, in one place.
 | `enrich-so_found.json` | Enrich.so reverse-lookup | `POST /api/v3/reverse-lookup/lookup` | UNVERIFIED |
 | `voila-norbert_found.json` | Voila Norbert | `POST /search/name` | UNVERIFIED |
 | `surfe` / `lemlist` (async test) | Surfe / Lemlist enrich | submit→poll | UNVERIFIED |
+| `neutrinoapi_found.json` | NeutrinoAPI Phone Validate | `POST /phone-validate` | UNVERIFIED |
+| `cloudmersive_found.json` | Cloudmersive Email Validate | `POST /validate/email/address/full` | UNVERIFIED |
+| `abstract-email_found.json` | Abstract Email Validation | `GET /v1/?email=` | UNVERIFIED |
+| `mailercheck_found.json` | MailerCheck | `POST /api/check/single` | UNVERIFIED |
+| `reoon_found.json` | Reoon Email Verifier | `GET /api/v1/verify` | UNVERIFIED |
+| `mails-so_found.json` | Mails.so | `GET /v1/validate` | UNVERIFIED |
+| `emailhippo_found.json` | Email Hippo MORE | `GET /v3/more/json/{key}/{email}` | UNVERIFIED |
+| `truelist_found.json` | Truelist | `POST /api/v1/verify_inline` | UNVERIFIED |
+| `bigpicture_found.json` | BigPicture.io Company | `GET /v1/companies/find` | UNVERIFIED |
+| `enformion_found.json` | Enformion Contact Enrich | `POST /Contact/Enrich` | UNVERIFIED |

@@ -1,0 +1,11 @@
+{
+  "ValidAddress": true,
+  "MailServerUsedForValidation": "aspmx.l.google.com",
+  "Valid_Syntax": true,
+  "Valid_Domain": true,
+  "Valid_SMTP": true,
+  "IsCatchallDomain": false,
+  "Domain": "acme.com",
+  "IsFreeEmailProvider": false,
+  "IsDisposable": false
+}

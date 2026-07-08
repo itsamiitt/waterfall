@@ -1458,3 +1458,55 @@ already accepted by the `providers.auth_scheme` CHECK (migrations 0005+0013) —
 - **Voila Norbert** — `POST /search/name` (form fields name,domain; Basic auth = **any username : token**,
   pool secret `"any:<TOKEN>"`) → `email.{email,is_done,score}`. Single-shot happy path (is_done=true);
   no documented GET/poll endpoint (async result is webhook-only), so a pending lookup yields no value here. [voilanorbert.com/api]
+
+### Wave 10 — further net-new providers (2026-07-08)
+Twelve more researched with cited official docs; **10 implemented**, 1 deferred, 1 excluded.
+
+**Email verify (single-shot):**
+- **Cloudmersive** — `POST /validate/email/address/full` ("Apikey" header); request body is a BARE JSON
+  string (the quoted email). `ValidAddress` bool → valid|invalid; PascalCase/underscore keys. [api.cloudmersive.com/docs + official client source]
+- **Abstract Email Validation** — `GET https://emailvalidation.abstractapi.com/v1/?api_key=&email=` →
+  `deliverability` (DELIVERABLE|UNDELIVERABLE|UNKNOWN). Boolean sub-checks are nested {value,text}
+  objects. 422 = out of credits. [docs.abstractapi.com/api/email-validation]
+- **MailerCheck** — `POST /api/check/single` (Bearer) → minimal `{status}` body (valid|catch_all|…|blocked);
+  60 req/min. [developers.mailercheck.com/email]
+- **Reoon** — `GET /api/v1/verify?email=&mode=power` (key query) → status (safe|invalid|…|unknown);
+  200-with-error `{"status":"error","reason"}`. [reoon.com API doc]
+- **Mails.so** — `GET /v1/validate?email=` (x-mails-api-key header) → `{data,error}` envelope,
+  `data.result` (deliverable|undeliverable|risky|unknown). [docs.mails.so]
+- **Email Hippo MORE** — `GET /v3/more/json/{key}/{email}` — the license key is a URL PATH segment
+  (AuthAPIKeyPath, second consumer after MixRank). `mailboxVerification.result` (Ok|Bad|RetryLater|
+  Unverifiable, decoded defensively string-or-int); 401 conflates bad key AND quota. [email-verify-api-docs.readthedocs.io]
+- **Truelist** — `POST /api/v1/verify_inline?email=` (Bearer; the address is a QUERY param on a POST) →
+  `emails[0].email_state` (ok|email_invalid|risky|accept_all|unknown). [truelist.io/docs/api]
+
+**Phone validate (single-shot):**
+- **NeutrinoAPI** — `POST /phone-validate` (form); DUAL headers **User-ID + API-Key** (pool secret
+  `"<user-id>:<api-key>"`). KEBAB-CASE response keys; `valid`+`type` → phone_status,
+  `international-number` → mobile_phone. Number-plan validation, not live HLR. [neutrinoapi.com/api/phone-validate]
+
+**Firmographics (single-shot):**
+- **BigPicture.io** — `GET /v1/companies/find?domain=`; the RAW key is the whole Authorization header
+  value (no Bearer prefix). Clearbit-style body: category.{industry,naicsCode}, metrics.{employees,
+  annualRevenue}, geo.*, foundedYear; `linkedin.handle` is a bare handle → adapter prefixes
+  https://www.linkedin.com/. 202 = lookup queued (re-request later; no job token). [docs.bigpicture.io/api]
+
+**Identity (DEPRIORITIZED — US public-records/people-search provenance, ADR-0009):**
+- **Enformion (EnformionGO)** — `POST /Contact/Enrich`; DUAL headers **galaxy-ap-name +
+  galaxy-ap-password** (pool secret `"<name>:<password>"`) + static routing header
+  `galaxy-search-type: DevAPIContactEnrich` set by Build. ≥2 of name/phone/address/email required.
+  200-with-`isError` body; charge-on-match. Maps person.name, top phone (+isConnected→phone_status),
+  first non-business email → personal_email. [enformiongo.readme.io]
+
+**Deferred:**
+- **Sinch Number Lookup v2** — clean oauth2-cc API (token at auth.sinch.com, Basic style), but the
+  endpoint is `POST /v2/projects/{projectId}/lookups`: the account-specific `projectId` is a mandatory
+  URL path segment that is neither a secret (not injectable via key pool) nor derivable from the
+  subject — the same mandatory-config blocker as Enlyft's solution_id. Deferred until per-provider
+  config plumbing exists. [developers.sinch.com/docs/number-lookup-api-v2]
+
+**EXCLUDED (§6):**
+- **FindThatLead** — the vendor's own help center states verbatim "Sorry, we don't have an API
+  available" (Zapier/Make only). The `api.findthatlead.com/v1` base echoed by search summaries is
+  unconfirmed by any official source and was NOT adopted.
+  [helpdesk.findthatlead.com/en/article/do-we-have-an-api-1hlliac/]

@@ -1,0 +1,22 @@
+{
+  "person": {
+    "personId": "G-0000000000000000000",
+    "name": { "firstName": "Jane", "middleName": "Q", "lastName": "Doe" },
+    "age": "42",
+    "addresses": [
+      { "street": "1234 Apple Ct", "city": "Liberty", "state": "OH", "zip": "45044" }
+    ],
+    "phones": [
+      { "number": "+15555550100", "type": "wireless", "isConnected": true }
+    ],
+    "emails": [
+      { "email": "jane.doe@gmail.com", "isValidated": true, "isBusiness": false }
+    ]
+  },
+  "message": "",
+  "identityScore": 90,
+  "pagination": { "currentPageNumber": 1, "resultsPerPage": 1, "totalPages": 1, "totalResults": 1 },
+  "requestType": "DevAPIContactEnrich",
+  "isError": false,
+  "error": { "inputErrors": [], "warnings": [] }
+}

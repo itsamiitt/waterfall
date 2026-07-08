@@ -1,0 +1,18 @@
+{
+  "version": { "v": "More-(0.8.57)", "doc": null },
+  "meta": {
+    "email": "jane@acme.com",
+    "tld": "com",
+    "domain": "acme.com",
+    "subDomain": null,
+    "user": "jane"
+  },
+  "disposition": { "isRole": false, "isFreeMail": false },
+  "emailVerification": {
+    "syntaxVerification": { "isSyntaxValid": true, "reason": "Success" },
+    "dnsVerification": { "isDomainHasDnsRecord": true, "isDomainHasMxRecords": true },
+    "mailboxVerification": { "result": "Ok", "reason": "Success" }
+  },
+  "spamAssess": { "isDisposableEmailAddress": false, "overallRiskScore": 0.0 },
+  "hippoTrust": { "score": 8.5, "level": "High" }
+}

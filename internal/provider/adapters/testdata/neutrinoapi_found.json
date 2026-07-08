@@ -1,0 +1,14 @@
+{
+  "country": "United States",
+  "country-code": "US",
+  "country-code3": "USA",
+  "currency-code": "USD",
+  "international-calling-code": "1",
+  "international-number": "+15555550100",
+  "is-mobile": true,
+  "local-number": "(555) 555-0100",
+  "prefix-network": "Verizon Wireless",
+  "type": "mobile",
+  "valid": true,
+  "api-error": 0
+}

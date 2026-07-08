@@ -1,0 +1,32 @@
+{
+  "id": "4eec624c-c1b4-43c5-9a91-c96859353ccc",
+  "name": "Acme",
+  "legalName": "Acme, Inc.",
+  "domain": "acme.com",
+  "url": "https://www.acme.com/",
+  "type": "private",
+  "phone": "1-415-555-0100",
+  "foundedYear": 2010,
+  "geo": {
+    "city": "San Francisco",
+    "state": "California",
+    "stateCode": "CA",
+    "country": "United States of America",
+    "countryCode": "US"
+  },
+  "category": {
+    "sector": "Technology",
+    "industryGroup": "Technology",
+    "industry": "Software & Computer Services",
+    "subIndustry": "Software",
+    "naicsCode": "541511"
+  },
+  "metrics": {
+    "raised": 25000000,
+    "employees": 3200,
+    "annualRevenue": 90000000,
+    "employeesRange": "1K-5K",
+    "estimatedAnnualRevenue": "$50M-$100M"
+  },
+  "linkedin": { "handle": "company/acme", "industry": "software development" }
+}

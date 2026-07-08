@@ -1,0 +1,20 @@
+{
+  "data": {
+    "id": "4c6b837a-1463-4f40-8d0b-b3afa31a4935",
+    "email": "jane@acme.com",
+    "username": "jane",
+    "domain": "acme.com",
+    "mx_record": "aspmx.l.google.com",
+    "score": 95,
+    "isv_format": true,
+    "isv_domain": true,
+    "isv_mx": true,
+    "isv_noblock": true,
+    "isv_nocatchall": true,
+    "isv_nogeneric": true,
+    "is_free": false,
+    "result": "deliverable",
+    "reason": "accepted_email"
+  },
+  "error": null
+}

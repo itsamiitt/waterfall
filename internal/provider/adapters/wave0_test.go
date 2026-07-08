@@ -481,6 +481,70 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			fixture: "testdata/voila-norbert_found.json", req: person(),
 			want: map[domain.Field]string{domain.FieldWorkEmail: "jane@acme.com", domain.FieldEmailStatus: "95"},
 		},
+		// Wave 10 — further net-new providers.
+		{
+			name: "neutrinoapi", newA: adapters.NeutrinoAPI, pool: "neutrinoapi:default",
+			fixture: "testdata/neutrinoapi_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldPhoneStatus: "valid_mobile", domain.FieldMobilePhone: "+15555550100"},
+		},
+		{
+			name: "cloudmersive", newA: adapters.Cloudmersive, pool: "cloudmersive:default",
+			fixture: "testdata/cloudmersive_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid", domain.FieldCompanyDomain: "acme.com"},
+		},
+		{
+			name: "abstract-email", newA: adapters.AbstractEmail, pool: "abstract-email:default",
+			fixture: "testdata/abstract-email_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "DELIVERABLE"},
+		},
+		{
+			name: "mailercheck", newA: adapters.MailerCheck, pool: "mailercheck:default",
+			fixture: "testdata/mailercheck_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid"},
+		},
+		{
+			name: "reoon", newA: adapters.Reoon, pool: "reoon:default",
+			fixture: "testdata/reoon_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "safe", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
+			name: "mails-so", newA: adapters.MailsSo, pool: "mails-so:default",
+			fixture: "testdata/mails-so_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "deliverable", domain.FieldWorkEmail: "jane@acme.com"},
+		},
+		{
+			name: "emailhippo", newA: adapters.EmailHippo, pool: "emailhippo:default",
+			fixture: "testdata/emailhippo_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "Ok", domain.FieldCompanyDomain: "acme.com"},
+		},
+		{
+			name: "truelist", newA: adapters.Truelist, pool: "truelist:default",
+			fixture: "testdata/truelist_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "ok", domain.FieldWorkEmail: "jane@acme.com", domain.FieldCompanyDomain: "acme.com"},
+		},
+		{
+			name: "bigpicture", newA: adapters.BigPicture, pool: "bigpicture:default",
+			fixture: "testdata/bigpicture_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "Acme",
+				domain.FieldCompanyDomain:      "acme.com",
+				domain.FieldNAICS:              "541511",
+				domain.FieldCompanyFoundedYear: "2010",
+				domain.FieldEmployeeCount:      "3200",
+				domain.FieldCompanyLinkedInURL: "https://www.linkedin.com/company/acme",
+			},
+		},
+		{
+			name: "enformion", newA: adapters.Enformion, pool: "enformion:default",
+			fixture: "testdata/enformion_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldFirstName:     "Jane",
+				domain.FieldLastName:      "Doe",
+				domain.FieldMobilePhone:   "+15555550100",
+				domain.FieldPhoneStatus:   "valid_mobile",
+				domain.FieldPersonalEmail: "jane.doe@gmail.com",
+			},
+		},
 		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),

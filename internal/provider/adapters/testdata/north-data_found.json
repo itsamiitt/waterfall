@@ -1,0 +1,28 @@
+{
+  "id": "57514825",
+  "name": { "name": "1000mikes AG", "legalForm": "AG" },
+  "address": { "street": "Hansaplatz 4", "postalCode": "20099", "city": "Hamburg", "country": "DE" },
+  "register": { "city": "Hamburg", "id": "HRB 103038", "uniqueKey": "12203550103038" },
+  "status": "active",
+  "segmentCodes": {
+    "wz": ["01.13.2"],
+    "uksic": ["01.13"],
+    "nace": ["01.13"],
+    "naics": ["111991", "111211"]
+  },
+  "financials": {
+    "items": [
+      { "id": "Revenue", "name": "Revenue", "value": 5400000, "unit": "EUR", "estimate": false },
+      { "id": "Employees", "name": "Employee number", "value": 42, "estimate": false }
+    ]
+  },
+  "extras": [
+    {
+      "sourceName": "example",
+      "items": [
+        { "id": "url", "name": "Website", "value": "https://www.1000mikes.com/about" },
+        { "id": "phone", "name": "Phone", "value": "+49 40 555 0100" }
+      ]
+    }
+  ]
+}

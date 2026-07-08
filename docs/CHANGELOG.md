@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 11 (part 2): registry aggregators (116 → 118) + ABN Lookup exclusion
+- **north-data** (DEPRIORITIZED — clean OpenAPI'd European-register data, but manual key issuance at
+  €500/mo minimum): `/company/v1/company?name=&fuzzyMatch=true&financials=true&extras=true`;
+  X-Api-Key header; NACE/NAICS codes mapped (uksic deliberately NOT mapped to sic — UK SIC ≠ US SIC);
+  financial indicator ids matched case-insensitively (docs conflict on "Revenue" vs "revenue").
+- **opensanctions** (DEPRIORITIZED — sanctions/PEP screening, near-zero hit rate for ordinary B2B;
+  optional compliance screen): POST /match/default (FollowTheMoney arrays, schema constant
+  "Company"); auth header value is literally "ApiKey <key>" (pool secret holds the full value);
+  values accepted only when the API asserts match==true, confidence scaled by its score.
+- **EXCLUDED: abn-lookup** — the JSON interface is JSONP-only (verified live: callback wrapper even
+  with no callback param, Content-Type text/javascript); the only alternative is SOAP/XML. Matches
+  the ADR-0002/0009 exclusion criteria; recoverable if wrapper-stripping is ever permitted.
+
 ### 2026-07-08 — Wave 11 (part 1): official open-data registries (113 → 116) — first VERIFIED shapes
 Three free, no-credential government/official registries implemented on the new AuthNone scheme
 (egress passthrough, migration 0014). Because they are public APIs, the researcher verified the wire

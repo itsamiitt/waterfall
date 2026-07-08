@@ -173,6 +173,8 @@ var registry = []Registered{
 	{Slug: "brreg", NewAsync: Brreg, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"NO"}, DocsURL: "https://data.brreg.no/enhetsregisteret/api/dokumentasjon/en/index.html"},
 	{Slug: "gleif", New: GLEIF, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://documenter.getpostman.com/view/7679680/SVYrrxuU"},
 	{Slug: "recherche-entreprises", New: RechercheEntreprises, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"FR"}, DocsURL: "https://recherche-entreprises.api.gouv.fr/docs/"},
+	{Slug: "north-data", New: NorthData, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"DE", "EU"}, DocsURL: "https://github.com/northdata/api/blob/master/doc/data-api-userguide/data-api-userguide.md"},
+	{Slug: "opensanctions", New: OpenSanctions, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://www.opensanctions.org/docs/api/"},
 	{Slug: "predictleads", New: PredictLeads, Category: "technographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.predictleads.com/v3"},
 
 	// L1 — Identity resolution / contact append.

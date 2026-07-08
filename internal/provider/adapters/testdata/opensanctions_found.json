@@ -1,0 +1,25 @@
+{
+  "responses": {
+    "q": {
+      "status": 200,
+      "results": [
+        {
+          "id": "NK-example000001",
+          "caption": "ACME HOLDINGS LLC",
+          "schema": "Company",
+          "properties": {
+            "name": ["ACME HOLDINGS LLC"],
+            "country": ["ru"],
+            "topics": ["sanction"]
+          },
+          "datasets": ["us_ofac_sdn"],
+          "target": true,
+          "score": 0.92,
+          "match": true
+        }
+      ],
+      "total": { "value": 1, "relation": "eq" }
+    }
+  },
+  "limit": 5
+}

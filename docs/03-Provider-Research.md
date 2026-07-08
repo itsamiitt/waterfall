@@ -1510,3 +1510,22 @@ Twelve more researched with cited official docs; **10 implemented**, 1 deferred,
   available" (Zapier/Make only). The `api.findthatlead.com/v1` base echoed by search summaries is
   unconfirmed by any official source and was NOT adopted.
   [helpdesk.findthatlead.com/en/article/do-we-have-an-api-1hlliac/]
+
+### Wave 11 — official registries + aggregators (2026-07-08)
+The three no-auth open-data registries (brreg, gleif, recherche-entreprises — AuthNone, first
+VERIFIED-live wire shapes) are described in the CHANGELOG entries; further Wave-11 verdicts:
+- **north-data** (DEPRIORITIZED, implemented) — official European register data via a clean OpenAPI
+  Data API (`GET /company/v1/company`, X-Api-Key); deprioritized solely for heavy onboarding: keys
+  are issued manually via support email, €500/month minimum, 12-month contract.
+  [github.com/northdata/api user guide + swagger.yaml]
+- **opensanctions** (DEPRIORITIZED, implemented) — yente match API (`POST /match/default`,
+  "Authorization: ApiKey <key>"); sanctions/PEP/watchlist screening only — returns data solely for
+  risk-listed entities, so it is an optional compliance screen, not a firmographics waterfall source.
+  Adapter accepts values only when the API asserts match==true, scaling confidence by the returned
+  score. [opensanctions.org/docs/api + api.opensanctions.org/openapi.json]
+- **EXCLUDED: abn-lookup (Australian Business Register)** — the JSON web service at
+  abr.business.gov.au/json is JSONP-ONLY: verified live that omitting the callback param still
+  returns `callback({...})` with Content-Type text/javascript; the only other official interface is
+  SOAP/XML (abrxmlsearch.asmx). JSONP/SOAP-only matches the exclusion criteria. The wrapper is a
+  fixed `callback(`/`)` affix, so the source is recoverable if a wrapper-stripping adapter is ever
+  sanctioned. [abr.business.gov.au, live-verified 2026-07-08]

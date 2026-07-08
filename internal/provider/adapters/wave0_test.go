@@ -571,6 +571,30 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			},
 		},
 		{
+			name: "north-data", newA: adapters.NorthData, pool: "north-data:default",
+			fixture: "testdata/north-data_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:      "1000mikes AG",
+				domain.FieldCompanyType:      "AG",
+				domain.FieldCompanyHQCity:    "Hamburg",
+				domain.FieldCompanyHQCountry: "DE",
+				domain.FieldIndustry:         "01.13",
+				domain.FieldNAICS:            "111991",
+				domain.FieldCompanyRevenue:   "5400000",
+				domain.FieldEmployeeCount:    "42",
+				domain.FieldCompanyDomain:    "1000mikes.com",
+				domain.FieldCompanyPhone:     "+49 40 555 0100",
+			},
+		},
+		{
+			name: "opensanctions", newA: adapters.OpenSanctions, pool: "opensanctions:default",
+			fixture: "testdata/opensanctions_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:      "ACME HOLDINGS LLC",
+				domain.FieldCompanyHQCountry: "RU",
+			},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

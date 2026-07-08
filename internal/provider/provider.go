@@ -26,6 +26,10 @@ const (
 	AuthBearer           AuthScheme = "bearer"
 	AuthBasic            AuthScheme = "basic"
 	AuthOAuth2CC         AuthScheme = "oauth2-cc"
+	// AuthNone marks a public API with no credential (official open-data registries: GLEIF,
+	// Brønnøysund, recherche-entreprises). The descriptor carries no KeyPoolSelector, so the
+	// egress AuthInjector passes the request through without a key lease (egress.go RoundTrip).
+	AuthNone AuthScheme = "none"
 )
 
 // AuthDescriptor tells the egress tier how to authenticate a call without exposing the

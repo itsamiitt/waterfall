@@ -32,6 +32,40 @@ func decode(body []byte) (provider.Result, error) {
 	return res, nil
 }
 
+// TestHTTPAdapter_AuthNone_PassthroughNoLease proves the AuthNone scheme (public no-credential
+// APIs — GLEIF, Brønnøysund, recherche-entreprises): with no KeyPoolSelector the AuthInjector
+// passes the request through untouched — no key lease (the empty resolver would error if
+// consulted) and no credential header on the wire.
+func TestHTTPAdapter_AuthNone_PassthroughNoLease(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("AuthNone must not add an Authorization header, got %q", got)
+		}
+		_, _ = w.Write([]byte(`{"email":"jane@acme.com","score":0.92}`))
+	}))
+	defer srv.Close()
+
+	client := srv.Client()
+	// Empty resolver: any Resolve call fails the test via the returned error surfacing in Fetch.
+	client.Transport = provider.NewAuthInjector(client.Transport, provider.StaticKeyResolver{})
+
+	a := &provider.HTTPAdapter{
+		NameV:   "open-registry",
+		BaseURL: srv.URL,
+		Client:  client,
+		Auth:    provider.AuthDescriptor{Scheme: provider.AuthNone},
+		Caps:    []provider.Capability{{Field: domain.FieldWorkEmail, Cost: 0, ExpectedConfidence: 0.9}},
+		Decode:  decode,
+	}
+	res, err := a.Fetch(context.Background(), provider.Request{Fields: []domain.Field{domain.FieldWorkEmail}})
+	if err != nil {
+		t.Fatalf("fetch through AuthNone passthrough: %v", err)
+	}
+	if res.Values[domain.FieldWorkEmail].Value != "jane@acme.com" {
+		t.Fatalf("unexpected result: %+v", res.Values)
+	}
+}
+
 func TestHTTPAdapter_Success_KeyInjectedAtEgress(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The egress AuthInjector must have placed the real secret; the adapter never did.

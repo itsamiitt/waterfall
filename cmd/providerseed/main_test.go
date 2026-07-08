@@ -22,12 +22,12 @@ func TestSeedInputFor_AllRegistered(t *testing.T) {
 	if len(reg) < 80 {
 		t.Fatalf("expected the full post-rollout registry, got only %d entries", len(reg))
 	}
-	// The auth schemes the providers.auth_scheme CHECK constraint accepts (migrations 0005 + 0013).
-	// Keep this in lockstep with the migration: a new provider.AuthScheme must land here AND in a
-	// migration, or catalog seeding fails at runtime with 23514 (as api-key-dual-header did before
-	// migration 0013). This test turns that runtime drift into a build failure.
+	// The auth schemes the providers.auth_scheme CHECK constraint accepts (migrations 0005 + 0013 +
+	// 0014). Keep this in lockstep with the migration: a new provider.AuthScheme must land here AND
+	// in a migration, or catalog seeding fails at runtime with 23514 (as api-key-dual-header did
+	// before migration 0013). This test turns that runtime drift into a build failure.
 	catalogAuthSchemes := map[string]bool{
-		"api-key-header": true, "api-key-query": true, "api-key-path": true,
+		"none": true, "api-key-header": true, "api-key-query": true, "api-key-path": true,
 		"api-key-dual-header": true, "bearer": true, "basic": true, "oauth2-cc": true,
 	}
 

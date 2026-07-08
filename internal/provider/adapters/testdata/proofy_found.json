@@ -1,0 +1,11 @@
+{
+  "status": "valid",
+  "syntax": { "username": "jane", "domain": "acme.com", "valid": true },
+  "free": false,
+  "roleAccount": false,
+  "roleNoReply": false,
+  "disposable": false,
+  "possibleSpamTrap": false,
+  "mx": { "records": ["aspmx.l.google.com."], "acceptsMail": true },
+  "deliverability": { "canConnect": true, "fullInbox": false, "catchAll": false, "deliverable": true, "disabled": false }
+}

@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 12 (part 2): verifiers + phone + charity register (126 → 131)
+- **sendgrid-validation** (bearer, dedicated Email-Validation key): result.verdict Valid|Risky|Invalid.
+- **proofy** (api-key-query): reads status at $.status OR $.result.status (documented schema/example
+  inconsistency handled defensively).
+- **captainverify** (api-key-query): 200-with-success=false error convention; credit exhaustion
+  degrades to result="unknown" (not an error).
+- **data8-phone** (api-key-query, POST body): Status.Success=false in-body error; phone_status from
+  ValidationResult+NumberType; NoCoverage/Ambiguous → inconclusive (omitted).
+- **charity-commission-uk** (DEPRIORITIZED, Ocp-Apim-Subscription-Key): implemented single-shot
+  against the OFFICIALLY-VERIFIED searchCharityName response only (charity_name, date_of_registration
+  → founded-year proxy, constant company_type="charity") — the detailed-fetch fields were UNVERIFIED
+  camelCase from an unofficial client with mismatched routes, so deliberately NOT mapped.
+
 ### 2026-07-08 — Wave 12 (part 1): Czech ARES + Ireland CRO registries (124 → 126)
 Final-sweep registries batch 1 — 2 implemented, 2 deferred, 1 excluded:
 - **ares-cz** (ACTIVE-CANDIDATE, AuthNone): official Czech Ministry of Finance register; POST

@@ -647,6 +647,35 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			},
 		},
 		{
+			name: "sendgrid-validation", newA: adapters.SendGridValidation, pool: "sendgrid-validation:default",
+			fixture: "testdata/sendgrid-validation_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "Valid"},
+		},
+		{
+			name: "proofy", newA: adapters.Proofy, pool: "proofy:default",
+			fixture: "testdata/proofy_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid"},
+		},
+		{
+			name: "captainverify", newA: adapters.CaptainVerify, pool: "captainverify:default",
+			fixture: "testdata/captainverify_found.json", req: emailReq(),
+			want: map[domain.Field]string{domain.FieldEmailStatus: "valid"},
+		},
+		{
+			name: "charity-commission-uk", newA: adapters.CharityCommissionUK, pool: "charity-commission-uk:default",
+			fixture: "testdata/charity-commission-uk_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "CANCER RESEARCH UK",
+				domain.FieldCompanyType:        "charity",
+				domain.FieldCompanyFoundedYear: "2005",
+			},
+		},
+		{
+			name: "data8-phone", newA: adapters.Data8Phone, pool: "data8-phone:default",
+			fixture: "testdata/data8-phone_found.json", req: person(),
+			want: map[domain.Field]string{domain.FieldPhoneStatus: "valid_mobile", domain.FieldMobilePhone: "+447700900123"},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

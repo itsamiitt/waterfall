@@ -1,0 +1,15 @@
+{
+  "credits": 870,
+  "result": "valid",
+  "details": "ok",
+  "free": false,
+  "role": false,
+  "disposable": false,
+  "ok4all": false,
+  "protected": false,
+  "did_you_mean": "",
+  "email": "jane@acme.com",
+  "email_normalized": "jane@acme.com",
+  "success": true,
+  "message": null
+}

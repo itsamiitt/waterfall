@@ -122,6 +122,9 @@ var registry = []Registered{
 	{Slug: "truelist", New: Truelist, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://truelist.io/docs/api"},
 	{Slug: "verimail", New: Verimail, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://verimail.io/docs/v3"},
 	{Slug: "mailboxlayer", New: Mailboxlayer, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.apilayer.com/mailboxlayer/docs/api-documentation"},
+	{Slug: "sendgrid-validation", New: SendGridValidation, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.twilio.com/docs/sendgrid/api-reference/email-address-validation/validate-an-email"},
+	{Slug: "proofy", New: Proofy, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.proofy.io/api-reference/endpoint/verify-single"},
+	{Slug: "captainverify", New: CaptainVerify, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://captainverify.com/api.html"},
 	{Slug: "sendpulse-verifier", NewAsync: SendPulseVerifier, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://sendpulse.com/integrations/api/verifier"},
 
 	// L5 — Phone validation.
@@ -143,6 +146,7 @@ var registry = []Registered{
 	{Slug: "neutrinoapi", New: NeutrinoAPI, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.neutrinoapi.com/api/phone-validate/"},
 	{Slug: "melissa-global-phone", New: MelissaGlobalPhone, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.melissa.com/cloud-api/global-phone/global-phone-index.html"},
 	{Slug: "loqate-phone", New: LoqatePhone, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.loqate.com/api-reference/phone-validation/individual-validate"},
+	{Slug: "data8-phone", New: Data8Phone, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"GB", "global"}, DocsURL: "https://docs.data-8.co.uk/web-services/phonevalidation/isvalid"},
 
 	// L4 — Phone / contact finding.
 	{Slug: "salesintel", New: SalesIntel, Category: "phone-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"US", "global"}, DocsURL: "https://developer.salesintel.io/salesintel-api-documentation/people-contact-apis"},
@@ -180,6 +184,7 @@ var registry = []Registered{
 	{Slug: "recherche-entreprises", New: RechercheEntreprises, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"FR"}, DocsURL: "https://recherche-entreprises.api.gouv.fr/docs/"},
 	{Slug: "ares-cz", New: AresCZ, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"CZ"}, DocsURL: "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/v3/api-docs"},
 	{Slug: "cro-ie", New: CroIE, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"IE"}, DocsURL: "https://services.cro.ie/cws/help"},
+	{Slug: "charity-commission-uk", New: CharityCommissionUK, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"GB"}, DocsURL: "https://register-of-charities.charitycommission.gov.uk/en/documentation-on-the-api"},
 	{Slug: "north-data", New: NorthData, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"DE", "EU"}, DocsURL: "https://github.com/northdata/api/blob/master/doc/data-api-userguide/data-api-userguide.md"},
 	{Slug: "nz-companies", NewAsync: NZCompanies, Category: "firmographics", Status: "ACTIVE-CANDIDATE", Regions: []string{"NZ"}, DocsURL: "https://portal.api.business.govt.nz/api/nzbn"},
 	{Slug: "opensanctions", New: OpenSanctions, Category: "firmographics", Status: "DEPRIORITIZED", Regions: []string{"global"}, DocsURL: "https://www.opensanctions.org/docs/api/"},

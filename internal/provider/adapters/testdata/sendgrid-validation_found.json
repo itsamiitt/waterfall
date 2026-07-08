@@ -1,0 +1,16 @@
+{
+  "result": {
+    "email": "jane@acme.com",
+    "verdict": "Valid",
+    "score": 0.98123,
+    "local": "jane",
+    "host": "acme.com",
+    "suggestion": "",
+    "checks": {
+      "domain": { "has_valid_address_syntax": true, "has_mx_or_a_record": true, "is_suspected_disposable_address": false },
+      "local_part": { "is_suspected_role_address": false },
+      "additional": { "has_known_bounces": false, "has_suspected_bounces": false }
+    },
+    "source": "signup"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "Status": { "Success": true, "CreditsRemaining": 1000 },
+  "Result": {
+    "TelephoneNumber": "+447700900123",
+    "ValidationResult": "Valid",
+    "ValidationLevel": "FullNumber",
+    "NumberType": "Mobile",
+    "Location": "United Kingdom",
+    "Provider": "EE",
+    "CountryCode": "GB",
+    "CountryName": "United Kingdom"
+  }
+}

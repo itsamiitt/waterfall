@@ -1,0 +1,21 @@
+{
+  "Version": "9.4.0.1273",
+  "TransmissionReference": "",
+  "TransmissionResults": "",
+  "Records": [
+    {
+      "RecordID": "1",
+      "Results": "PS01,PS20",
+      "PhoneNumber": "5555550100",
+      "CountryAbbreviation": "US",
+      "CountryName": "United States",
+      "Carrier": "Verizon Wireless",
+      "InternationalPhoneNumber": "+15555550100",
+      "PhoneCountryDialingCode": "1",
+      "PhoneNationalDestinationCode": "555",
+      "PhoneSubscriberNumber": "5550100",
+      "Locality": "New York",
+      "TimeZoneCode": "EST"
+    }
+  ]
+}

@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 11 (part 4, final): mailboxlayer + Melissa + Loqate (121 → 124)
+Wave 11 closes at 12/12 researched — 11 implemented, 1 excluded (abn-lookup):
+- **mailboxlayer** (APILayer legacy host apilayer.net, access_key query): ALL errors are HTTP 200
+  with {success:false,error:{code}} (live-verified) — classified by numeric code (101/102 auth,
+  104 quota, 106 rate-limit, 999 transient); boolean smtp_check → valid|invalid; echoed email
+  classified work vs personal by the free/disposable flags.
+- **melissa-global-phone** (license key as "id" query; official OpenAPI spec): verdict is the
+  comma-delimited Records[].Results code string — PS01 = valid (PS08 → landline), absence = invalid;
+  request-level failures arrive as a non-empty TransmissionResults inside HTTP 200 (specific GE
+  codes UNVERIFIED — any non-empty value treated as AUTH-class).
+- **loqate-phone** (GBG; "Key" query): Items-wrapped error envelope checked before success fields
+  (legacy paths return errors under HTTP 200 — live-verified); IsValid is a STRING Yes|No|Maybe —
+  "Maybe" yields no phone_status (inconclusive), Yes maps NumberType through the normalized vocab.
+
 ### 2026-07-08 — Wave 11 (part 3): NZ registry + verifiers (118 → 121) + TokenFromRequest
 - **ADR-0024 extension: `AsyncHTTPAdapter.TokenFromRequest`** — derives the poll token from the
   ORIGINAL request when the submit body carries no job id (ParseSubmit, if set, still validates the

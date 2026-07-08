@@ -121,6 +121,7 @@ var registry = []Registered{
 	{Slug: "emailhippo", New: EmailHippo, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://email-verify-api-docs.readthedocs.io/en/latest/"},
 	{Slug: "truelist", New: Truelist, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://truelist.io/docs/api"},
 	{Slug: "verimail", New: Verimail, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://verimail.io/docs/v3"},
+	{Slug: "mailboxlayer", New: Mailboxlayer, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.apilayer.com/mailboxlayer/docs/api-documentation"},
 	{Slug: "sendpulse-verifier", NewAsync: SendPulseVerifier, Category: "email-verify", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://sendpulse.com/integrations/api/verifier"},
 
 	// L5 — Phone validation.
@@ -140,6 +141,8 @@ var registry = []Registered{
 	{Slug: "trestle", New: Trestle, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"US", "global"}, DocsURL: "https://docs.trestleiq.com/api-reference/phone-validation-api"},
 	{Slug: "numlookupapi", New: NumLookupAPI, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://numlookupapi.com/docs/validate"},
 	{Slug: "neutrinoapi", New: NeutrinoAPI, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://www.neutrinoapi.com/api/phone-validate/"},
+	{Slug: "melissa-global-phone", New: MelissaGlobalPhone, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.melissa.com/cloud-api/global-phone/global-phone-index.html"},
+	{Slug: "loqate-phone", New: LoqatePhone, Category: "phone-validate", Status: "ACTIVE-CANDIDATE", Regions: []string{"global"}, DocsURL: "https://docs.loqate.com/api-reference/phone-validation/individual-validate"},
 
 	// L4 — Phone / contact finding.
 	{Slug: "salesintel", New: SalesIntel, Category: "phone-find", Status: "ACTIVE-CANDIDATE", Regions: []string{"US", "global"}, DocsURL: "https://developer.salesintel.io/salesintel-api-documentation/people-contact-apis"},

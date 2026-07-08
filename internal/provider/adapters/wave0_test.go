@@ -600,6 +600,31 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 			want: map[domain.Field]string{domain.FieldEmailStatus: "deliverable", domain.FieldWorkEmail: "jane@acme.com"},
 		},
 		{
+			name: "mailboxlayer", newA: adapters.Mailboxlayer, pool: "mailboxlayer:default",
+			fixture: "testdata/mailboxlayer_found.json", req: emailReq(),
+			want: map[domain.Field]string{
+				domain.FieldEmailStatus:   "valid",
+				domain.FieldWorkEmail:     "jane@acme.com",
+				domain.FieldCompanyDomain: "acme.com",
+			},
+		},
+		{
+			name: "melissa-global-phone", newA: adapters.MelissaGlobalPhone, pool: "melissa-global-phone:default",
+			fixture: "testdata/melissa-global-phone_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldPhoneStatus: "valid_unknown",
+				domain.FieldMobilePhone: "+15555550100",
+			},
+		},
+		{
+			name: "loqate-phone", newA: adapters.LoqatePhone, pool: "loqate-phone:default",
+			fixture: "testdata/loqate-phone_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldPhoneStatus: "valid_mobile",
+				domain.FieldMobilePhone: "+15555550100",
+			},
+		},
+		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),
 			want: map[domain.Field]string{

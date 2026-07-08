@@ -545,6 +545,31 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 				domain.FieldPersonalEmail: "jane.doe@gmail.com",
 			},
 		},
+		// Wave 11 — official open-data registries (AuthNone).
+		{
+			name: "gleif", newA: adapters.GLEIF, pool: "gleif:default",
+			fixture: "testdata/gleif_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "Bloomberg Finance L.P.",
+				domain.FieldCompanyHQCountry:   "US",
+				domain.FieldCompanyHQCity:      "New York",
+				domain.FieldCompanyType:        "T91T",
+				domain.FieldCompanyFoundedYear: "2007",
+			},
+		},
+		{
+			name: "recherche-entreprises", newA: adapters.RechercheEntreprises, pool: "recherche-entreprises:default",
+			fixture: "testdata/recherche-entreprises_found.json", req: person(),
+			want: map[domain.Field]string{
+				domain.FieldCompanyName:        "DIRECTION INTERMINISTERIELLE DU NUMERIQUE (DINUM)",
+				domain.FieldIndustry:           "84.11Z",
+				domain.FieldCompanyType:        "7120",
+				domain.FieldCompanyFoundedYear: "2017",
+				domain.FieldCompanyHQCity:      "PARIS",
+				domain.FieldCompanyHQCountry:   "FR",
+				domain.FieldCompanyRevenue:     "12000000",
+			},
+		},
 		{
 			name: "extruct", newA: adapters.Extruct, pool: "extruct:default",
 			fixture: "testdata/extruct_found.json", req: person(),

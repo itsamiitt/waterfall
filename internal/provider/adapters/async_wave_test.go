@@ -173,6 +173,19 @@ func TestAsyncWave_SubmitPoll(t *testing.T) {
 				domain.FieldSIC: "82990", domain.FieldCompanyHQCountry: "England", domain.FieldCompanyHQCity: "London",
 			},
 		},
+		// Wave 11 — official open-data registries (AuthNone: no credential, egress passthrough).
+		{
+			name: "brreg", newA: adapters.Brreg, pool: "brreg:default", secret: "UNUSED",
+			submitMethod: "GET", submitPath: "/enheter",
+			submitBody: `{"_embedded":{"enheter":[{"organisasjonsnummer":"923609016","navn":"EQUINOR ASA"}]},"page":{"totalElements":1}}`,
+			pollBody:   `{"organisasjonsnummer":"923609016","navn":"EQUINOR ASA","organisasjonsform":{"kode":"ASA","beskrivelse":"Allmennaksjeselskap"},"hjemmeside":"www.equinor.com","telefon":"51 99 00 00","naeringskode1":{"kode":"06.100","beskrivelse":"Utvinning av råolje"},"antallAnsatte":21467,"stiftelsesdato":"1972-09-18","forretningsadresse":{"adresse":["Forusbeen 50"],"poststed":"STAVANGER","landkode":"NO","land":"Norge"},"konkurs":false}`,
+			req:        provider.Request{Known: map[domain.Field]string{domain.FieldCompanyName: "Equinor"}},
+			want: map[domain.Field]string{
+				domain.FieldCompanyName: "EQUINOR ASA", domain.FieldCompanyType: "ASA", domain.FieldCompanyFoundedYear: "1972",
+				domain.FieldEmployeeCount: "21467", domain.FieldIndustry: "Utvinning av råolje", domain.FieldCompanyDomain: "equinor.com",
+				domain.FieldCompanyHQCountry: "NO", domain.FieldCompanyHQCity: "STAVANGER", domain.FieldCompanyPhone: "51 99 00 00",
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

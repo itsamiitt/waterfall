@@ -5,6 +5,21 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-08 — Wave 11 (part 1): official open-data registries (113 → 116) — first VERIFIED shapes
+Three free, no-credential government/official registries implemented on the new AuthNone scheme
+(egress passthrough, migration 0014). Because they are public APIs, the researcher verified the wire
+shapes LIVE — these are the rollout's first fixtures marked **VERIFIED** rather than UNVERIFIED:
+- **brreg** (Norway Brønnøysund Enhetsregisteret, match→fetch): navn search → `/enheter/{orgnr}`;
+  Norwegian keys (navn, antallAnsatte, naeringskode1, stiftelsesdato, forretningsadresse); zero-match
+  = 200 with `_embedded` absent; 410 Gone = legally removed (purge caches).
+- **gleif** (GLEIF LEI Records, global): `filter[entity.legalName]` search (JSON:API); legalForm.id
+  is an ISO 20275 ELF code (documented as code-not-label); no-match = 200 empty data[].
+- **recherche-entreprises** (French DINUM/SIRENE): `/search?q=`; NAF/APE + INSEE codes documented as
+  code-valued; hq_country = constant "FR" (France-only registry, cited). DELIBERATELY not mapped:
+  tranche_effectif_salarie (band-code semantics conflicted in research — needs a verified INSEE
+  decode) and dirigeants names (company officers, not the enrichment subject).
+Remaining Wave-11 research (9 providers) still in flight. `go build ./...` + `go test ./...` green.
+
 ### 2026-07-08 — Wave 10: +10 provider adapters (103 → 113)
 Twelve more providers researched (cited); 10 implemented, 1 deferred, 1 excluded:
 - **Email verify**: cloudmersive (bare-JSON-string body), abstract-email, mailercheck, reoon,

@@ -47,3 +47,6 @@ contract, in one place.
 | `truelist_found.json` | Truelist | `POST /api/v1/verify_inline` | UNVERIFIED |
 | `bigpicture_found.json` | BigPicture.io Company | `GET /v1/companies/find` | UNVERIFIED |
 | `enformion_found.json` | Enformion Contact Enrich | `POST /Contact/Enrich` | UNVERIFIED |
+| `brreg` (async test) | Norway Brønnøysund registry | `GET /enheter?navn=` → `GET /enheter/{orgnr}` | VERIFIED (live 2026-07-08 — public no-auth API) |
+| `gleif_found.json` | GLEIF LEI Records | `GET /lei-records?filter[entity.legalName]=` | VERIFIED (live 2026-07-08 — public no-auth API) |
+| `recherche-entreprises_found.json` | French Recherche d'entreprises | `GET /search?q=` | VERIFIED (live 2026-07-08 — public no-auth API) |

@@ -1,0 +1,31 @@
+{
+  "results": [
+    {
+      "siren": "130025265",
+      "nom_complet": "DIRECTION INTERMINISTERIELLE DU NUMERIQUE (DINUM)",
+      "nom_raison_sociale": "DIRECTION INTERMINISTERIELLE DU NUMERIQUE",
+      "sigle": "DINUM",
+      "siege": {
+        "siret": "13002526500013",
+        "adresse": "20 AVENUE DE SEGUR 75007 PARIS",
+        "code_postal": "75007",
+        "libelle_commune": "PARIS",
+        "etat_administratif": "A"
+      },
+      "activite_principale": "84.11Z",
+      "categorie_entreprise": "ETI",
+      "date_creation": "2017-05-24",
+      "dirigeants": [],
+      "etat_administratif": "A",
+      "nature_juridique": "7120",
+      "tranche_effectif_salarie": "32",
+      "statut_diffusion": "O",
+      "finances": { "2023": { "ca": 12000000, "resultat_net": 250000 } },
+      "tva": ["FR07130025265"]
+    }
+  ],
+  "total_results": 1,
+  "page": 1,
+  "per_page": 1,
+  "total_pages": 1
+}

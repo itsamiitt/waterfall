@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 25 (part b1): intent write-back mapping (canonical Field projection)
+`intent.Project` maps `[]ClassScore` → the three canonical Fields (ADR-0027): `intent_score` = the
+strongest class's score, `buying_signal` = the strongest class, `intent_topics` = classes at/above a
+threshold (score-desc, normalized comma-join). `Writeback.Fields()` yields the `(Field,value)` pairs for
+the `field_versions` store — intent is the **single write-back owner**; the per-class breakdown stays in
+`intent_scores`, never overloaded onto the single-valued Fields. Deterministic; empty scores → zero
+Writeback. Tests + `-race` green; full suite clean; zero new Go dep. The store write + async
+`intent_refresh` lane + `intent_*` persistence (migration 0016, live PG) follow.
+
 ### 2026-07-10 — R&I Slice 25 (part a): computed Intent Engine scoring core (`internal/intent`)
 The **deterministic, auditable intent scoring core** (ADR-0027). Ten intent classes; a `Scorer` turns
 collected `Signal`s into per-class scores via **decay** (`magnitude·2^(-age/halflife)`) → **weight** →

@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 23 (part a): research orchestrator core + Dossier schema (`internal/research`)
+The **domain→Dossier assembly core** (ADR-0028): a **deterministic DAG orchestrator** that composes the
+discovery (`internal/collect`), enrichment (engine seam), and AI (`internal/ai` cascade) seams in a
+**fixed order** — the orchestrator, never a model, chooses the steps (ADR-0026). The `Dossier` response
+schema mirrors doc 06 + `openapi-research.json`: firmographics reference canonical Field values while
+competitors/news/etc. are Dossier-only, and every value carries a `Source` with
+`source_type ∈ {api,dataset,ai_inference}` (AI values kept provenance-distinct, never fused as facts).
+Intent is async → `pending` on a sync assembly (ADR-0027). In-memory + seam-injected (unit-testable with
+fakes); persistence (`research_*` / migration 0015), `internal/job` wiring, and the G2 idempotency cache
+land in the next increments. Tests (assembly/provenance/deterministic-order/error-resilience) + `-race`
+green; full suite clean. Zero new Go dep.
+
 ### 2026-07-10 — R&I Slice 22 (part 2): search collection layer (`internal/collect`)
 The data-collection **search** client (ADR-0025): **Brave / Tavily / Serper** as bounded, breaker-guarded
 egress calls reusing the egress key-injection seam (`provider.WithAuthDescriptor`). Search returns

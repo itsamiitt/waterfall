@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 25 (part a): computed Intent Engine scoring core (`internal/intent`)
+The **deterministic, auditable intent scoring core** (ADR-0027). Ten intent classes; a `Scorer` turns
+collected `Signal`s into per-class scores via **decay** (`magnitude·2^(-age/halflife)`) → **weight** →
+**noisy-OR corroboration** → optional **isotonic Calibrator hook**, with per-signal `Reasoning` retained
+(G5, explainability) and a per-class confidence. Weights + half-lives are a versioned config
+(`DefaultWeights` cold-start). Deviation (ADR-0003): `engine.fuseAgreeing`/`logit` are unexported, so v1
+uses a self-contained noisy-OR combiner (0 with no evidence, monotonic in evidence); `calibrate.FitIsotonic`
+is the offline backfill and log-odds Naive-Bayes is the calibrated target — all scores **UNVERIFIED** until
+backtested. Tests (decay, corroboration, no-evidence=0, calibrator hook, clamp, deterministic reasoning) +
+`-race` green; full suite clean; zero new Go dep. PG-free core; the async `intent_refresh` lane + write-back
+into `field_versions` + `intent_*` persistence (migration 0016, live PG) follow.
+
 ### 2026-07-10 — R&I Slice 24 (part b): `POST /v1/research` mounted LIVE in enrichapi (smoke-verified)
 The Research API is now **served by the real `enrichapi` binary**. `api.Server` gains an optional
 `Research http.Handler` field, mounted at `POST /v1/research` behind the same posture as enrichment

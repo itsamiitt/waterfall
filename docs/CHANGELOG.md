@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 23 (part d): migration 0015 — `research_*` tables (Class-T FORCE RLS, live-validated)
+The persistence schema for the research subsystem: `research_runs` / `research_steps` / `research_dossiers`
+/ `research_sources` (ADR-0028) — backing the async `POST /v1/research` (202+job_id), `GET /v1/research/{id}`,
+`GET /v1/dossiers/{domain}`, and queryable per-value provenance (G5, `source_type` CHECK). Class-T tenant
+isolation matching `0001` exactly (`app_current_tenant()` + FORCE RLS `USING`/`WITH CHECK`; `SET LOCAL
+app.current_tenant` per tx; app role has no BYPASSRLS). **Live-validated against ephemeral PG17**: all 15
+migrations apply cleanly in order (no collision with the dashboard schema); 4 tables with FORCE RLS + 4
+isolation policies; the **G1 release-blocker passes as a NON-superuser** (tenant B sees 0 of tenant A's rows)
+and a cross-tenant INSERT is rejected by `WITH CHECK`. The Go pgstore + a build-tagged RLS integration test
+land next with the async-flow wiring.
+
 ### 2026-07-10 — R&I Slice 25 (part b1): intent write-back mapping (canonical Field projection)
 `intent.Project` maps `[]ClassScore` → the three canonical Fields (ADR-0027): `intent_score` = the
 strongest class's score, `buying_signal` = the strongest class, `intent_topics` = classes at/above a

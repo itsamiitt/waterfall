@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 23 (part e): research pgstore + RLS integration test (live-green)
+`internal/research.Store` — a Postgres-backed store for Dossiers + queryable provenance (migration 0015),
+RLS-scoped exactly like `internal/pgstore` (never takes a tenant id; binds `app.current_tenant` per tx from
+the ctx Principal; the app role has no BYPASSRLS). `SaveDossier` upserts `research_dossiers` + replaces
+`research_sources` (G5, `source_type`-guarded); `GetDossier` / `LatestBySubject` read within-tenant. A
+build-tagged (`integration`) RLS test — the docs/21 §1 release-blocker — **passes LIVE against ephemeral
+PG17**: tenant B sees 0 of A's dossiers (by id AND by subject), a no-principal ctx is rejected
+(fail-closed), and a cross-tenant INSERT is rejected by `WITH CHECK`. `go build/vet/test` + `gofmt` green
+(integration test excluded from the default suite by tag); zero new Go dep. The async 202+job_id / GET
+wiring follows.
+
 ### 2026-07-10 — R&I Slice 23 (part d): migration 0015 — `research_*` tables (Class-T FORCE RLS, live-validated)
 The persistence schema for the research subsystem: `research_runs` / `research_steps` / `research_dossiers`
 / `research_sources` (ADR-0028) — backing the async `POST /v1/research` (202+job_id), `GET /v1/research/{id}`,

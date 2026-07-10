@@ -11,7 +11,7 @@ Decision section in place.
 |-----|-------|--------|
 | [0000](0000-adr-template.md) | ADR template | Template |
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
-| [0002](0002-api-first-no-scraping.md) | API-first only; no scraping/browser automation | Accepted |
+| [0002](0002-api-first-no-scraping.md) | API-first only; no scraping/browser automation | Accepted (superseded by [0025](0025-data-collection-search-dataset-apis.md)) |
 | [0003](0003-plan-first-gated-process.md) | Plan-first, gate-driven delivery process | Accepted |
 | [0004](0004-identity-resolution-tiered.md) | Identity resolution: tiered deterministic→blocking→Fellegi–Sunter→cost-gated ML | Accepted |
 | [0005](0005-confidence-calibrate-then-fuse.md) | Confidence: calibrate-then-fuse (log-odds) + SPRT stop | Accepted |
@@ -34,9 +34,23 @@ Decision section in place.
 | [0022](0022-store-adapter-dependency-policy.md) | Per-store adapter dependency policy: hand-roll Redis/S3/ClickHouse-HTTP; ADR-0016 exception only for Kafka/Temporal | Accepted |
 | [0023](0023-adapter-registry-catalog-seed-field-vocabulary.md) | Adapter registry (single source of truth) + code→catalog seeder + Field-vocabulary extension for the 200-provider rollout | Accepted |
 | [0024](0024-async-multi-credential-provider-egress.md) | Asynchronous & multi-credential provider egress (per-adapter CallPolicy, oauth2-cc, async submit→poll) | Accepted (phased) |
+| [0025](0025-data-collection-search-dataset-apis.md) | Data-collection: search-API & public-dataset providers; returned-URL fetch boundary (supersedes 0002, refines 0009) | Accepted |
+| [0026](0026-llm-egress-adapter-cost-cascade.md) | LLM-as-egress-adapter + deterministic AI cost cascade (zero new Go dep) | Accepted |
+| [0027](0027-computed-intent-methodology.md) | Computed intent methodology: signal→decay→fuse→calibrate→guardrailed score (async-only) | Accepted |
+| [0028](0028-research-dossier-api-field-additions.md) | Research-dossier API + canonical-Field additions (33→39); one-value-per-Field preserved | Accepted |
+| [0029](0029-embeddings-rag-postgres-deferred.md) | Embeddings / RAG on Postgres — deferred (guards zero-dep + free-first) | Accepted (defer) |
+| [0030](0030-crm-outbound-egress.md) | CRM outbound connectors through the single egress-proxy (preserves 0010) | Accepted (roadmap) |
 
 > All architecture decisions are recorded. **Resolved:** datastore (ADR-0011), API protocols (ADR-0012),
 > queue transport (ADR-0013), orchestration (ADR-0014, cost-gated), cloud/topology (ADR-0015), secrets
 > backend (ADR-0017 — closes open item KM-1/SE-secrets), frontend dependency exception (ADR-0016),
 > dashboard sessions (ADR-0018), dashboard realtime transport (ADR-0019), platform/tenant table
 > taxonomy (ADR-0020).
+>
+> **Research & Intelligence series (Phase R&I, 2026-07-09):** ADR-0025 admits search/dataset APIs as
+> providers while keeping browser/DOM scraping permanently banned (**supersedes 0002**, refines 0009);
+> ADR-0026 makes LLMs egress adapters with a deterministic free→paid cost cascade (zero new Go dep);
+> ADR-0027 defines the computed-intent methodology (supersedes the ingest-only framing of `docs/14`);
+> ADR-0028 adds the research-dossier API + six single-valued Fields (33→39) DOC-FIRST; ADR-0029 defers
+> embeddings/RAG to protect the zero-dependency + free-first posture; ADR-0030 routes CRM push through
+> the **single** egress-proxy (preserves 0010) as roadmap. Authority: [`docs/research-intelligence/`](../docs/research-intelligence/).

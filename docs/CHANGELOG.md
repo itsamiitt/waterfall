@@ -5,6 +5,32 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-09 — Research & Intelligence platform: planning series + 6 ADRs (design-only, plan-first)
+Opened the plan-first design series that evolves the engine into an Enterprise Research & Intelligence
+platform (domain → Dossier; computed intent; AI research), reusing the enrichment core, ~145-adapter
+Provider machinery, durable queue/worker fabric, RLS multi-tenancy, and the admin dashboard. **Docs +
+ADRs only — no production code** (per ADR-0003; implementation is a later gate). Resolves four approved
+forks and the cross-cutting conflicts an adversarial architecture review surfaced (one global migration
+ledger 0015–0018; one ADR map; one owner per table; deterministic-gate-disposes for AI; single egress
+preserved; stdlib-only audit).
+- **6 new ADRs (0025–0030):** 0025 data-collection — admits third-party **search APIs** (Brave/Tavily/
+  Serper) + public **bulk datasets** (Common Crawl *index*, OpenAlex, SEC EDGAR, GLEIF) as legitimate
+  server-side Providers while browser automation/DOM scraping stay permanently banned (**supersedes
+  0002**, refines 0009; returned-URL boundary; Common Crawl index-only, WARC deferred). 0026 LLM-as-
+  egress-adapter + deterministic free→paid cost cascade (**zero new Go dep**). 0027 computed-intent
+  methodology (signal→decay→log-odds fuse→isotonic calibrate→guardrailed score; async-only; supersedes
+  the ingest-only framing of `docs/14`). 0028 research-dossier API + six single-valued Fields (33→39,
+  DOC-FIRST); multi-valued data stays Dossier-only. 0029 embeddings/RAG deferred (guards zero-dep +
+  free-first). 0030 CRM outbound through the **single** egress-proxy (roadmap; preserves 0010).
+- **`docs/00 §7`:** registered the 6 new canonical scalar Fields (`twitter_url`, `facebook_url`,
+  `github_url`, `crunchbase_url`, `company_ticker`, `total_funding_usd`) + the multi-valued-is-Dossier-
+  only note. **`adr/README.md`** index updated; **`adr/0002`** marked superseded-by-0025 (Status line
+  only — Decision unchanged, append-only rule).
+- **New series `docs/research-intelligence/`** (00-overview anchor + 01–16 + `openapi-research.json`),
+  modeled on `docs/waterfall-dashboard/`. New Mermaid diagrams: `diagrams/research-pipeline.mmd`,
+  `intent-flow.mmd`, `ai-orchestration.mmd`. Implementation is scoped as Slices 21–27 (docs 43–49) in
+  `16-implementation-phases.md`, not yet built. All scale/cost/perf numbers carry **UNVERIFIED**.
+
 ### 2026-07-08 — Wave 13: remaining 200-sheet rows triaged (133 → 135)
 Researched the 20 remaining spreadsheet rows that plausibly had a self-serve API. Honest outcome:
 **2 implemented, 7 deferred, 11 EXCLUDED** — most of the "big name" contact DBs have real APIs but

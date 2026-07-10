@@ -121,8 +121,10 @@ Canonical Field vocabulary (extend only here): `work_email`, `personal_email`, `
 `naics`, `sic`, `company_revenue`, `funding_stage`, `company_founded_year`, `company_hq_country`,
 `company_hq_city`, `company_type`, `company_linkedin_url`, `company_phone`, `duns_number`,
 `technographics`, `intent_topics`, `intent_score`, `buying_signal`, `first_name`, `last_name`,
-`full_name` (name fields are person match keys / inputs for email-finder providers — added
-Slice 04, `docs/26`).
+`full_name`, `twitter_url`, `facebook_url`, `github_url`, `crunchbase_url`, `company_ticker`,
+`total_funding_usd` (name fields are person match keys / inputs for email-finder providers — added
+Slice 04, `docs/26`; the final six social/identifier scalars — added by the Research & Intelligence
+series, ADR-0028 / `docs/research-intelligence/`, registered DOC-FIRST ahead of Slice 22).
 
 > **Firmographics/technographics/intent Fields** (`company_revenue`, `funding_stage`,
 > `company_founded_year`, `company_hq_country`, `company_hq_city`, `company_type`,
@@ -131,6 +133,14 @@ Slice 04, `docs/26`).
 > (ADR-0023). `technographics` and `intent_topics` are inherently multi-valued but stored as a
 > **single normalized Observation value** — a sorted, deduped, comma-joined list — so the
 > one-value-per-Field `field_versions` model (`docs/06`) is unchanged.
+
+> **Research & Intelligence scalars** (`twitter_url`, `facebook_url`, `github_url`,
+> `crunchbase_url`, `company_ticker`, `total_funding_usd`) are each genuinely **single-valued**, so
+> they slot into `field_versions` with no special handling (ADR-0028). Everything the Research &
+> Intelligence series surfaces that is **multi-valued or relational** — competitors, acquisitions,
+> funding *rounds*/investors, partnerships, multi-location, SEO keywords, campaigns, news — is
+> **never** a canonical Field; it lives only inside the research **Dossier** JSON
+> (`docs/research-intelligence/06`), preserving the one-value-per-Field invariant.
 
 ## 8. Document map & phase plan
 

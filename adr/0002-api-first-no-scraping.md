@@ -1,6 +1,6 @@
 # ADR 0002 — API-first only; no scraping / browser automation / manual workflows
 
-- **Status:** Accepted
+- **Status:** Accepted · **Superseded by [ADR-0025](0025-data-collection-search-dataset-apis.md)** (2026-07-09) — 0025 narrowly restates and retains the no-scraping / no-browser-automation core, and additionally admits third-party **search APIs** and **public bulk-dataset APIs** as legitimate server-side Providers with a defined returned-URL fetch boundary. The Decision below is unchanged and remains in force except as extended by 0025.
 - **Date:** 2026-06-30
 - **Deciders:** Lead Enterprise Solutions Architect, Staff Security Engineer, Principal Backend Engineer
 - **Phase:** 0

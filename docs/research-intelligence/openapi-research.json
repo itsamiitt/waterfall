@@ -1,0 +1,924 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Waterfall Research & Intelligence API (/v1/research, /v1/intent) + admin surface",
+    "version": "1.0.0",
+    "description": "Machine-authoritative contract for the domain -> Dossier Research API, the computed-intent API, and the /v1/admin/{ai,research,intent} admin surface. Human-readable twin: docs/research-intelligence/06-research-api-schema.md. Parity-tested against handler DTOs (ADR-0012). Realizes ADR-0028 (research dossier + one-value-per-Field), ADR-0026 (LLM-as-egress-adapter), ADR-0027 (computed intent). Conventions: snake_case JSON, Idempotency-Key required on writes, uniform error body {\"error\":{\"code\",\"message\"}}, cursor pagination (limit cap 200), 202 {job_id,status} for async work. Research/intent endpoints are on the enrichapi deployable; /v1/admin/* on dashboardd."
+  },
+  "servers": [
+    { "url": "/" }
+  ],
+  "security": [
+    { "bearerAuth": [] }
+  ],
+  "tags": [
+    { "name": "research", "description": "domain -> Dossier Research API (enrichapi)" },
+    { "name": "intent", "description": "computed multi-class intent (enrichapi)" },
+    { "name": "admin-ai", "description": "AI prompts + model routing (dashboardd, configver kinds ai_prompt/llm_route)" },
+    { "name": "admin-research", "description": "research run monitoring (dashboardd)" },
+    { "name": "admin-intent", "description": "intent weights config (dashboardd, configver kind intent_weights)" }
+  ],
+  "paths": {
+    "/v1/research": {
+      "post": {
+        "summary": "Start a Research Run for a subject (async 202 by default; ?mode=sync = capped preview)",
+        "operationId": "post_v1_research",
+        "tags": ["research"],
+        "parameters": [
+          { "$ref": "#/components/parameters/IdempotencyKey" },
+          { "$ref": "#/components/parameters/ModeQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResearchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Async accepted; poll GET /v1/research/{id} or await the completion webhook",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobAccepted" } } }
+          },
+          "200": {
+            "description": "Sync capped-budget preview (firmographics + company_profile; intent last-known or pending)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResearchRunResult" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "402": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "callbacks": {
+          "runComplete": {
+            "{$request.body#/webhook_url}": {
+              "post": {
+                "summary": "HMAC-signed, idempotent Run-complete notification (internal/webhook)",
+                "requestBody": {
+                  "required": true,
+                  "content": {
+                    "application/json": {
+                      "schema": { "$ref": "#/components/schemas/WebhookEvent" }
+                    }
+                  }
+                },
+                "responses": {
+                  "200": { "description": "Tenant acknowledged the notification" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/research/{id}": {
+      "get": {
+        "summary": "Research Run status + Dossier when ready",
+        "operationId": "get_v1_research_id",
+        "tags": ["research"],
+        "parameters": [ { "$ref": "#/components/parameters/IdPath" } ],
+        "responses": {
+          "200": {
+            "description": "Run status; dossier present once status=succeeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResearchRunResult" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/dossiers/{domain}": {
+      "get": {
+        "summary": "Latest stored Dossier for a Company",
+        "operationId": "get_v1_dossiers_domain",
+        "tags": ["research"],
+        "parameters": [ { "$ref": "#/components/parameters/DomainPath" } ],
+        "responses": {
+          "200": {
+            "description": "Latest stored Dossier",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DossierEnvelope" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/intent/refresh": {
+      "post": {
+        "summary": "Enqueue an async computed-intent refresh (job.Kind=intent_refresh; never blocks)",
+        "operationId": "post_v1_intent_refresh",
+        "tags": ["intent"],
+        "parameters": [ { "$ref": "#/components/parameters/IdempotencyKey" } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IntentRefreshRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Refresh enqueued (concurrent triggers for the same account coalesce)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobAccepted" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "402": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/intent/accounts/{domain}": {
+      "get": {
+        "summary": "Full per-class Intent Class Score breakdown with reasoning",
+        "operationId": "get_v1_intent_accounts_domain",
+        "tags": ["intent"],
+        "parameters": [ { "$ref": "#/components/parameters/DomainPath" } ],
+        "responses": {
+          "200": {
+            "description": "Per-class scores + confidence + ordered reasoning contributions",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentAccount" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/admin/ai/prompts": {
+      "get": {
+        "summary": "List ai_prompt config versions (configver kind ai_prompt)",
+        "operationId": "get_v1_admin_ai_prompts",
+        "tags": ["admin-ai"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated prompt versions",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromptVersionList" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "summary": "Create a new ai_prompt draft version (approval-gated publish, ADR-0020)",
+        "operationId": "post_v1_admin_ai_prompts",
+        "tags": ["admin-ai"],
+        "parameters": [ { "$ref": "#/components/parameters/IdempotencyKey" } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PromptVersionCreate" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Approval-gated create/publish accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalAccepted" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/admin/ai/models": {
+      "get": {
+        "summary": "List llm_route config versions + the projected model catalog (registry.go, ADR-0023)",
+        "operationId": "get_v1_admin_ai_models",
+        "tags": ["admin-ai"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model routing versions + catalog projection",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelRouteList" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "summary": "Create a new llm_route draft version (model cascade + per-tier budget caps)",
+        "operationId": "post_v1_admin_ai_models",
+        "tags": ["admin-ai"],
+        "parameters": [ { "$ref": "#/components/parameters/IdempotencyKey" } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ModelRouteCreate" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Approval-gated create/publish accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalAccepted" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/admin/research/runs": {
+      "get": {
+        "summary": "List Research Runs (reads research_runs; internal/dash/research)",
+        "operationId": "get_v1_admin_research_runs",
+        "tags": ["admin-research"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["queued", "running", "succeeded", "failed"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated research run summaries",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResearchRunSummaryList" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/admin/research/runs/{id}": {
+      "get": {
+        "summary": "One Research Run with per-step detail (research_steps)",
+        "operationId": "get_v1_admin_research_runs_id",
+        "tags": ["admin-research"],
+        "parameters": [ { "$ref": "#/components/parameters/IdPath" } ],
+        "responses": {
+          "200": {
+            "description": "Run + steps",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResearchRunSummary" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/admin/intent/weights": {
+      "get": {
+        "summary": "Get the active intent_weights config version (configver kind intent_weights)",
+        "operationId": "get_v1_admin_intent_weights",
+        "tags": ["admin-intent"],
+        "responses": {
+          "200": {
+            "description": "Active weights + per-type half-lives",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentWeights" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "summary": "Create a new intent_weights draft version (approval-gated publish)",
+        "operationId": "post_v1_admin_intent_weights",
+        "tags": ["admin-intent"],
+        "parameters": [ { "$ref": "#/components/parameters/IdempotencyKey" } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IntentWeightsCreate" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Approval-gated create/publish accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalAccepted" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT principal (ADR-0018). Admin surface additionally accepts the session cookie + CSRF."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Required on all writes (ADR-0012). Replay with same key+body returns the original result; reuse with a different body -> 409 CONFLICT.",
+        "schema": { "type": "string", "maxLength": 255 }
+      },
+      "ModeQuery": {
+        "name": "mode",
+        "in": "query",
+        "required": false,
+        "description": "sync => capped-budget preview (200); omitted => async (202).",
+        "schema": { "type": "string", "enum": ["sync"] }
+      },
+      "IdPath": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      },
+      "DomainPath": {
+        "name": "domain",
+        "in": "path",
+        "required": true,
+        "description": "Normalized company domain (host, lowercased, no scheme).",
+        "schema": { "type": "string" }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque base64url pagination cursor.",
+        "schema": { "type": "string" }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Page size; server clamps to a hard cap of 200.",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Uniform error body",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Taxonomy mapped 1:1 onto internal/provider error classes.",
+                "enum": ["AUTH", "RATE_LIMIT", "TRANSIENT", "NOT_FOUND", "BAD_REQUEST", "QUOTA", "PROVIDER_DOWN", "CONFLICT"]
+              },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "JobAccepted": {
+        "type": "object",
+        "required": ["job_id", "status"],
+        "properties": {
+          "job_id": { "type": "string", "example": "run_01J8Z3K7A2QF" },
+          "status": { "type": "string", "enum": ["queued", "running"], "example": "queued" }
+        }
+      },
+      "ApprovalAccepted": {
+        "type": "object",
+        "required": ["approval_request_id"],
+        "properties": {
+          "approval_request_id": { "type": "string" },
+          "status": { "type": "string", "example": "pending_approval" }
+        }
+      },
+      "ResearchRequest": {
+        "type": "object",
+        "description": "At least one subject identifier is required.",
+        "properties": {
+          "company_domain": { "type": "string", "example": "acme.io" },
+          "company_name": { "type": "string", "example": "Acme Corporation" },
+          "linkedin_url": { "type": "string" },
+          "work_email": { "type": "string" },
+          "phone": { "type": "string" },
+          "webhook_url": { "type": "string", "description": "Optional HMAC-signed completion callback target." },
+          "wanted_sections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["company_profile", "contact_profile", "firmographics", "technographics", "hiring_signals", "intent", "news", "competitors", "ai_summary", "search_keywords", "crm_ready"]
+            }
+          }
+        }
+      },
+      "ResearchRunResult": {
+        "type": "object",
+        "required": ["job_id", "status"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed", "preview"] },
+          "error": { "type": "string" },
+          "dossier": { "$ref": "#/components/schemas/Dossier" }
+        }
+      },
+      "DossierEnvelope": {
+        "type": "object",
+        "required": ["dossier"],
+        "properties": {
+          "dossier": { "$ref": "#/components/schemas/Dossier" }
+        }
+      },
+      "WebhookEvent": {
+        "type": "object",
+        "required": ["job_id", "status", "company_domain"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["succeeded", "failed"] },
+          "company_domain": { "type": "string" },
+          "dossier_url": { "type": "string" },
+          "generated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Dossier": {
+        "type": "object",
+        "description": "Research-owned composite (ADR-0028). Single-valued data mirrors canonical Fields; multi-valued data is Dossier-only. ai_inference values are never fused as high-confidence facts.",
+        "properties": {
+          "company_profile": { "$ref": "#/components/schemas/CompanyProfile" },
+          "contact_profile": { "$ref": "#/components/schemas/ContactProfile" },
+          "firmographics": { "$ref": "#/components/schemas/Firmographics" },
+          "technographics": { "$ref": "#/components/schemas/Technographics" },
+          "hiring_signals": { "type": "array", "items": { "$ref": "#/components/schemas/HiringSignal" } },
+          "intent": { "$ref": "#/components/schemas/DossierIntent" },
+          "news": { "type": "array", "items": { "$ref": "#/components/schemas/NewsItem" } },
+          "competitors": { "type": "array", "items": { "$ref": "#/components/schemas/Competitor" } },
+          "ai_summary": { "type": "string" },
+          "ai_reasoning": { "type": "string" },
+          "search_keywords": { "type": "array", "items": { "type": "string" } },
+          "crm_ready": { "$ref": "#/components/schemas/CrmReady" },
+          "confidence": { "$ref": "#/components/schemas/Confidence" },
+          "provenance": { "type": "array", "items": { "$ref": "#/components/schemas/ProvenanceRow" } },
+          "processing_log": { "type": "array", "items": { "$ref": "#/components/schemas/ProcessingLogEntry" } },
+          "metadata": { "$ref": "#/components/schemas/Metadata" },
+          "data_freshness": { "$ref": "#/components/schemas/DataFreshness" }
+        }
+      },
+      "CompanyProfile": {
+        "type": "object",
+        "properties": {
+          "legal_name": { "type": "string" },
+          "domain": { "type": "string" },
+          "description": { "type": "string" },
+          "sector": { "type": "string" },
+          "hq": {
+            "type": "object",
+            "properties": {
+              "city": { "type": "string" },
+              "region": { "type": "string" },
+              "country": { "type": "string" }
+            }
+          },
+          "employees_band": { "type": "string" },
+          "founded_year": { "type": "integer" },
+          "socials": {
+            "type": "object",
+            "description": "Mirrors canonical single-valued Fields (incl. the 6 new scalars, ADR-0028).",
+            "properties": {
+              "twitter_url": { "type": "string", "nullable": true },
+              "facebook_url": { "type": "string", "nullable": true },
+              "github_url": { "type": "string", "nullable": true },
+              "crunchbase_url": { "type": "string", "nullable": true },
+              "linkedin_url": { "type": "string", "nullable": true }
+            }
+          }
+        }
+      },
+      "ContactProfile": {
+        "type": "object",
+        "properties": {
+          "full_name": { "type": "string" },
+          "title": { "type": "string" },
+          "work_email": { "type": "string" },
+          "linkedin_url": { "type": "string" },
+          "seniority": { "type": "string" },
+          "department": { "type": "string" }
+        }
+      },
+      "Firmographics": {
+        "type": "object",
+        "description": "Scalar members are canonical Fields; the object is a Dossier projection of them.",
+        "properties": {
+          "employee_count": { "type": "integer", "nullable": true },
+          "revenue_band": { "type": "string", "nullable": true },
+          "company_ticker": { "type": "string", "nullable": true },
+          "total_funding_usd": { "type": "integer", "nullable": true },
+          "funding_stage": { "type": "string", "nullable": true },
+          "hq_country": { "type": "string", "nullable": true },
+          "naics": { "type": "string", "nullable": true }
+        }
+      },
+      "Technographics": {
+        "type": "object",
+        "description": "Multi-valued; Dossier-only (never a Field).",
+        "properties": {
+          "categories": { "type": "array", "items": { "type": "string" } },
+          "products": { "type": "array", "items": { "type": "string" } },
+          "recent_adds": { "type": "array", "items": { "type": "string" } },
+          "recent_drops": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "HiringSignal": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string" },
+          "department": { "type": "string" },
+          "location": { "type": "string" },
+          "posted_at": { "type": "string", "format": "date" },
+          "velocity": { "type": "string", "enum": ["up", "flat", "down"] },
+          "source_type": { "$ref": "#/components/schemas/SourceType" }
+        }
+      },
+      "DossierIntent": {
+        "type": "object",
+        "description": "intent_score/intent_topics/buying_signal are single-valued Fields (written by internal/intent); buying_signals[] detail is Dossier-only.",
+        "properties": {
+          "intent_score": { "type": "number", "format": "float", "nullable": true },
+          "status": { "type": "string", "enum": ["computed", "last_known", "pending"] },
+          "intent_topics": { "type": "array", "items": { "type": "string" } },
+          "buying_signals": { "type": "array", "items": { "$ref": "#/components/schemas/BuyingSignal" } }
+        }
+      },
+      "BuyingSignal": {
+        "type": "object",
+        "properties": {
+          "class": { "type": "string" },
+          "type": { "type": "string" },
+          "magnitude": { "type": "number", "format": "float" },
+          "observed_at": { "type": "string", "format": "date" },
+          "confidence": { "type": "number", "format": "float" },
+          "source_type": { "$ref": "#/components/schemas/SourceType" }
+        }
+      },
+      "NewsItem": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "published_at": { "type": "string", "format": "date" },
+          "topic": { "type": "string" },
+          "sentiment": { "type": "string", "enum": ["positive", "neutral", "negative"] },
+          "source_type": { "$ref": "#/components/schemas/SourceType" }
+        }
+      },
+      "Competitor": {
+        "type": "object",
+        "description": "Dossier-only; never a Field (ADR-0028).",
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string" },
+          "basis": { "type": "string" },
+          "source_type": { "$ref": "#/components/schemas/SourceType" }
+        }
+      },
+      "CrmReady": {
+        "type": "object",
+        "description": "Normalized CRM-neutral projection (ADR-0028/0030). Data only; no CRM credential.",
+        "properties": {
+          "account": { "$ref": "#/components/schemas/CrmAccount" },
+          "contact": { "$ref": "#/components/schemas/CrmContact" }
+        }
+      },
+      "CrmAccount": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string" },
+          "industry": { "type": "string" },
+          "employee_count": { "type": "integer", "nullable": true },
+          "annual_revenue_usd": { "type": "integer", "nullable": true },
+          "hq_country": { "type": "string" },
+          "linkedin_url": { "type": "string" },
+          "intent_score": { "type": "number", "format": "float", "nullable": true }
+        }
+      },
+      "CrmContact": {
+        "type": "object",
+        "properties": {
+          "full_name": { "type": "string" },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "title": { "type": "string" },
+          "email": { "type": "string" },
+          "seniority": { "type": "string" },
+          "linkedin_url": { "type": "string" }
+        }
+      },
+      "Confidence": {
+        "type": "object",
+        "properties": {
+          "overall": { "type": "number", "format": "float" },
+          "by_section": {
+            "type": "object",
+            "additionalProperties": { "type": "number", "format": "float" }
+          }
+        }
+      },
+      "SourceType": {
+        "type": "string",
+        "enum": ["api", "dataset", "ai_inference"],
+        "description": "Provenance origin. ai_inference values are never fused as high-confidence facts."
+      },
+      "ProvenanceRow": {
+        "type": "object",
+        "required": ["field", "provider", "source_type"],
+        "description": "Queryable twin: research_sources (G5).",
+        "properties": {
+          "field": { "type": "string" },
+          "provider": { "type": "string" },
+          "source_type": { "$ref": "#/components/schemas/SourceType" },
+          "cost": { "type": "number" },
+          "idem_key": { "type": "string" },
+          "confidence": { "type": "number", "format": "float" },
+          "retained_losers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RetainedLoser" }
+          }
+        }
+      },
+      "RetainedLoser": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string" },
+          "value": {},
+          "confidence": { "type": "number", "format": "float" }
+        }
+      },
+      "ProcessingLogEntry": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "string" },
+          "status": { "type": "string" },
+          "model": { "type": "string" },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "properties": {
+          "config_version": { "type": "string" },
+          "mode": { "type": "string", "enum": ["full", "preview"] },
+          "run_id": { "type": "string" },
+          "subject": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      },
+      "DataFreshness": {
+        "type": "object",
+        "properties": {
+          "generated_at": { "type": "string", "format": "date-time" },
+          "last_updated": { "type": "string", "format": "date-time" }
+        }
+      },
+      "IntentRefreshRequest": {
+        "type": "object",
+        "required": ["company_domain"],
+        "properties": {
+          "company_domain": { "type": "string", "example": "acme.io" }
+        }
+      },
+      "IntentAccount": {
+        "type": "object",
+        "required": ["company_domain", "classes"],
+        "properties": {
+          "company_domain": { "type": "string" },
+          "generated_at": { "type": "string", "format": "date-time" },
+          "config_version": { "type": "string" },
+          "classes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/IntentClass" }
+          }
+        }
+      },
+      "IntentClass": {
+        "type": "object",
+        "required": ["class", "score"],
+        "properties": {
+          "class": {
+            "type": "string",
+            "enum": ["buying", "hiring", "tech-replacement", "ai-adoption", "security-investment", "cloud-migration", "digital-transformation", "crm-replacement", "outsourcing", "marketing-investment"]
+          },
+          "score": { "type": "number", "format": "float" },
+          "confidence": { "type": "number", "format": "float" },
+          "reasoning": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/IntentReasoning" }
+          }
+        }
+      },
+      "IntentReasoning": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "raw_magnitude": { "type": "number", "format": "float" },
+          "decayed_value": { "type": "number", "format": "float" },
+          "weight": { "type": "number", "format": "float" },
+          "provider": { "type": "string" },
+          "cost": { "type": "number" }
+        }
+      },
+      "PageInfo": {
+        "type": "object",
+        "properties": {
+          "next_cursor": { "type": "string", "nullable": true }
+        }
+      },
+      "PromptVersion": {
+        "type": "object",
+        "properties": {
+          "version_id": { "type": "string" },
+          "prompt_key": { "type": "string", "example": "company_research.v3" },
+          "status": { "type": "string", "enum": ["draft", "validated", "published", "archived"] },
+          "tenant_scope": { "type": "string", "example": "platform" },
+          "payload_hash": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PromptVersionCreate": {
+        "type": "object",
+        "required": ["prompt_key", "template"],
+        "properties": {
+          "prompt_key": { "type": "string" },
+          "template": { "type": "string" },
+          "tenant_scope": { "type": "string", "default": "platform" }
+        }
+      },
+      "PromptVersionList": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/PromptVersion" } },
+          "page": { "$ref": "#/components/schemas/PageInfo" }
+        }
+      },
+      "ModelRoute": {
+        "type": "object",
+        "properties": {
+          "version_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "validated", "published", "archived"] },
+          "cascade": {
+            "type": "array",
+            "description": "Ordered free->mid->paid model tiers (ADR-0026); bandit may propose, gate disposes.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tier": { "type": "string", "enum": ["free", "mid", "paid"] },
+                "model_slug": { "type": "string", "example": "openrouter:deepseek-r1:free" },
+                "tier_budget_cap_usd": { "type": "number", "nullable": true }
+              }
+            }
+          },
+          "catalog": {
+            "type": "array",
+            "description": "Model catalog projected from registry.go (ADR-0023); no llm_models table.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "model_slug": { "type": "string" },
+                "category": { "type": "string", "example": "llm" },
+                "adapter": { "type": "string", "example": "openrouter" }
+              }
+            }
+          }
+        }
+      },
+      "ModelRouteCreate": {
+        "type": "object",
+        "required": ["cascade"],
+        "properties": {
+          "cascade": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["tier", "model_slug"],
+              "properties": {
+                "tier": { "type": "string", "enum": ["free", "mid", "paid"] },
+                "model_slug": { "type": "string" },
+                "tier_budget_cap_usd": { "type": "number", "nullable": true }
+              }
+            }
+          },
+          "tenant_scope": { "type": "string", "default": "platform" }
+        }
+      },
+      "ModelRouteList": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ModelRoute" } },
+          "page": { "$ref": "#/components/schemas/PageInfo" }
+        }
+      },
+      "ResearchRunSummary": {
+        "type": "object",
+        "properties": {
+          "run_id": { "type": "string" },
+          "company_domain": { "type": "string" },
+          "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed"] },
+          "config_version": { "type": "string" },
+          "total_cost": { "type": "number" },
+          "llm_cost_usd": { "type": "number" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "completed_at": { "type": "string", "format": "date-time", "nullable": true },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "task_type": { "type": "string" },
+                "model_slug": { "type": "string", "nullable": true },
+                "prompt_version": { "type": "string", "nullable": true },
+                "prompt_tokens": { "type": "integer", "nullable": true },
+                "completion_tokens": { "type": "integer", "nullable": true },
+                "cost": { "type": "number" },
+                "outcome": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "ResearchRunSummaryList": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ResearchRunSummary" } },
+          "page": { "$ref": "#/components/schemas/PageInfo" }
+        }
+      },
+      "IntentWeights": {
+        "type": "object",
+        "properties": {
+          "version_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "validated", "published", "archived"] },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "class": { "type": "string" },
+                "type": { "type": "string" },
+                "weight": { "type": "number", "format": "float" },
+                "halflife_days": { "type": "number", "format": "float" }
+              }
+            }
+          }
+        }
+      },
+      "IntentWeightsCreate": {
+        "type": "object",
+        "required": ["weights"],
+        "properties": {
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["class", "type", "weight"],
+              "properties": {
+                "class": { "type": "string" },
+                "type": { "type": "string" },
+                "weight": { "type": "number", "format": "float" },
+                "halflife_days": { "type": "number", "format": "float" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+%% AI agent orchestration DAG + deterministic Model Cascade (Phase R&I, ADR-0026). Source of truth for docs/research-intelligence/04-ai-pipeline.md.
+%% Governing invariant: the LLM PROPOSES; a DETERMINISTIC gate DISPOSES every spend, tool, and escalation. No model-driven tool execution. LLM = egress adapter (zero new Go dep). All calls via the SOLE egress-proxy.
+flowchart TB
+    plan([Research Run → orchestrator builds a typed Agent-Task DAG<br/>internal/ai TaskTypes; input contract + Prompt Version + output struct]) --> fanout{{"deterministic fan-out (orchestrator, NOT the model, decides which tasks/tools run)"}}
+
+    fanout --> t1["company_research"]
+    fanout --> t2["technology"]
+    fanout --> t3["competitor"]
+    fanout --> t4["hiring / seo / market / news"]
+    fanout --> t5["summarization"]
+
+    subgraph TASK["Per Agent-Task (one research_steps row; G2 key pins model+prompt_version+input_hash)"]
+        cascade["Model Cascade — free→mid→paid ordered by reservation value (ADR-0007)"] --> reserve{{"G4: reserve estimated tokens; G3: CallPolicy{Timeout:60-90s,MaxAttempts:1} + breaker"}}
+        reserve --> call(["LLM adapter — HTTPAdapter + AuthDescriptor{Bearer}<br/>egress-proxy injects key (secret never in adapter)"])
+        call --> charge["charge actual tokens on success (G4) + G5 provenance (source_type=ai_inference)"]
+        charge --> validate{{"struct-based validation (stdlib) — schema-valid?"}}
+        validate -- invalid, attempts left --> reask["json_validation agent re-asks (capped by MaxAttempts)"]
+        reask --> cascade
+        validate -- ok --> disp{{"DETERMINISTIC dispose gate:<br/>schema-valid AND budget-ok AND attempts≤policy AND cross-field agreement?<br/>(NEVER LLM self-confidence · NEVER model-chosen tool)"}}
+        disp -- accept --> accept["accept result"]
+        disp -- escalate --> cascade
+        disp -- stop --> stop["stop (budget/attempts) → partial, flagged"]
+    end
+
+    t1 --> cascade
+    t2 --> cascade
+    t3 --> cascade
+    t4 --> cascade
+    t5 --> cascade
+    accept --> merge([results → Dossier assembly; losers retained])
+    stop --> merge
+
+    prompts[("Prompt Version + routing = config_versions kinds<br/>ai_prompt / llm_route via internal/dash/configver (no new table)")] -. pinned .-> cascade
+    bandit[["internal/bandit (Thompson, guardrailed — ADR-0008)<br/>PROPOSES model ranking only"]] -. proposal .-> cascade
+
+    classDef det fill:#e8f5e9,stroke:#2e7d32;
+    classDef sec fill:#fde,stroke:#b00,stroke-width:2px;
+    classDef store fill:#eef,stroke:#33a;
+    class fanout,reserve,validate,disp det;
+    class call sec;
+    class prompts store;
+
+    %% bandit + LLM only PROPOSE; the disp/reserve/validate gates DISPOSE. A model-emitted "call tool X" is ignored — the orchestrator owns tool/step selection.

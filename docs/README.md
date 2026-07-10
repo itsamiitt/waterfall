@@ -16,6 +16,7 @@ approved plan for that module exists (see [`skills/enrichment-discipline`](../sk
 | Architecture | `04` … `16` | System, data, queue, routing, security, cost design |
 | Ops & product | `17` … `22` | Dashboard, security, deployment, monitoring, testing, roadmap |
 | **Implementation** | `23` … `40` | Per-slice implementation records — the code that exists + how each was verified live |
+| **Subsystem series** | [`waterfall-dashboard/`](waterfall-dashboard/00-overview.md) · [`research-intelligence/`](research-intelligence/00-overview.md) | Self-contained design series: the control-plane management dashboard, and the Research & Intelligence platform extension (ADRs 0025–0030) |
 | **Front door** | [`../README.md`](../README.md) | Top-level README: what it is, the five gates, quickstart, `scripts/demo.sh` |
 | Decisions | [`/adr`](../adr) | Architecture Decision Records (one file per decision) |
 | Diagrams | [`/diagrams`](../diagrams) | Diffable Mermaid diagrams, kept in sync with prose |

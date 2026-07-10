@@ -1,0 +1,39 @@
+%% Domain → Dossier research assembly pipeline (Phase R&I, ADR-0028). Source of truth for docs/research-intelligence/02-architecture.md §3 and 06-research-api-schema.md.
+%% Spine invariant unchanged: learned/LLM components PROPOSE; deterministic gates DISPOSE. Every external/LLM call passes G1-G5 and the SOLE egress-proxy. No scraping (ADR-0025). AI values are source_type=ai_inference, never fused as facts.
+flowchart TB
+    req([POST /v1/research: tenant_id, subject{domain|name|linkedin|email|phone}, wanted_sections<br/>Idempotency-Key required — G2]) --> mode{mode?}
+    mode -- sync --> preview["capped-budget preview<br/>firmographics + company_profile only<br/>intent = last-known / pending (never blocks — ADR-0027)"]
+    mode -- async --> queue[["internal/job + internal/durable<br/>202 {job_id}"]]
+    preview --> resp
+    queue --> run
+
+    subgraph RUN["Research Run — internal/research/orchestrator (deterministic DAG; NOT Temporal by default — ADR-0014)"]
+        run["reserve aggregate Dossier cost ceiling — G4"] --> collect
+        subgraph COL["1 · Collect / resolve (ADR-0025 — search/dataset APIs, no scraping)"]
+            collect["search + dataset adapters via egress-proxy<br/>discover identifiers (domain→CIK/LEI); URLs are discovery-only"]
+        end
+        collect --> enrich["2 · Waterfall enrich — engine.Run over canonical Fields<br/>(reuses router/fuse/attribution unchanged)"]
+        enrich --> ai
+        subgraph AIB["3 · AI research — internal/ai agents (LLM-as-egress-adapter, ADR-0026)"]
+            ai["company_research · technology · competitor · hiring · seo · market<br/>free→paid Model Cascade, gate-disposed"]
+        end
+        ai --> news["4 · News / competitors — search+dataset+llm"]
+        news --> intent["5 · Intent — read latest intent_scores (computed async — ADR-0027)"]
+        intent --> summ["6 · Summarize — summarization agent → ai_summary + ai_reasoning"]
+        summ --> valid{{"7 · Validate — struct-based (stdlib); json_validation re-asks, capped"}}
+        valid -- invalid, attempts left --> ai
+        valid -- ok --> crm["8 · CRM-map — normalize crm_ready{account,contact}"]
+    end
+    crm --> store[("9 · Persist — research_dossiers + research_sources (mig 0015)<br/>G5 provenance per value: provider · source_type · cost · idem_key · confidence · losers retained")]
+    store --> resp([Dossier JSON → GET /v1/research/{id} + HMAC webhook])
+    store -. freshness TTL .-> refresh[["background refresh — re-enqueue via internal/job"]]
+    refresh -. re-run .-> run
+
+    classDef det fill:#e8f5e9,stroke:#2e7d32;
+    classDef sec fill:#fde,stroke:#b00,stroke-width:2px;
+    classDef store fill:#eef,stroke:#33a;
+    class run,valid,enrich det;
+    class collect,ai,news sec;
+    class store,queue store;
+
+    %% All of COL/AIB/news egress traverses the SOLE egress-proxy (SSRF choke + host allow-list + key injection); control-plane + workers run no-egress.

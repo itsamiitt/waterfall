@@ -1,0 +1,32 @@
+%% Computed Intent Engine — async signal→score flow (Phase R&I, ADR-0027). Source of truth for docs/research-intelligence/05-intent-methodology.md.
+%% Separate lane from per-Field enrichment: keyed on Company/company_domain, async/batch only (never the sync path). LLM outputs are PROPOSED raw signals only; the class score is deterministic + auditable. Reuses ADR-0005 calibrate-then-fuse.
+flowchart TB
+    trig{{"Trigger — internal/job Kind=intent_refresh, keyed on company_domain<br/>scheduled sweep OR provider webhook (surging) > polling"}} --> collect
+
+    subgraph COL["1 · Collect + normalize signals (via egress-proxy; G1-G5 per call)"]
+        collect["signal adapters: theirstack/predictleads (hiring),<br/>builtwith/wappalyzer/hg-insights (techno deltas), firmographics (funding),<br/>search/news, + LLM extraction (source_type=ai_inference)"] --> norm["normalize → {class, type, magnitude, observed_at, provider, confidence, cost}<br/>persist intent_signals (mig 0016, partitioned, FORCE RLS) — LOSERS RETAINED"]
+    end
+
+    norm --> propose{{"LLM signals enter here as PROPOSED raw signals only<br/>(never a final class score)"}}
+    propose --> score
+
+    subgraph SCORE["2 · Deterministic scoring — internal/intent/score (pins config_version — ADR-0006)"]
+        score["decay: magnitude·2^(-age/halflife[type])"] --> fuse["same-class log-odds fuse — internal/engine.fuseAgreeing (ADR-0005)<br/>per-source weight cap + correlation discount"]
+        fuse --> cal["isotonic calibrate — internal/calibrate (score → observed conversion)"]
+        cal --> guard["guardrailed class score + confidence (G5)"]
+    end
+
+    weights[("weights = config_versions kind 'intent_weights'<br/>via internal/dash/configver (no new table)")] -. pinned config_version .-> score
+    guard --> persist[("intent_scores (mig 0016): per-class score + confidence + reasoning JSONB<br/>reasoning = ordered per-signal contributions — the auditable 'why'")]
+
+    persist --> writeback["3 · Write-back — internal/intent (SINGLE owner) →<br/>field_versions: intent_score / intent_topics / buying_signal (G5)"]
+    persist --> api([GET /v1/intent/accounts/{domain} — per-class breakdown + reasoning])
+
+    classDef det fill:#e8f5e9,stroke:#2e7d32;
+    classDef store fill:#eef,stroke:#33a;
+    classDef sec fill:#fde,stroke:#b00,stroke-width:2px;
+    class score,fuse,cal,guard,propose det;
+    class persist,weights store;
+    class collect sec;
+
+    %% docs/14 intent_data stays the third-party INGEST store; this computed engine adds intent_signals + intent_scores. Async-only; a sync Dossier preview reads last-known scores.

@@ -24,6 +24,7 @@ type Server struct {
 	Jobs        job.Store                   // job state reads (tenant-scoped)
 	Records     store.FieldVersions         // read model for GET /records
 	DeadLetters DeadLetterAdmin             // optional; enables the /v1/dead-letters routes when set
+	Research    http.Handler                // optional; enables POST /v1/research (domain→Dossier, ADR-0028) when set
 	Metrics     *metrics.Registry           // optional; enables /metrics + RED instrumentation
 	WriteScope  string                      // optional; if set, write routes require this JWT scope (403 otherwise)
 	ReadyCheck  func(context.Context) error // optional; /readyz is 200 only when this returns nil
@@ -87,6 +88,16 @@ func (s *Server) Handler() http.Handler {
 			redrive = s.requireScope(s.WriteScope, redrive)
 		}
 		mux.Handle("POST /v1/dead-letters/{id}/redrive", s.instrument("/v1/dead-letters/{id}/redrive", s.protected(redrive)))
+	}
+	if s.Research != nil {
+		// POST /v1/research is a write (assembles + will persist a Research Run): authenticate +
+		// rate-limit (protected), require the write scope, and honor the drain gate — same posture as
+		// enrichment submit.
+		research := s.gateDrain(s.Research.ServeHTTP)
+		if s.WriteScope != "" {
+			research = s.requireScope(s.WriteScope, research)
+		}
+		mux.Handle("POST /v1/research", s.instrument("/v1/research", s.protected(research)))
 	}
 	return s.recoverer(mux)
 }

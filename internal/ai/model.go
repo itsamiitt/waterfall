@@ -17,6 +17,8 @@
 package ai
 
 import (
+	"net/url"
+
 	"github.com/enrichment/waterfall/internal/domain"
 	"github.com/enrichment/waterfall/internal/provider"
 )
@@ -93,6 +95,25 @@ func Models() []Model {
 			InPerMTok: 100, OutPerMTok: 500, DocsURL: "https://docs.anthropic.com/en/api/messages",
 		},
 	}
+}
+
+// Hosts returns the distinct hostnames of every Model's BaseURL, for extending the egress SSRF
+// allow-list (provider.NewHostAllowList) — LLM calls traverse the same egress client as providers.
+func Hosts() []string {
+	seen := map[string]struct{}{}
+	var hosts []string
+	for _, m := range Models() {
+		u, err := url.Parse(m.BaseURL)
+		if err != nil || u.Hostname() == "" {
+			continue
+		}
+		if _, ok := seen[u.Hostname()]; ok {
+			continue
+		}
+		seen[u.Hostname()] = struct{}{}
+		hosts = append(hosts, u.Hostname())
+	}
+	return hosts
 }
 
 // costOf computes the G4 credit cost of a completion from its token usage and the model's

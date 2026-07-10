@@ -11,7 +11,11 @@
 // enrichment engine.
 package collect
 
-import "github.com/enrichment/waterfall/internal/provider"
+import (
+	"net/url"
+
+	"github.com/enrichment/waterfall/internal/provider"
+)
 
 // Dialect is the request/response wire shape of a search API.
 type Dialect int
@@ -58,6 +62,26 @@ func Providers() []Provider {
 			Status: "DEPRIORITIZED", DocsURL: "https://serper.dev/playground",
 		},
 	}
+}
+
+// Hosts returns the distinct hostnames of every search Provider's BaseURL, for extending the egress
+// SSRF allow-list (provider.NewHostAllowList) — the research orchestrator calls these through the
+// same egress client as the enrichment adapters.
+func Hosts() []string {
+	seen := map[string]struct{}{}
+	var hosts []string
+	for _, p := range Providers() {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil || u.Hostname() == "" {
+			continue
+		}
+		if _, ok := seen[u.Hostname()]; ok {
+			continue
+		}
+		seen[u.Hostname()] = struct{}{}
+		hosts = append(hosts, u.Hostname())
+	}
+	return hosts
 }
 
 func bearer(sel string) provider.AuthDescriptor {

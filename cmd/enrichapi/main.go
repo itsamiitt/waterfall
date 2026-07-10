@@ -25,9 +25,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/enrichment/waterfall/internal/ai"
 	"github.com/enrichment/waterfall/internal/api"
 	"github.com/enrichment/waterfall/internal/auth"
 	"github.com/enrichment/waterfall/internal/bandit"
+	"github.com/enrichment/waterfall/internal/collect"
 	"github.com/enrichment/waterfall/internal/config"
 	"github.com/enrichment/waterfall/internal/domain"
 	"github.com/enrichment/waterfall/internal/durable"
@@ -41,6 +43,7 @@ import (
 	"github.com/enrichment/waterfall/internal/pgstore"
 	"github.com/enrichment/waterfall/internal/provider"
 	"github.com/enrichment/waterfall/internal/provider/adapters"
+	"github.com/enrichment/waterfall/internal/research"
 	"github.com/enrichment/waterfall/internal/router"
 	"github.com/enrichment/waterfall/internal/store"
 	"github.com/enrichment/waterfall/internal/tenant"
@@ -65,8 +68,13 @@ func main() {
 	// "slug:pool=secret,..." map); in the full platform they are leased from the rotation engine
 	// (a KeyResolver that also implements LeaseResolver) instead. With no key configured for a
 	// pool, the call fails auth and the waterfall simply falls through — no fabricated data.
+	// The SSRF host allow-list spans the enrichment adapters PLUS the R&I search + LLM egress hosts
+	// (ADR-0025/0026): the research orchestrator calls those through the SAME egress client, so their
+	// hosts must be admitted by the dial-time guard too.
+	allowHosts := append(adapters.Hosts(), collect.Hosts()...)
+	allowHosts = append(allowHosts, ai.Hosts()...)
 	egress := provider.NewEgressClient(
-		provider.NewHostAllowList(adapters.Hosts()...),
+		provider.NewHostAllowList(allowHosts...),
 		staticProviderKeys(os.Getenv),
 	)
 	provs := adapters.All(egress)
@@ -265,6 +273,29 @@ func main() {
 		// Drain-gating (T5a/OI-P5-2): only the heartbeat-echoed running state admits new work.
 		srv.ShouldClaim = hbClient.ShouldClaim
 	}
+
+	// Research API (ADR-0028): domain -> Dossier, composing the real collect/ai/engine seams over the
+	// SAME egress client. Served at POST /v1/research (synchronous assembly; auth + rate-limit +
+	// write-scope + drain-gate applied by api.Server). The LLM + search steps degrade gracefully
+	// (logged in the Dossier processing_log) when their key pools are unconfigured — no fabricated data.
+	var braveSearch collect.Provider
+	for _, p := range collect.Providers() {
+		if p.Slug == "brave-search" {
+			braveSearch = p
+		}
+	}
+	srv.Research = &research.HTTPHandler{Assembler: research.NewOrchestrator(
+		research.EngineEnricher{
+			Engine: eng, Planner: router.New(provs...),
+			CostCeiling: 100, ConfidenceTarget: 0.8, ConfigVersion: "research-v1",
+		},
+		research.CollectDiscoverer{Client: collect.NewClient(egress), Provider: braveSearch},
+		research.CascadeAIRunner{
+			Completer: ai.NewLLMClient(egress), Models: ai.Models(),
+			Budget: ai.Budget{Credits: 100}, Prompts: research.DefaultPrompts(),
+		},
+	)}
+	logger.Info("research API enabled", "route", "POST /v1/research")
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpSrv := &http.Server{

@@ -34,16 +34,18 @@ type researchRequest struct {
 	WantedSections []string `json:"wanted_sections"`
 }
 
-// Routes registers the Research API endpoints on mux. The auth middleware that binds the Principal is
-// applied by the mounting server, exactly as for /v1/enrichments.
+// Routes registers the Research API endpoints on a standalone mux (for tests / standalone serving).
+// The mounting gateway instead sets api.Server.Research = h and applies its own auth/rate-limit/
+// instrument wrappers, exactly as for /v1/enrichments.
 func (h *HTTPHandler) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/research", h.postResearch)
+	mux.Handle("POST /v1/research", h)
 }
 
-// postResearch handles POST /v1/research. This increment serves the SYNCHRONOUS assembly (the
-// ?mode=sync preview): it assembles and returns the Dossier inline. The default async 202+job_id
-// flow and GET /v1/research/{id} land with research persistence (migration 0015).
-func (h *HTTPHandler) postResearch(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP handles POST /v1/research (HTTPHandler implements http.Handler so the gateway can mount
+// it directly). This increment serves the SYNCHRONOUS assembly (the ?mode=sync preview): it
+// assembles and returns the Dossier inline. The default async 202+job_id flow and
+// GET /v1/research/{id} land with research persistence (migration 0015).
+func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Idempotency-Key") == "" {
 		writeErr(w, http.StatusBadRequest, "missing_idempotency_key",
 			"the Idempotency-Key header is required on writes")

@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 24 (part b): `POST /v1/research` mounted LIVE in enrichapi (smoke-verified)
+The Research API is now **served by the real `enrichapi` binary**. `api.Server` gains an optional
+`Research http.Handler` field, mounted at `POST /v1/research` behind the same posture as enrichment
+(protected auth → principal G1, per-tenant rate limit, write-scope, drain gate; off by default → 404).
+`cmd/enrichapi` constructs the production orchestrator — `EngineEnricher` over the live engine +
+`CollectDiscoverer`(brave) + `CascadeAIRunner`(`ai.Models()`, `DefaultPrompts()`) — all over the **same**
+egress client, with the SSRF host allow-list extended to the search + LLM hosts (`collect.Hosts()`/
+`ai.Hosts()`, ADR-0025/0026). **Live smoke** (memory mode, no keys): the binary boots ("research API
+enabled"), `POST /v1/research` returns a valid Dossier JSON, and the `processing_log` **honestly** records
+each step degrading (search `PROVIDER_DOWN`/no key, 0 fields enriched, AI cascade exhausted) — **no
+fabricated data**; unauth → 401. api mount test (mounted/protected/scope-gated/off-by-default) + full suite
++ `-race` green; zero new Go dep.
+
 ### 2026-07-10 — R&I Slice 24 (part a): `POST /v1/research` is callable (domain → dossier over HTTP)
 **The headline endpoint.** `internal/research.HTTPHandler` serves `POST /v1/research` reusing the platform
 API conventions (ADR-0012): tenant from the authenticated Principal (G1, never the body), `Idempotency-Key`

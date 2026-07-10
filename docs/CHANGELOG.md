@@ -5,6 +5,16 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 23 (part c): enrichment seam over engine.Run (real-seam trio complete)
+`EngineEnricher` adapts the enrichment engine (router `Plan` + `engine.Run` under G1–G5) to the
+orchestrator's `Enricher` seam — mapping a Subject → `EnrichmentRequest` for the canonical Fields and the
+`Outcome` back to per-Field values + provenance (tenant isolation G1 from the ctx Principal; G4 ceiling; G2
+idempotent re-run). This **completes the real-seam trio** (Discoverer/`collect` + AIRunner/`ai`-cascade +
+Enricher/`engine`): a test runs the orchestrator against the **real** engine (in-memory store + mock
+providers) + a stub AI and asserts a Dossier with `source_type=api` provenance for engine-filled Fields.
+PG-free. Tests + `-race` green; full suite clean; zero new Go dep. Remaining slice 23: persistence —
+migration 0015 (`research_*` FORCE RLS) + pgstore + RLS zero-rows (live PG) — then slice 24 `POST /v1/research`.
+
 ### 2026-07-10 — R&I Slice 23 (part b): real ai/collect seams wired into the orchestrator
 `CascadeAIRunner` (over `ai.RunCascade` + per-task struct validators + a `PromptStore` of content-trust-safe
 default prompts — collected text is untrusted data, never instructions) and `CollectDiscoverer` (over

@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 22 (part 2): search collection layer (`internal/collect`)
+The data-collection **search** client (ADR-0025): **Brave / Tavily / Serper** as bounded, breaker-guarded
+egress calls reusing the egress key-injection seam (`provider.WithAuthDescriptor`). Search returns
+**discovery** (URLs + snippets), NOT Fields, so — generalizing deviation **D-1** — it is a dedicated client,
+not a Field-shaped adapter, and search Providers are a separate `Providers()` registry never wired into the
+enrichment engine. Per-dialect request build + response parse; a returned URL is discovery-only (resolved
+only via another provider API — the ADR-0025 boundary). Inclusion status per ADR-0009: Brave (own index)
+**ACTIVE-CANDIDATE**; Serper/Tavily (SERP-derived) **DEPRIORITIZED** (RI-OI-1). Zero new Go dep; tests
+(per-dialect + auth injection + status classification) + `-race` green; full suite regression-clean.
+Remaining slice 22: **dataset** providers that fill canonical Fields (normal HTTPAdapter; GLEIF already exists).
+
 ### 2026-07-10 — R&I Slice 22 (part 1): 6 canonical Fields (33→39) + Brandfetch social coverage
 Code catches up to the DOC-FIRST field registration (ADR-0028): the six single-valued R&I scalars
 (`twitter_url`, `facebook_url`, `github_url`, `crunchbase_url`, `company_ticker`, `total_funding_usd`)

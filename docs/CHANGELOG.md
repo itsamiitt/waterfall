@@ -5,6 +5,25 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 21 (part 1): LLM egress client + deterministic cost cascade
+First implementation slice of the Research & Intelligence platform
+(`docs/research-intelligence/16-implementation-phases.md`). LLM inference as a bounded, cost-metered
+egress call — reusing the enrichment egress/key-injection/breaker machinery with **zero new Go
+dependency**; all gates green.
+- **`internal/ai`**: Model registry (openrouter free-first + openrouter-paid/openai/anthropic);
+  dual-dialect (OpenAI + Anthropic) `LLMClient` with egress key-injection + a per-model circuit breaker
+  (G3); struct-based stdlib JSON validation (no schema engine); and the **deterministic free→paid Model
+  Cascade** — accept/escalate/stop disposed ONLY by schema-valid + G4 budget + attempt count (never a
+  model's self-reported confidence, never a model-chosen tool; losers retained for G5).
+- **`internal/provider`**: exported the egress seam (`WithAuthDescriptor`, `ClassifyStatus`) so a
+  non-`HTTPAdapter` caller reuses key injection + the status taxonomy; backward-compatible, every
+  existing adapter/test untouched.
+- **Deviation D-1** (recorded in `04-ai-pipeline.md`): LLM uses a dedicated client + a separate registry,
+  not the Field-shaped `HTTPAdapter.Fetch`. `go build/vet/test` + `gofmt` + `-race` all green; full-suite
+  regression-clean.
+- **Remaining in slice 21:** `internal/dash/airouting` (`ai_prompt`/`llm_route` config kinds over
+  `configver`) + the LLM catalog projection.
+
 ### 2026-07-09 — Research & Intelligence platform: planning series + 6 ADRs (design-only, plan-first)
 Opened the plan-first design series that evolves the engine into an Enterprise Research & Intelligence
 platform (domain → Dossier; computed intent; AI research), reusing the enrichment core, ~145-adapter

@@ -11,6 +11,8 @@
   },
   "links": [
     { "name": "twitter", "url": "https://twitter.com/acme" },
-    { "name": "linkedin", "url": "https://www.linkedin.com/company/acme" }
+    { "name": "linkedin", "url": "https://www.linkedin.com/company/acme" },
+    { "name": "facebook", "url": "https://facebook.com/acme" },
+    { "name": "github", "url": "https://github.com/acme" }
   ]
 }

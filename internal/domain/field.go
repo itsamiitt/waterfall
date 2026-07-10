@@ -56,6 +56,17 @@ const (
 	FieldFirstName Field = "first_name"
 	FieldLastName  Field = "last_name"
 	FieldFullName  Field = "full_name"
+
+	// Research & Intelligence scalars (R&I; ADR-0028, docs/00 §7). Each is genuinely
+	// single-valued, so it slots into field_versions with no schema change. Multi-valued or
+	// relational R&I data (competitors, acquisitions, funding rounds, partnerships, locations)
+	// stays Dossier-only and is NEVER a canonical Field.
+	FieldTwitterURL      Field = "twitter_url"
+	FieldFacebookURL     Field = "facebook_url"
+	FieldGitHubURL       Field = "github_url"
+	FieldCrunchbaseURL   Field = "crunchbase_url"
+	FieldCompanyTicker   Field = "company_ticker"
+	FieldTotalFundingUSD Field = "total_funding_usd"
 )
 
 // canonicalFields is the allow-list used by Field.Valid. It mirrors the constants
@@ -73,6 +84,9 @@ var canonicalFields = map[Field]struct{}{
 	// Technographics (L7) + Intent/signals (L8).
 	FieldTechnographics: {}, FieldIntentTopics: {}, FieldIntentScore: {}, FieldBuyingSignal: {},
 	FieldFirstName: {}, FieldLastName: {}, FieldFullName: {},
+	// Research & Intelligence scalars (R&I; ADR-0028).
+	FieldTwitterURL: {}, FieldFacebookURL: {}, FieldGitHubURL: {}, FieldCrunchbaseURL: {},
+	FieldCompanyTicker: {}, FieldTotalFundingUSD: {},
 }
 
 // Valid reports whether f is part of the canonical Field vocabulary.

@@ -44,6 +44,9 @@ func Brandfetch(base string, client *http.Client) *provider.HTTPAdapter {
 			{Field: domain.FieldCompanyHQCountry, Cost: 3, ExpectedConfidence: 0.70},
 			{Field: domain.FieldCompanyHQCity, Cost: 3, ExpectedConfidence: 0.70},
 			{Field: domain.FieldCompanyLinkedInURL, Cost: 3, ExpectedConfidence: 0.75},
+			{Field: domain.FieldTwitterURL, Cost: 3, ExpectedConfidence: 0.75},
+			{Field: domain.FieldFacebookURL, Cost: 3, ExpectedConfidence: 0.75},
+			{Field: domain.FieldGitHubURL, Cost: 3, ExpectedConfidence: 0.75},
 		},
 		Build: func(ctx context.Context, base string, req provider.Request) (*http.Request, error) {
 			u := strings.TrimRight(base, "/") + "/" + url.PathEscape(req.Known[domain.FieldCompanyDomain])
@@ -95,10 +98,21 @@ func decodeBrandfetch(body []byte) (provider.Result, error) {
 	if len(p.Company.Industries) > 0 {
 		put(domain.FieldIndustry, p.Company.Industries[0].Name, 0.65)
 	}
+	// links[] carries the company's social profiles; map the ones that are canonical Fields
+	// (ADR-0028). Twitter is keyed "twitter" or "x"; unknown link names are ignored.
 	for _, l := range p.Links {
-		if strings.EqualFold(l.Name, "linkedin") && l.URL != "" {
+		if l.URL == "" {
+			continue
+		}
+		switch strings.ToLower(l.Name) {
+		case "linkedin":
 			put(domain.FieldCompanyLinkedInURL, l.URL, 0.75)
-			break
+		case "twitter", "x":
+			put(domain.FieldTwitterURL, l.URL, 0.75)
+		case "facebook":
+			put(domain.FieldFacebookURL, l.URL, 0.75)
+		case "github":
+			put(domain.FieldGitHubURL, l.URL, 0.75)
 		}
 	}
 	return res, nil

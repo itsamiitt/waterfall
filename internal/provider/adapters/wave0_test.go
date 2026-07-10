@@ -999,6 +999,9 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 				domain.FieldCompanyHQCountry:   "United States",
 				domain.FieldCompanyHQCity:      "Frisco",
 				domain.FieldCompanyLinkedInURL: "https://www.linkedin.com/company/acme",
+				domain.FieldTwitterURL:         "https://twitter.com/acme",
+				domain.FieldFacebookURL:        "https://facebook.com/acme",
+				domain.FieldGitHubURL:          "https://github.com/acme",
 			},
 		},
 		{

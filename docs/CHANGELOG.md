@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 24 (part a): `POST /v1/research` is callable (domain → dossier over HTTP)
+**The headline endpoint.** `internal/research.HTTPHandler` serves `POST /v1/research` reusing the platform
+API conventions (ADR-0012): tenant from the authenticated Principal (G1, never the body), `Idempotency-Key`
+required on writes, snake_case JSON, uniform error body `{"error":{"code","message"}}`. This increment
+serves the **synchronous** assembly (the `?mode=sync` preview) — it runs the orchestrator inline and returns
+the Dossier JSON. An **end-to-end test drives HTTP → real orchestrator → real enrichment engine** (in-memory
+store + mock provider) + a stub AI and asserts a Dossier with provenance; error cases (missing key 400, no
+identifiers 422, no principal 401, unknown field 400) covered. The handler is injected via an `Assembler`
+seam, ready to mount into `cmd/enrichapi`. The default async 202+job_id flow + `GET /v1/research/{id}` land
+with persistence (migration 0015). Tests + `-race` green; full suite clean; zero new Go dep.
+
 ### 2026-07-10 — R&I Slice 23 (part c): enrichment seam over engine.Run (real-seam trio complete)
 `EngineEnricher` adapts the enrichment engine (router `Plan` + `engine.Run` under G1–G5) to the
 orchestrator's `Enricher` seam — mapping a Subject → `EnrichmentRequest` for the canonical Fields and the

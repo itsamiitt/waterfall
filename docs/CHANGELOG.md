@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-10 — R&I Slice 23 (part b): real ai/collect seams wired into the orchestrator
+`CascadeAIRunner` (over `ai.RunCascade` + per-task struct validators + a `PromptStore` of content-trust-safe
+default prompts — collected text is untrusted data, never instructions) and `CollectDiscoverer` (over
+`collect.Client`) bridge the orchestrator to the real AI and search clients — both PG-free, so verifiable
+now. An **end-to-end test** wires the orchestrator to a real `collect` Brave client (httptest) + a stub
+completer + a fake enricher and asserts a complete Dossier assembles (profile, AI summary, merged search
+keywords, typed provenance). The enrichment seam over `engine.Run` + persistence (`research_*` /
+migration 0015, needs live PG) are the next increment. Tests + `-race` green; full suite clean; zero new Go dep.
+
 ### 2026-07-10 — R&I Slice 23 (part a): research orchestrator core + Dossier schema (`internal/research`)
 The **domain→Dossier assembly core** (ADR-0028): a **deterministic DAG orchestrator** that composes the
 discovery (`internal/collect`), enrichment (engine seam), and AI (`internal/ai` cascade) seams in a

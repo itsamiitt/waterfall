@@ -9,7 +9,10 @@
         "phone_number": "+1-555-0100",
         "linkedin": { "value": "https://www.linkedin.com/company/acme" },
         "founded_on": { "value": "2012-02-01", "precision": "day" },
-        "categories": [{ "value": "Software" }, { "value": "SaaS" }]
+        "categories": [{ "value": "Software" }, { "value": "SaaS" }],
+        "permalink": "acme",
+        "stock_symbol": { "value": "NASDAQ:ACME" },
+        "funding_total": { "value_usd": 12000000, "currency": "USD" }
       }
     }
   ]

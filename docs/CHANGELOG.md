@@ -9,10 +9,11 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 Code catches up to the DOC-FIRST field registration (ADR-0028): the six single-valued R&I scalars
 (`twitter_url`, `facebook_url`, `github_url`, `crunchbase_url`, `company_ticker`, `total_funding_usd`)
 are added to `internal/domain/field.go` (const block + `canonicalFields` map); `Valid()` now accepts
-**exactly 39**, locked by a new `internal/domain` test. **Brandfetch** (firmographics) now maps
-twitter/facebook/github from its `links[]`, so three of the new Fields have real provider coverage
-(fixture + `wave0_test` extended, subset-semantics runner). Multi-valued R&I data (competitors, funding
-rounds, …) stays Dossier-only, never a Field. `go build/vet/test` + `gofmt` green; full suite regression-clean.
+**exactly 39**, locked by a new `internal/domain` test. **Brandfetch** (social URLs from `links[]`) and
+**Crunchbase** (`funding_total.value_usd`→total_funding_usd, `stock_symbol`→company_ticker,
+`permalink`→crunchbase_url) give **all six** new Fields real provider coverage (fixtures + `wave0_test`
+extended, subset-semantics runner). Multi-valued R&I data (competitors, funding rounds, …) stays
+Dossier-only, never a Field. `go build/vet/test` + `gofmt` green; full suite regression-clean.
 Remaining slice 22: search/dataset providers (Brave/Tavily/Serper/OpenAlex/SEC-EDGAR/Common Crawl index)
 — search returns discovery/URLs, not Fields, so it needs a dedicated collection client (generalizes D-1).
 

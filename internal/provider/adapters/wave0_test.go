@@ -1015,6 +1015,9 @@ func TestWave0_DecodeFixtures(t *testing.T) {
 				domain.FieldFundingStage:       "series_a",
 				domain.FieldIndustry:           "SaaS,Software",
 				domain.FieldCompanyLinkedInURL: "https://www.linkedin.com/company/acme",
+				domain.FieldTotalFundingUSD:    "12000000",
+				domain.FieldCompanyTicker:      "NASDAQ:ACME",
+				domain.FieldCrunchbaseURL:      "https://www.crunchbase.com/organization/acme",
 			},
 		},
 		{

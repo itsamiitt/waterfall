@@ -43,12 +43,16 @@ func Crunchbase(base string, client *http.Client) *provider.HTTPAdapter {
 			{Field: domain.FieldCompanyType, Cost: 5, ExpectedConfidence: 0.80},
 			{Field: domain.FieldFundingStage, Cost: 5, ExpectedConfidence: 0.70},
 			{Field: domain.FieldCompanyPhone, Cost: 5, ExpectedConfidence: 0.70},
+			{Field: domain.FieldTotalFundingUSD, Cost: 5, ExpectedConfidence: 0.75},
+			{Field: domain.FieldCompanyTicker, Cost: 5, ExpectedConfidence: 0.75},
+			{Field: domain.FieldCrunchbaseURL, Cost: 5, ExpectedConfidence: 0.80},
 		},
 		Build: func(ctx context.Context, base string, req provider.Request) (*http.Request, error) {
 			body := map[string]any{
 				"field_ids": []string{
 					"name", "website_url", "linkedin", "founded_on", "categories",
 					"company_type", "funding_stage", "phone_number",
+					"funding_total", "stock_symbol", "permalink",
 				},
 				"query": []map[string]any{{
 					"type":        "predicate",
@@ -87,6 +91,13 @@ func Crunchbase(base string, client *http.Client) *provider.HTTPAdapter {
 						Categories []struct {
 							Value string `json:"value"`
 						} `json:"categories"`
+						Permalink   string `json:"permalink"`
+						StockSymbol struct {
+							Value string `json:"value"`
+						} `json:"stock_symbol"`
+						FundingTotal struct {
+							ValueUSD json.Number `json:"value_usd"`
+						} `json:"funding_total"`
 					} `json:"properties"`
 				} `json:"entities"`
 			}
@@ -115,6 +126,13 @@ func Crunchbase(base string, client *http.Client) *provider.HTTPAdapter {
 				cats = append(cats, c.Value)
 			}
 			put(domain.FieldIndustry, normList(cats), 0.80)
+			// R&I scalars (ADR-0028): total funding (money.value_usd), stock ticker, and the
+			// Crunchbase permalink as a canonical URL. Shapes UNVERIFIED until a live authorized call.
+			put(domain.FieldTotalFundingUSD, string(pr.FundingTotal.ValueUSD), 0.75)
+			put(domain.FieldCompanyTicker, pr.StockSymbol.Value, 0.75)
+			if pr.Permalink != "" {
+				put(domain.FieldCrunchbaseURL, "https://www.crunchbase.com/organization/"+pr.Permalink, 0.80)
+			}
 			return res, nil
 		},
 	}

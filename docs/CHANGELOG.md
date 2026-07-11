@@ -5,6 +5,22 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 27 (part 2b): CRM push-through-egress adapter + idempotent push service (live-green)
+The CRM push executes through the **single egress-proxy** (ADR-0030/0010) — no second internet route.
+`internal/crm.Pusher` mirrors the `internal/collect`/`internal/ai` dedicated-client pattern: it POSTs the
+mapped record through the egress `*http.Client`, injecting the OAuth token **at the egress boundary** via
+`provider.WithAuthDescriptor` keyed on the connection's envelope reference (never in the control-plane),
+bounded by a G3 timeout + per-provider breaker, with `provider.ClassifyStatus` error taxonomy. `Service`
+makes every push **idempotent (G2)**: it claims the ledger key first and executes the egress push only when
+the `(tenant, key)` is new — a redelivery is a deduplicated no-op; on push failure the claim is released so
+the push is retryable (the ledger records only pushes that reached the CRM). Pure `ApplyFieldMap` projects
+Dossier fields → CRM fields (unmapped/absent never leak). Verified: unit tests (token-at-egress, 401→
+ClassAuth, `ApplyFieldMap`) + **an RFC1918 CRM host is refused by the SSRF guard** (`TestPush_SSRFBlocked`),
+and a **live E2E on PG17 + a fake CRM sink** — two identical pushes yield **exactly one** CRM write, a new
+`field_map_version` is a distinct push. Store gained `DeletePush` (failure release). Full Go suite + `-race`
+green; zero new Go dep. Remaining: the `/v1/admin/crm/connections` dashboardd endpoint + DSAR cascade wiring
+(part 2c) close Slice 27.
+
 ### 2026-07-11 — R&I Slice 27 (part 2a): CRM schema + store + idempotency + DSAR (migration 0019, live-green)
 The CRM outbound persistence + G1/G2/DSAR contract (ADR-0030), schema + control-plane store; the
 push-through-egress adapter and the `/v1/admin/crm/connections` endpoint attach next. **Migration

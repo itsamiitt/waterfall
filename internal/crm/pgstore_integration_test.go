@@ -49,7 +49,12 @@ func TestCRMRLS_Isolation(t *testing.T) {
 			t.Fatalf("apply %s: %v", path, err)
 		}
 	}
-	applyFile("../../migrations/0001_init.sql")
+	// app_current_tenant() is the only thing 0019 needs from 0001; define it inline so this test is
+	// self-contained (two integration tests share one DB — re-applying all of 0001 would collide on its
+	// base tables).
+	if err := admin.Exec("CREATE OR REPLACE FUNCTION app_current_tenant() RETURNS text LANGUAGE sql STABLE AS $f$ SELECT current_setting('app.current_tenant', true) $f$"); err != nil {
+		t.Fatalf("define app_current_tenant: %v", err)
+	}
 	applyFile("../../migrations/0019_crm.sql")
 
 	if err := admin.Exec("create role app_rls login nosuperuser"); err != nil {

@@ -172,6 +172,14 @@ func (s *Store) RecordPush(ctx context.Context, p PushRecord) (bool, error) {
 	return inserted, err
 }
 
+// DeletePush releases a push-ledger claim by idem_key (used on push failure so the push is retryable).
+// RLS scopes the delete to the caller's tenant.
+func (s *Store) DeletePush(ctx context.Context, idemKey string) error {
+	return s.tx(ctx, func(c *pg.Conn) error {
+		return c.ExecParams("delete from crm_push_ledger where idem_key = $1", idemKey)
+	})
+}
+
 // MarkErasurePending flags every not-yet-erased ledger row for a record as erasure-obligated (DSAR
 // cascade, ADR-0030 / 09 §5): the downstream CRM erasure obligation is recorded so a DSAR delete
 // propagates to what was pushed. Returns the number of rows newly marked.

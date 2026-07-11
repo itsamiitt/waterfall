@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I docs: implementation reconciliation (design ↔ shipped) after slices 21–27 landed
+Now that all planned slices are implemented + live-verified, reconciled the design docs with reality (no
+code change). `docs/research-intelligence/16-implementation-phases.md`: status DRAFT → **IMPLEMENTED**; added
+a **§2.0 implementation-status table** (per-slice: migration, what shipped, what's a documented follow-on);
+and flipped the §5 Self-Verification gate verdicts from PENDING to **✅ REALIZED / ◑ PARTIAL** with concrete
+live evidence (RLS as non-superuser on PG17; CRM push idempotency 2→1; `TestPush_SSRFBlocked_RFC1918`;
+cascade disposed by deterministic signals; single egress boundary). `00-overview.md`: added **§9b
+Implementation Self-Verification Record** mapping each hard invariant (G1–G5, single-boundary, stdlib-only,
+one-owner, model-proposes) to how the shipped code realizes it, plus the deferred-follow-on register. The
+design-review Status of `00` stays DRAFT (the formal /architecture-review gate was not run) — §9b records
+implementation without conflating the two.
+
 ### 2026-07-11 — R&I Slice 27 (part 2c): CRM connections dashboard surface — CLOSES Slice 27 (all planned slices 21–27 done)
 The admin read surface for CRM outbound connections. `internal/dash/crm` is a tenant-scoped read model over
 `crm_connections` (migration 0019) via the dashboard dual-GUC RLS seam (`db.Store.Tx`): `GET

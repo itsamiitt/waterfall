@@ -1,6 +1,6 @@
 # 16 — Implementation Phases
 
-> **Status:** DRAFT · **Owner:** Solutions Architect + Principal Backend Engineer · **Last updated:** 2026-07-09 · **Gated by:** /architecture-review, /security-audit, /provider-audit, /scale-check
+> **Status:** IMPLEMENTED (slices 21–27 shipped + live-verified 2026-07-11; see §2.0) · **Owner:** Solutions Architect + Principal Backend Engineer · **Last updated:** 2026-07-11 · **Gated by:** /architecture-review, /security-audit, /provider-audit, /scale-check
 
 > Authoritative slice plan for the Research & Intelligence platform. It continues the Waterfall dashboard phase
 > plan ([`docs/waterfall-dashboard/12`](../waterfall-dashboard/12-implementation-phases.md), slices through P12)
@@ -60,6 +60,23 @@
 | 25 (47) | Computed intent + `intent_*` + write-back | **0016** | `internal/intent/{signal,score}`, `internal/dash/intent` | G1/G5 | ten-class score with reasoning; parent+partition RLS; single write-back owner | XL |
 | 26 (48) | Dashboard modules + web screens | — | `internal/dash/{airouting,research,intent}`, `web/features/{aimodels,airesearch,intent}` | G1 (reads) | no-orphan-UI; every panel binds a live endpoint; `npm run build` green | L |
 | 27 (49) | Roadmap: news (0018) → CRM (0019) | **0018**, **0019** | `internal/news`, `internal/crm` | G1/G2/G3/G4/G5 | roadmap tables + RLS; CRM push through the single egress-proxy | XL |
+
+### 2.0 Implementation status (updated 2026-07-11) — slices 21–27 SHIPPED + live-verified
+
+All seven planned slices are implemented on the `waterfall` branch and live-verified against ephemeral
+**PostgreSQL 17** (RLS proven as a **non-superuser** role — the only way RLS actually binds). One green,
+tested, committed increment per slice-part; migrations **0015–0019** land in strict filename order (the whole
+18/19-file chain applies clean). The full commit trail + per-increment evidence is in `docs/CHANGELOG.md`.
+
+| Slice | Status | Migration(s) | Shipped | Deferred follow-on |
+|---|---|---|---|---|
+| 21 | ✅ shipped | — (config kinds) | `internal/ai` LLM egress client + deterministic free→paid cascade (disposed by schema-valid + G4 budget + attempts, never self-confidence / model tool-calls); openrouter/-paid/openai/anthropic | `airouting` config-EDITING (needs kind-widen migration 0020); read-only model catalog shipped in slice 26 |
+| 22 | ✅ shipped | — (registry + `field.go`) | `internal/collect` Brave/Tavily/Serper (index-only, returned-URL boundary); 6 scalar Fields (`Valid()`=39); Brandfetch/Crunchbase coverage | broader dataset adapters (GLEIF exists; EDGAR fuzzy-CIK) |
+| 23 | ✅ shipped | **0015** | `internal/research` deterministic DAG orchestrator (collect→enrich→ai→intent); `research_*` FORCE RLS; per-value provenance (`source_type`) | — |
+| 24 | ✅ shipped | — | `POST /v1/research` (**sync** assembly) + `GET /v1/dossiers/{domain}`, live on enrichapi; Idempotency-Key required | **async 202+job_id** lane (`job.Kind=research_run` → `research_runs`/`steps`) — designed, sync-only shipped |
+| 25 | ✅ shipped | **0016** | `internal/intent` ten-class noisy-OR scorer + calibrator hook; single write-back owner (3 Fields); `GET /v1/intent/accounts` + `POST /v1/intent/refresh` live | richer signal collectors; partitioned `intent_signals` raw feed |
+| 26 | ✅ shipped | **0017** (operator cross-Tenant read) | dash read-models `intent`/`research` + operator-only `airouting` model catalog; web features `intent`/`airesearch`/`aimodels` (full `npm run check:ci` green); operator-read RLS policy | Research **Run** monitor (needs the async lane); intent **weights** editor (needs config surface) |
+| 27 | ✅ shipped | **0018** news/market · **0019** crm | `internal/news` schema + store (index-only); `internal/crm` schema + store + **push through the single egress-proxy** (token injected at egress, RFC1918 refused) + **idempotent** service (G2) + DSAR `MarkErasurePending`; dash `/v1/admin/crm/connections` read surface | news **collection lane** (behind news-monitoring ADR RM-OI-2); CRM **configure-write** (`POST`, envelope-sealed secret); full **DSAR cascade** orchestrator |
 
 ### Slice 21 (doc 43) — LLM-egress adapters + deterministic cost cascade
 
@@ -428,18 +445,19 @@ roadmap slice (27) requires 24 (`crm_ready`) and is gated behind its own approva
 
 ## 5. Self-Verification Record
 
-> REQUIRED FINAL SECTION — scaffold created now; verdicts filled during plan self-verification and finalized when
-> the slices land. Categories: Hard Gate / Principle / Acceptance.
+> Verdicts reconciled to the shipped implementation (2026-07-11). "Evidence" lists the DESIGN-intent test
+> names; the authoritative per-increment evidence (actual test names, commit hashes, live-PG runs) is in
+> `docs/CHANGELOG.md` and the §2.0 implementation-status table. Categories: Hard Gate / Principle / Acceptance.
 
 | Check | Category | Verdict | Evidence |
 |---|---|---|---|
-| Every new table (`research_*` 0015, `intent_*` 0016, `crm_*`/`news_*` 0019/0018) FORCE RLS + zero-rows proven | Hard Gate | PENDING | `TestResearchRLSZeroRows`, `TestIntentRLSZeroRows` (parent+partitions), `TestCRMRLSZeroRows` (`14 §3.1`) |
-| Idempotency — LLM cache-on-first-success; Dossier/intent/CRM writes idempotent | Hard Gate | PENDING | `TestLLMIdempotentReplayCache`, `TestResearchIdempotencyKeyRequired`, `TestChaosIntentRefreshCoalesce` |
-| Bounded — every new call a `provider.Call` + `CallPolicy` + breaker via the sole egress-proxy | Hard Gate | PENDING | `TestNewAdapterSSRFBlocked`, `CallPolicy{60–90s,MaxAttempts:1}` (`04 §2`) |
-| Cost ceiling — aggregate Dossier reserve; LLM reserve-on-estimate/charge-on-actual | Hard Gate | PENDING | `TestCascadeStopsOnBudget`, `TestChaosBudgetExhaustionMidRun` |
-| Provenance — every value a `research_sources` row; `ai_inference` never fused as fact | Hard Gate | PENDING | `TestDossierProvenanceParity`, `TestIntentAIInferenceNotWrittenThrough` |
-| Model proposes, gate disposes — escalation only on (a)/(b)/(c)/(d), never self-confidence/tool call | Principle | PENDING | `TestCascadeDecisionTable`, `TestCascadeIgnoresSelfConfidence`, `TestCascadeIgnoresModelToolInstruction` |
-| No scraping / single boundary — returned-URL discovery-only; Common Crawl index-only; no second egress | Principle | PENDING | `TestSearchReturnedURLNotFetched`, `TestCommonCrawlIndexOnly`, CRM single-boundary audit |
+| Every new table (`research_*` 0015, `intent_*` 0016, `crm_*`/`news_*` 0019/0018) FORCE RLS + zero-rows proven | Hard Gate | ✅ REALIZED (live) | RLS integration tests proven as non-superuser `app_rls` on PG17 for `research_*`, `intent_scores`, `news_items`/`market_signals`, `crm_*` (tenant B sees 0 of A) |
+| Idempotency — LLM cache-on-first-success; Dossier/intent/CRM writes idempotent | Hard Gate | ◑ PARTIAL (live) | CRM push is a proven no-op on redelivery (live E2E: 2 pushes → 1 CRM write); research `POST` requires Idempotency-Key; LLM response cache = deferred follow-on |
+| Bounded — every new call a `provider.Call` + `CallPolicy` + breaker via the sole egress-proxy | Hard Gate | ✅ REALIZED (live) | `internal/{collect,ai,crm}` clients: egress `*http.Client` + `CallPolicy` timeout + per-provider breaker; `TestPush_SSRFBlocked_RFC1918` refuses a private CRM host |
+| Cost ceiling — aggregate Dossier reserve; LLM reserve-on-estimate/charge-on-actual | Hard Gate | ◑ PARTIAL | free→paid cascade stops on the G4 budget signal (slice 21); aggregate Dossier reserve / charge-on-actual = follow-on |
+| Provenance — every value a `research_sources` row; `ai_inference` never fused as fact | Hard Gate | ✅ REALIZED | Dossier assembly writes a `research_sources` row per value with `source_type` in {api,dataset,ai_inference}; intent write-back marks its provenance |
+| Model proposes, gate disposes — escalation only on (a)/(b)/(c)/(d), never self-confidence/tool call | Principle | ✅ REALIZED | `internal/ai` cascade escalates only on schema-valid + G4 budget + attempts; never LLM self-reported confidence or model-chosen tool calls |
+| No scraping / single boundary — returned-URL discovery-only; Common Crawl index-only; no second egress | Principle | ✅ REALIZED | `internal/collect` returns discovery Hits (URL/text, never Fields); CRM push traverses the SOLE egress-proxy (RFC1918 refused) — no second internet route |
 | Stdlib-only — no LLM/vector SDK; struct validation; no `pgvector` | Principle | PENDING | `TestNoNewGoDependency` |
 | One-owner-per-table + DOC-FIRST fields — canonical names fixed (no `dossiers` alias); `Valid()` = 39 | Principle | PENDING | field-vocab test; owner map `00 §2.3` |
 | Contract parity — `openapi-research.json` ↔ handlers; two-home boundary | Acceptance | PENDING | `TestResearchOpenAPIParity`, `TestDossierBoundaryNoFieldWrite` |

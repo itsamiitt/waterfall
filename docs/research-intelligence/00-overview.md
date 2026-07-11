@@ -226,6 +226,29 @@ implementation slices, `16`):
 | **Provider trichotomy** | Search/dataset/LLM classified by ADR-0009; Serper/Tavily DEPRIORITIZED pending human policy; EXCLUDED providers never registered. |
 | **DOC-FIRST field vocab** | The 6 new scalars registered in `docs/00 §7` before any `field.go` change; multi-valued data stays Dossier-only. |
 
+## 9b Implementation Self-Verification Record (2026-07-11)
+
+The design above is now **implemented**: slices 21–27 shipped on the `waterfall` branch (migrations 0015–0019),
+each a green/tested/committed increment, live-verified against ephemeral **PostgreSQL 17** with RLS proven as a
+**non-superuser** role. See [`16 §2.0`](16-implementation-phases.md) for the per-slice reconciliation and
+`docs/CHANGELOG.md` for the per-increment evidence.
+
+| Invariant | Realized by (live-verified unless noted) |
+|-----------|-------------------------------------------|
+| **G1 tenant isolation** | `research_*` (0015), `intent_scores` (0016), `news_items`/`market_signals` (0018), `crm_*` (0019) all FORCE RLS; RLS integration tests as non-superuser `app_rls` show tenant B sees 0 of A; dashboard reads via dual-GUC `db.Store.Tx`; operator cross-Tenant read is an enumerated additive policy (0017). |
+| **G2 idempotency** | CRM push proven idempotent live (2 pushes → 1 CRM write; `crm_push_ledger` UNIQUE `(tenant, idem_key)`); research `POST` requires an Idempotency-Key; intent refresh upserts. *LLM response cache = follow-on.* |
+| **G3 bounded** | `internal/{ai,collect,crm}` clients call through the egress `*http.Client` with a `CallPolicy` timeout + per-provider breaker; `TestPush_SSRFBlocked_RFC1918` refuses a private CRM host. |
+| **G4 cost ceiling** | free→paid cascade stops on the deterministic G4 budget signal (slice 21). *Aggregate-Dossier reserve / charge-on-actual = follow-on.* |
+| **G5 provenance** | Dossier assembly writes a `research_sources` row per value with `source_type ∈ {api,dataset,ai_inference}`; `ai_inference` never fused as a high-confidence fact. |
+| **SSRF / single boundary** | CRM push is a *direction* of the sole egress-proxy (no second internet route); OAuth token injected only at egress via `provider.WithAuthDescriptor` (envelope reference in the control-plane, never plaintext). |
+| **Stdlib-only** | Zero new Go dep across all slices; LLM/search/CRM = HTTP+JSON dedicated clients; struct-based validation; hand-rolled `internal/pg`. Web: zero new npm dep (ADR-0016 allowlist unchanged). |
+| **One-owner-per-table** | `internal/research`/`internal/intent`/`internal/news`/`internal/crm` each own their tables; dash modules are read-only projections. |
+| **Model proposes, gate disposes** | `internal/ai` cascade escalates only on schema-valid + G4 budget + attempts — never LLM self-confidence or model-chosen tool calls. |
+
+**Deferred (documented, not blocking):** async research lane (`job.Kind=research_run` → Run monitor); `airouting`
+config-editing (kind-widen migration 0020); news collection lane (news-monitoring ADR RM-OI-2); CRM
+configure-write (`POST`, sealed secret); full DSAR cascade orchestrator; R&I web features for runs/weights/CRM.
+
 ## Open items
 
 | ID | Item | Status | Owner |

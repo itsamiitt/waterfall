@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: async research runner (worker) — the second async-lane increment
+`internal/research.Runner` processes queued research runs asynchronously in an in-memory dispatcher (a
+durable pgoutbox relay is a later refinement). `Submit(reqCtx, runID, subject)` captures the tenant
+**Principal** (never the request context) and enqueues; a worker rebuilds a fresh background context bound
+to that Principal — so RLS still confines every write to the submitting Tenant, with **no cross-Tenant scan
+and no BYPASSRLS** — then transitions the run queued→running, assembles the Dossier via the **same
+`Assembler` seam as the sync path**, persists it (`SaveDossier`), and marks it done|failed. `Submit`
+fail-closes without a Principal and applies backpressure (returns false) when the bounded queue is full.
+Fakes-based unit tests cover the done / assembly-failure / persist-failure transitions + an end-to-end
+`Start`/`Submit`/`Stop`, green under **`-race`** (goroutines). No migration, no HTTP wiring yet (the
+`POST` 202-response + `GET /v1/research/{id}` route is the next increment). Full Go suite green; zero new
+Go dep.
+
 ### 2026-07-11 — R&I: research run-lifecycle store (foundation for the async 202+run_id lane)
 The first building block toward the plan's designed **async** `POST /v1/research` (202 + run_id) — the piece
 the shipped sync-only flow skipped. `research_runs` already existed (migration 0015) but nothing wrote run

@@ -113,6 +113,38 @@ func TestResearchRLS_DossierIsolation(t *testing.T) {
 		t.Fatalf("tenant-A should find its dossier by subject (ok=%v err=%v)", okA, err)
 	}
 
+	// --- research_runs lifecycle (the async 202+run_id foundation) ---
+	if created, err := store.CreateRun(ctxA, "run-1", "acme.com", "v1"); err != nil || !created {
+		t.Fatalf("CreateRun A: created=%v err=%v", created, err)
+	}
+	// Idempotent: the same run_id again is a no-op (a retried submission returns the existing run).
+	if created, err := store.CreateRun(ctxA, "run-1", "acme.com", "v1"); err != nil || created {
+		t.Fatalf("duplicate CreateRun must be a no-op: created=%v err=%v", created, err)
+	}
+	if r, ok, err := store.GetRun(ctxA, "run-1"); err != nil || !ok || r.Status != research.RunQueued || r.SubjectKey != "acme.com" {
+		t.Fatalf("GetRun A = %+v ok=%v err=%v", r, ok, err)
+	}
+	// queued → running → done.
+	if err := store.SetRunStatus(ctxA, "run-1", research.RunRunning); err != nil {
+		t.Fatalf("SetRunStatus running: %v", err)
+	}
+	if err := store.SetRunStatus(ctxA, "run-1", research.RunDone); err != nil {
+		t.Fatalf("SetRunStatus done: %v", err)
+	}
+	if r, ok, err := store.GetRun(ctxA, "run-1"); err != nil || !ok || r.Status != research.RunDone {
+		t.Fatalf("GetRun after transitions = %+v ok=%v err=%v", r, ok, err)
+	}
+	// tenant-B sees NONE of tenant-A's runs (RLS G1), by id or in the list.
+	if _, okB, err := store.GetRun(ctxB, "run-1"); err != nil || okB {
+		t.Fatalf("tenant-B must NOT see tenant-A's run (ok=%v err=%v)", okB, err)
+	}
+	if runsB, err := store.ListRuns(ctxB, 50); err != nil || len(runsB) != 0 {
+		t.Fatalf("tenant-B must see 0 runs (n=%d err=%v)", len(runsB), err)
+	}
+	if runsA, err := store.ListRuns(ctxA, 50); err != nil || len(runsA) != 1 || runsA[0].RunID != "run-1" || runsA[0].Status != research.RunDone {
+		t.Fatalf("tenant-A ListRuns = %+v err=%v", runsA, err)
+	}
+
 	// Fail-closed: no principal ⇒ error, never a cross-tenant read.
 	if _, _, err := store.GetDossier(context.Background(), "d-A"); err == nil {
 		t.Fatal("store must reject an unauthenticated context")

@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: research run-lifecycle store (foundation for the async 202+run_id lane)
+The first building block toward the plan's designed **async** `POST /v1/research` (202 + run_id) — the piece
+the shipped sync-only flow skipped. `research_runs` already existed (migration 0015) but nothing wrote run
+status; `internal/research.Store` gains the lifecycle: `CreateRun` (records a **queued** run, idempotent per
+`(tenant, run_id)` so a retried submission returns the existing run — G2), `SetRunStatus` (queued → running
+→ done|failed), `GetRun`, `ListRuns`, plus `Run` + `RunQueued/Running/Done/Failed` constants. Tenant-scoped
+by RLS like the rest of the store (tenant never passed as an argument). **Live-verified on PG17** (extended
+the research RLS integration test, non-superuser `app_rls`): idempotent create is a no-op, status transitions
+persist, and tenant B sees 0 of A's runs by id + in the list. No migration (table exists); no HTTP wiring
+yet (the worker + async route are the next increments). Full Go suite + `-race` green; zero new Go dep.
+
 ### 2026-07-11 — R&I: CRM connections web feature (completes the CRM vertical UI)
 `web/src/features/crm` surfaces the part-2c `/v1/admin/crm/connections` read-model in the SPA — a read-only
 table of the Tenant's configured CRM push targets (connection, provider, status, updated-at) over `GET

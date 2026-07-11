@@ -2022,6 +2022,32 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/crm/connections':
+    get:
+      summary: List configured CRM connections (Tenant-scoped, ADR-0030)
+      operationId: get_v1_admin_crm_connections
+      tags: [crm]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/crm/connections/{id}':
+    get:
+      summary: Get a CRM connection by id (Tenant-scoped, ADR-0030)
+      operationId: get_v1_admin_crm_connection
+      tags: [crm]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
   '/v1/admin/ai/models':
     get:
       summary: List the LLM model cascade catalog (operator-only, ADR-0026)

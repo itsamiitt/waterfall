@@ -32,6 +32,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/audit"
 	"github.com/enrichment/waterfall/internal/dash/configver"
 	"github.com/enrichment/waterfall/internal/dash/cost"
+	dashcrm "github.com/enrichment/waterfall/internal/dash/crm"
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/health"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
@@ -449,6 +450,9 @@ func main() {
 	// AI models catalog (Slice 26, ADR-0026): operator-only read of the LLM cascade registry (no store).
 	airouting.Routes(fmux, airouting.Deps{Service: airouting.NewService(), Auth: httpx.CtxAuthenticator{}, Logger: logger})
 
+	// CRM connections (Slice 27, ADR-0030): tenant-scoped read of configured CRM outbound connections.
+	dashcrm.Routes(fmux, dashcrm.Deps{Service: dashcrm.NewService(store), Auth: httpx.CtxAuthenticator{}, Logger: logger})
+
 	alertStore := alerts.NewStore(store, time.Now)
 	alertEval := alerts.NewEvaluator(alertStore, auditLog, time.Now, reg, logger)
 	alertNotif := alerts.NewNotifier(alertStore, backend, nil /* SSRF-guarded default egress */, time.Now, reg, logger)
@@ -778,6 +782,9 @@ grant select, insert, update, delete on mfa_used_steps, dash_admin_idempotency t
 -- P7 self_monitor snapshot row-set (0010): loop heartbeats, fold watermarks, SSE client
 -- counts, overview/queue snapshots — written through internal/dash/realtime.SelfMon only.
 grant select, insert, update, delete on self_monitor to dash_app;
+-- R&I dashboard read models (0016 intent, 0015 research, 0019 crm): read-only projections for the admin
+-- surface (internal/dash/{intent,research,crm}). Writes stay with the R&I owner modules (enrichapi).
+grant select on intent_scores, research_dossiers, crm_connections to dash_app;
 `
 
 // startupSelfCheck refuses to run as a role that bypasses RLS (which would silently defeat G1) and

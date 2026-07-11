@@ -5,6 +5,24 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 27 (part 2c): CRM connections dashboard surface — CLOSES Slice 27 (all planned slices 21–27 done)
+The admin read surface for CRM outbound connections. `internal/dash/crm` is a tenant-scoped read model over
+`crm_connections` (migration 0019) via the dashboard dual-GUC RLS seam (`db.Store.Tx`): `GET
+/v1/admin/crm/connections` (list) + `/connections/{id}` (get) behind a new **`CRMRead` RBAC action**
+(operator allow; tenant_admin own-Tenant — CRM connections are outbound-integration config; tenant_user
+deny). The projection **omits `secret_ref` and `config`** — the dashboard shows which CRMs a Tenant pushes
+to and their status, never credential material. Mounted in `cmd/dashboardd`; OpenAPI parity kept (both CRM
+paths added to `openapi-admin.{json,yaml}`; `TestAdminOpenAPIParity` green) + `04-api-contracts.md §2.14`
+rows. **Also closed a latent grant gap**: `dashboardd`'s `provisionRolesSQL` never granted `dash_app` on the
+R&I read tables — added `grant select on intent_scores, research_dossiers, crm_connections`. Middleware
+tests (401/403 incl. tenant_user-denied) + a **live RLS integration test on PG17** (tenant B sees 0 of A's
+connections, fail-closed). Full Go suite + `-race` green; zero new Go dep.
+
+**Slice 27 closed → all planned R&I slices 21–27 are implemented + live-verified.** Documented follow-ons
+remain (async research lane / Run monitor; airouting config-editing via a kind-widen migration 0020; the
+news collection lane behind its news-monitoring ADR; the CRM configure-write path + a full DSAR cascade
+orchestrator; R&I web features for runs/weights/crm).
+
 ### 2026-07-11 — R&I Slice 27 (part 2b): CRM push-through-egress adapter + idempotent push service (live-green)
 The CRM push executes through the **single egress-proxy** (ADR-0030/0010) — no second internet route.
 `internal/crm.Pusher` mirrors the `internal/collect`/`internal/ai` dedicated-client pattern: it POSTs the

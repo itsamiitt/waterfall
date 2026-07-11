@@ -1007,6 +1007,8 @@ reads cross-Tenant via the enumerated operator-read policy (migration 0017). Rea
 | GET | `/intent/accounts/{domain}` | Per-class Intent Class Scores for one account | TU+/O | `{ account, scores: [{ class, score, confidence, signal_count, config_version, computed_at }] }`; the ten class scores are never conflated with the single `intent_score` Field |
 | GET | `/research/dossiers` | Assembled dossiers, freshest first | TU+/O | `{ items: [{ dossier_id, subject_key, overall_confidence, config_version, freshness_at }] }`; `?limit=` (cap 200) |
 | GET | `/research/dossiers/{id}` | The full stored Dossier JSON | TU+/O | raw Dossier document (per-section confidence + provenance; `source_type=ai_inference` visibly distinct) |
+| GET | `/crm/connections` | Configured CRM outbound connections | TA+ (own Tenant) / O | `{ items: [{ connection_id, provider, status, created_at, updated_at }] }`; credential material (secret_ref/config) never projected (ADR-0030); `?limit=` (cap 200) |
+| GET | `/crm/connections/{id}` | One CRM connection | TA+/O | same shape; 404 when absent |
 
 ---
 

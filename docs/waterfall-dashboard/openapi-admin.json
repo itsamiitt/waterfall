@@ -1044,6 +1044,50 @@
     ]
    }
   },
+  "/v1/admin/crm/connections": {
+   "get": {
+    "operationId": "get_v1_admin_crm_connections",
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "List configured CRM connections (Tenant-scoped, ADR-0030)",
+    "tags": [
+     "crm"
+    ]
+   }
+  },
+  "/v1/admin/crm/connections/{id}": {
+   "get": {
+    "operationId": "get_v1_admin_crm_connection",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "Get a CRM connection by id (Tenant-scoped, ADR-0030)",
+    "tags": [
+     "crm"
+    ]
+   }
+  },
   "/v1/admin/ai/models": {
    "get": {
     "operationId": "get_v1_admin_ai_models",

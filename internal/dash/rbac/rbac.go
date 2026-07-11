@@ -48,6 +48,7 @@ const (
 	IntentRead       Action = "intent.read"    // R&I: computed intent read (Slice 26, ADR-0027)
 	ResearchRead     Action = "research.read"  // R&I: research dossier read (Slice 26, ADR-0028)
 	AIModelsRead     Action = "ai.models.read" // R&I: LLM model catalog read (Slice 26, ADR-0026)
+	CRMRead          Action = "crm.read"       // R&I: CRM connection read (Slice 27, ADR-0030)
 	AlertsCRUD       Action = "alerts.crud"
 	AlertsAck        Action = "alerts.ack"
 	UsersCRUD        Action = "users.crud"
@@ -125,6 +126,9 @@ var matrix = map[Action]map[string]Decision{
 	ResearchRead: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionOwnTenant},
 	// The LLM model registry is platform config (not tenant data): operator-only, like health/workers.
 	AIModelsRead: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionDeny, RoleTenantUser: DecisionDeny},
+	// CRM connections are outbound-integration config (which CRM a Tenant pushes to): a tenant_admin
+	// concern (own-tenant), operator cross-tenant for support; tenant_user has no config visibility.
+	CRMRead: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 
 	AlertsCRUD: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 	AlertsAck:  {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},

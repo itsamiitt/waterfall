@@ -5,6 +5,16 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 25 (part b4): `intent_refresh` orchestration (async lane core)
+`internal/intent.IntentRefresher` — the async lane that makes intent self-populating (ADR-0027): collect
+signals (`SignalCollector` seam) → `Scorer.ScoreAll` → persist per-class scores (`ScoreWriter`) →
+`Project` → write back the three canonical Fields (`intent_score`/`intent_topics`/`buying_signal`) into
+`field_versions` via a `FieldWriter` seam (the engine store's `Append`; intent is the single write-back
+owner, G5 provenance `provider=intent-engine`). PG-free + seam-based (unit-testable with fakes, like the
+research orchestrator). Tests (persist+write-back, no-signals-writes-nothing, collector-error) + `-race`
+green; full suite clean; zero new Go dep. The real `SignalCollector` (provider outputs → Signals) +
+`job.Kind=intent_refresh` submission follow.
+
 ### 2026-07-11 — R&I Slice 25 (part b3): intent read API `GET /v1/intent/accounts/{domain}` mounted LIVE
 The computed-intent read surface. `internal/intent.HTTPHandler` serves `GET /v1/intent/accounts/{domain}`
 (auth → principal G1; an account with no intent = 200 with `[]`; no store = 404) via a `ScoreStore` seam.

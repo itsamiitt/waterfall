@@ -14,3 +14,8 @@ export function dossierHeadline(doc: unknown): string | null {
   if (typeof d.subject_key === "string" && d.subject_key !== "") return d.subject_key;
   return null;
 }
+
+/** True while a research run is still being processed (queued or running) — the UI marks it in-progress. */
+export function isActiveRun(status: string): boolean {
+  return status === "queued" || status === "running";
+}

@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: Research Runs web tab (surfaces the async run monitor in the SPA)
+Adds a **Runs** view to `web/src/features/airesearch` over the part-`bb722db` `GET /v1/admin/research/runs`
+backend: a read-only table of the Tenant's async research runs (run_id, subject, status, updated) with
+in-progress runs marked (queued/running show a `…`). Routed at `/research/runs` (rides the existing
+`research/:id` route — a dossier id is a domain, never "runs" — so no router/nav change; checked first in
+the feature's pathname switch), reached via a "runs →" link on the dossiers page and a "← dossiers" link
+back. New `useResearchRuns` hook (short stale time — status changes as the worker runs) + pure `isActiveRun`
+helper (vitest). No new nav module or RBAC (reuses `research.read`); `/research/runs` already in
+`04-api-contracts §2.14`, so the no-orphan-UI gate stays green. Full `npm run check:ci` green (tsc + vitest
++ allowlist + orphan + build + bundle-size 111.6 KB / 400 KB); zero new npm dep. **The async research lane
+now has a full SPA surface** (dossiers + runs).
+
 ### 2026-07-11 — R&I: Research Run monitor dashboard — completes the async research lane surface
 The dashboard read surface for the async lane, now that `research_runs` is populated by real submissions.
 `internal/dash/research.Service` gains `Runs(ctx, limit)` → run lifecycle rows (run_id, subject_key,

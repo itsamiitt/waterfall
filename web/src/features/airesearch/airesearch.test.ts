@@ -1,7 +1,7 @@
 // features/airesearch unit tests: the Dossier headline extractor is defensive against arbitrary JSON
 // (doc 06 — the Dossier is a composite document, not a fixed shape) and never throws on bad input.
 import { describe, expect, it } from "vitest";
-import { dossierHeadline } from "./logic";
+import { dossierHeadline, isActiveRun } from "./logic";
 
 describe("airesearch dossierHeadline", () => {
   it("returns null for non-objects", () => {
@@ -22,5 +22,18 @@ describe("airesearch dossierHeadline", () => {
 
   it("returns null when neither a name nor a subject key is present", () => {
     expect(dossierHeadline({ firmographics: {} })).toBeNull();
+  });
+});
+
+describe("airesearch isActiveRun", () => {
+  it("treats queued and running as in-progress", () => {
+    expect(isActiveRun("queued")).toBe(true);
+    expect(isActiveRun("running")).toBe(true);
+  });
+
+  it("treats terminal states as not in-progress", () => {
+    expect(isActiveRun("done")).toBe(false);
+    expect(isActiveRun("failed")).toBe(false);
+    expect(isActiveRun("")).toBe(false);
   });
 });

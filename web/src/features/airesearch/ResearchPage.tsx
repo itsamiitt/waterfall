@@ -3,7 +3,7 @@
 // dossier is a research-owned composite — the admin surface reads it, never assembles it.
 import { useNavigate } from "react-router";
 import { isApiError } from "../../api/client";
-import { EmptyState, Table, type ColumnDef } from "../../design/primitives";
+import { Button, EmptyState, Table, type ColumnDef } from "../../design/primitives";
 import { formatUtc } from "../../lib/format";
 import { useDossiers } from "./api";
 import type { DossierSummary } from "./types";
@@ -25,7 +25,12 @@ export default function ResearchPage() {
     <>
       <div className="page-header">
         <h1 tabIndex={-1}>Research</h1>
-        <span className="page-header-meta">assembled dossiers (domain → Dossier)</span>
+        <span className="page-header-meta">
+          assembled dossiers (domain → Dossier) ·{" "}
+          <Button size="sm" variant="ghost" onClick={() => nav("/research/runs")}>
+            runs →
+          </Button>
+        </span>
       </div>
 
       {q.isError ? (

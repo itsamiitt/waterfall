@@ -19,3 +19,18 @@ export interface DossiersResponse {
 /** The full stored Dossier document — an arbitrary JSON object (top-level keys per doc 06:
  * company_profile, firmographics, intent, provenance, …). Rendered as-is; never reshaped here. */
 export type DossierDoc = Record<string, unknown>;
+
+/** One async research run's lifecycle row (list). Mirrors dash/research RunSummary. */
+export interface RunSummary {
+  run_id: string;
+  subject_key: string;
+  status: string;
+  config_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /research/runs envelope. */
+export interface RunsResponse {
+  items: RunSummary[];
+}

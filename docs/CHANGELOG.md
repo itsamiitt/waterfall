@@ -5,6 +5,23 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: async research HTTP wiring — POST 202+run_id + GET /v1/research/{id} (LIVE end-to-end)
+Realizes the plan's designed **async** research flow (ADR-0028), the third and final async-lane increment.
+`POST /v1/research` is now async by default when the run store + worker are wired: it records a **queued**
+run (`run_id` = `sha256(tenant, Idempotency-Key)` — stable, non-secret, so a retry maps to the same run — G2),
+enqueues it on the `Runner`, and returns **202 `{run_id, status}`**; a duplicate submission returns the
+existing run's status without re-enqueuing. **`?mode=sync`** (or memory mode, no run store) keeps the inline
+capped-budget assembly. New **`GET /v1/research/{id}`** serves run status + the assembled Dossier once done
+(tenant-scoped; 404 cross-Tenant / unknown / async-disabled). Wired into `api.Server.ResearchAPI` (new `Run`
+method + `GET /v1/research/{id}` protected mount) and `cmd/enrichapi` (constructs `research.NewRunner` over
+the orchestrator + store, `Start(4)`, `defer Stop()` before the pool closes). Unit tests: async 202 +
+enqueue-once + idempotent no-re-enqueue, `?mode=sync` override, `GET` status/dossier/404/401. **Live on
+PG17 + the real enrichapi binary**: `POST` → 202 `{run_id, status:queued}`, the worker transitions it
+queued→**running** (background — the request never blocked), and a same-key re-POST returns the **same
+run_id** without re-enqueuing. (Reaching `done` live is gated only by the real orchestrator's external-call
+latency without API keys — the async mechanism, worker pickup, and idempotency are proven.) Full Go suite +
+`-race` green; zero new Go dep.
+
 ### 2026-07-11 — R&I: async research runner (worker) — the second async-lane increment
 `internal/research.Runner` processes queued research runs asynchronously in an in-memory dispatcher (a
 durable pgoutbox relay is a later refinement). `Submit(reqCtx, runID, subject)` captures the tenant

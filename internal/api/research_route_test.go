@@ -16,6 +16,10 @@ func (s *stubResearch) Research(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"dossier_id": "d1"})
 }
 
+func (s *stubResearch) Run(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"run_id": "run-1", "status": "queued"})
+}
+
 func (s *stubResearch) Dossier(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"dossier_id": "d1"})
 }

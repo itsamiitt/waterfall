@@ -2,6 +2,8 @@ package research
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -27,9 +29,24 @@ type DossierStore interface {
 	LatestBySubject(ctx context.Context, subjectKey string) (Dossier, bool, error)
 }
 
+// RunSubmitter enqueues a research run for async assembly. *Runner satisfies it.
+type RunSubmitter interface {
+	Submit(ctx context.Context, runID string, subject Subject) bool
+}
+
+// RunStore records and reads run lifecycle rows (research_runs). *Store satisfies it. When both Runs and
+// Runner are set, POST /v1/research is async by default (202 + run_id) and GET /v1/research/{id} serves
+// status; without them the endpoint serves the synchronous inline assembly.
+type RunStore interface {
+	CreateRun(ctx context.Context, runID, subjectKey, configVersion string) (bool, error)
+	GetRun(ctx context.Context, runID string) (Run, bool, error)
+}
+
 type HTTPHandler struct {
 	Assembler Assembler
 	Store     DossierStore // optional; enables persistence + GET /v1/dossiers/{domain}
+	Runs      RunStore     // optional; with Runner, enables async POST + GET /v1/research/{id}
+	Runner    RunSubmitter // optional; the async worker
 }
 
 // researchRequest is the POST /v1/research body.
@@ -47,12 +64,14 @@ type researchRequest struct {
 // instrument wrappers, exactly as for /v1/enrichments.
 func (h *HTTPHandler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/research", h.Research)
+	mux.HandleFunc("GET /v1/research/{id}", h.Run)
 	mux.HandleFunc("GET /v1/dossiers/{domain}", h.Dossier)
 }
 
-// Research handles POST /v1/research. This increment serves the SYNCHRONOUS assembly (the ?mode=sync
-// preview): it assembles the Dossier inline, persists it when a Store is configured, and returns it.
-// The default async 202+job_id flow and GET /v1/research/{id} land with the job lane.
+// Research handles POST /v1/research. When the run store + worker are wired it is ASYNC by default
+// (ADR-0028): it records a queued run, enqueues it, and returns 202 + run_id (a retry with the same
+// Idempotency-Key returns the existing run — G2). `?mode=sync`, or a deployment without the run lane
+// (memory mode), serves the inline capped-budget assembly instead.
 func (h *HTTPHandler) Research(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Idempotency-Key") == "" {
 		writeErr(w, http.StatusBadRequest, "missing_idempotency_key",
@@ -73,10 +92,41 @@ func (h *HTTPHandler) Research(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// G1: the tenant flows from the authenticated principal, never the request body.
-	if _, err := tenant.FromContext(r.Context()); err != nil {
+	principal, err := tenant.FromContext(r.Context())
+	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "unauthorized", "no principal")
 		return
 	}
+
+	async := h.Runs != nil && h.Runner != nil && r.URL.Query().Get("mode") != "sync"
+	if async {
+		h.submitAsync(w, r, principal, subject)
+		return
+	}
+	h.assembleSync(w, r, subject)
+}
+
+// submitAsync records a queued run and enqueues it, returning 202 + run_id. A retry with the same
+// Idempotency-Key resolves to the same run_id, so CreateRun is a no-op and the existing run's status is
+// returned instead of starting a second assembly (G2).
+func (h *HTTPHandler) submitAsync(w http.ResponseWriter, r *http.Request, principal tenant.Principal, subject Subject) {
+	runID := deriveRunID(principal.TenantID, r.Header.Get("Idempotency-Key"))
+	created, err := h.Runs.CreateRun(r.Context(), runID, subjectID(subject), "")
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", "could not record the research run")
+		return
+	}
+	status := RunQueued
+	if created {
+		h.Runner.Submit(r.Context(), runID, subject) // backpressure: run stays queued if the queue is full
+	} else if run, ok, gerr := h.Runs.GetRun(r.Context(), runID); gerr == nil && ok {
+		status = run.Status // duplicate submission: reflect the existing run's progress
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"run_id": runID, "status": status})
+}
+
+// assembleSync assembles the Dossier inline, persists it when a Store is configured, and returns it.
+func (h *HTTPHandler) assembleSync(w http.ResponseWriter, r *http.Request, subject Subject) {
 	dossier, err := h.Assembler.Assemble(r.Context(), subject)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "assembly_failed", "the dossier could not be assembled")
@@ -93,6 +143,61 @@ func (h *HTTPHandler) Research(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, dossier)
+}
+
+// runResponse is the GET /v1/research/{id} body: the run's lifecycle plus the assembled Dossier once done.
+type runResponse struct {
+	RunID         string   `json:"run_id"`
+	SubjectKey    string   `json:"subject_key"`
+	Status        string   `json:"status"`
+	ConfigVersion string   `json:"config_version"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
+	Dossier       *Dossier `json:"dossier,omitempty"`
+}
+
+// Run handles GET /v1/research/{id}: the status of an async research run, plus the assembled Dossier once
+// it is done. Tenant-scoped (G1) — a run belonging to another tenant is 404. 404 when async is disabled.
+func (h *HTTPHandler) Run(w http.ResponseWriter, r *http.Request) {
+	if _, err := tenant.FromContext(r.Context()); err != nil {
+		writeErr(w, http.StatusUnauthorized, "unauthorized", "no principal")
+		return
+	}
+	if h.Runs == nil {
+		writeErr(w, http.StatusNotFound, "not_found", "async research is not enabled")
+		return
+	}
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeErr(w, http.StatusUnprocessableEntity, "validation_error", "run id is required")
+		return
+	}
+	run, ok, err := h.Runs.GetRun(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", "run lookup failed")
+		return
+	}
+	if !ok {
+		writeErr(w, http.StatusNotFound, "not_found", "no research run with this id")
+		return
+	}
+	resp := runResponse{
+		RunID: run.RunID, SubjectKey: run.SubjectKey, Status: run.Status,
+		ConfigVersion: run.ConfigVersion, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+	}
+	if run.Status == RunDone && h.Store != nil {
+		if d, found, derr := h.Store.LatestBySubject(r.Context(), run.SubjectKey); derr == nil && found {
+			resp.Dossier = &d
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// deriveRunID makes a stable, non-secret run id from the tenant + Idempotency-Key, so a retried submission
+// maps to the same run (G2) without echoing the client's key on the wire.
+func deriveRunID(tenantID, idemKey string) string {
+	sum := sha256.Sum256([]byte(tenantID + "\x00" + idemKey))
+	return "run_" + hex.EncodeToString(sum[:16])
 }
 
 // Dossier handles GET /v1/dossiers/{domain}: the freshest stored Dossier for a Company within the

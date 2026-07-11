@@ -308,10 +308,18 @@ func main() {
 		}
 		defer rs.Close()
 		researchHandler.Store = rs
-		logger.Info("research dossier persistence enabled")
+		researchHandler.Runs = rs
+		// Async research lane (ADR-0028): POST /v1/research records a queued run + enqueues it; a worker
+		// pool assembles the Dossier via the same orchestrator and transitions the run; GET /v1/research/{id}
+		// serves status. Each run travels with its submitting Principal (RLS) — no cross-tenant scan.
+		runner := research.NewRunner(researchHandler.Assembler, rs, 64, logger)
+		runner.Start(4)
+		defer runner.Stop() // LIFO: stop workers before rs.Close() drains the pool
+		researchHandler.Runner = runner
+		logger.Info("research dossier persistence + async run lane enabled")
 	}
 	srv.Research = researchHandler
-	logger.Info("research API enabled", "routes", "POST /v1/research, GET /v1/dossiers/{domain}")
+	logger.Info("research API enabled", "routes", "POST /v1/research (async 202+run_id), GET /v1/research/{id}, GET /v1/dossiers/{domain}")
 
 	// Intent read API (ADR-0027): GET /v1/intent/accounts/{domain} serves the last-computed per-class
 	// scores. Persistence (intent_scores, migration 0016) is enabled with Postgres; without it the

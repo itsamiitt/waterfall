@@ -64,6 +64,7 @@ func (s *Server) log() *slog.Logger {
 // (GET /v1/dossiers/{domain}).
 type ResearchAPI interface {
 	Research(http.ResponseWriter, *http.Request)
+	Run(http.ResponseWriter, *http.Request)
 	Dossier(http.ResponseWriter, *http.Request)
 }
 
@@ -113,7 +114,9 @@ func (s *Server) Handler() http.Handler {
 			research = s.requireScope(s.WriteScope, research)
 		}
 		mux.Handle("POST /v1/research", s.instrument("/v1/research", s.protected(research)))
-		// GET /v1/dossiers/{domain} is a read: authenticated + rate-limited only.
+		// GET /v1/research/{id} (async run status) and GET /v1/dossiers/{domain} are reads: authenticated
+		// + rate-limited only.
+		mux.Handle("GET /v1/research/{id}", s.instrument("/v1/research/{id}", s.protected(s.Research.Run)))
 		mux.Handle("GET /v1/dossiers/{domain}", s.instrument("/v1/dossiers/{domain}", s.protected(s.Research.Dossier)))
 	}
 	if s.Intent != nil {

@@ -203,3 +203,128 @@ func TestGetDossier_404WhenNoStoreOrMissing(t *testing.T) {
 		t.Fatalf("no-principal status = %d, want 401", rw.Code)
 	}
 }
+
+// --- async lane fakes (RunStore + RunSubmitter) ---
+
+type fakeRuns struct {
+	runs map[string]Run
+}
+
+func newFakeRuns() *fakeRuns { return &fakeRuns{runs: map[string]Run{}} }
+
+func (f *fakeRuns) CreateRun(_ context.Context, runID, subjectKey, cfg string) (bool, error) {
+	if _, ok := f.runs[runID]; ok {
+		return false, nil
+	}
+	f.runs[runID] = Run{RunID: runID, SubjectKey: subjectKey, Status: RunQueued, ConfigVersion: cfg}
+	return true, nil
+}
+
+func (f *fakeRuns) GetRun(_ context.Context, runID string) (Run, bool, error) {
+	r, ok := f.runs[runID]
+	return r, ok, nil
+}
+
+type fakeSubmitter struct{ submitted []string }
+
+func (f *fakeSubmitter) Submit(_ context.Context, runID string, _ Subject) bool {
+	f.submitted = append(f.submitted, runID)
+	return true
+}
+
+func TestPostResearch_AsyncReturns202AndEnqueuesOnce(t *testing.T) {
+	runs := newFakeRuns()
+	sub := &fakeSubmitter{}
+	h := &HTTPHandler{Assembler: fakeAssembler{}, Store: newFakeStore(), Runs: runs, Runner: sub}
+
+	rw := doPost(t, h, `{"company_domain":"acme.com"}`, true, true)
+	if rw.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", rw.Code, rw.Body.String())
+	}
+	var m map[string]string
+	if err := json.Unmarshal(rw.Body.Bytes(), &m); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if m["status"] != RunQueued || m["run_id"] == "" {
+		t.Fatalf("resp = %v", m)
+	}
+	if len(sub.submitted) != 1 || sub.submitted[0] != m["run_id"] {
+		t.Fatalf("run should be enqueued once with the returned id: %v", sub.submitted)
+	}
+
+	// Idempotent re-submission (same Idempotency-Key) → 202, same run, NOT re-enqueued (G2).
+	rw2 := doPost(t, h, `{"company_domain":"acme.com"}`, true, true)
+	if rw2.Code != http.StatusAccepted {
+		t.Fatalf("dup status = %d, want 202", rw2.Code)
+	}
+	if len(sub.submitted) != 1 {
+		t.Fatalf("duplicate submission must NOT re-enqueue: %v", sub.submitted)
+	}
+}
+
+func TestPostResearch_SyncModeOverridesAsync(t *testing.T) {
+	sub := &fakeSubmitter{}
+	h := &HTTPHandler{
+		Assembler: fakeAssembler{d: Dossier{CompanyProfile: map[string]string{"name": "Acme"}}},
+		Runs:      newFakeRuns(), Runner: sub,
+	}
+	mux := http.NewServeMux()
+	h.Routes(mux)
+	req := httptest.NewRequest(http.MethodPost, "/v1/research?mode=sync", strings.NewReader(`{"company_domain":"acme.com"}`))
+	req.Header.Set("Idempotency-Key", "k1")
+	req = req.WithContext(tenant.WithPrincipal(req.Context(), tenant.Principal{TenantID: "t1"}))
+	rw := httptest.NewRecorder()
+	mux.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusOK {
+		t.Fatalf("?mode=sync status = %d, want 200 (inline assembly); body=%s", rw.Code, rw.Body.String())
+	}
+	if len(sub.submitted) != 0 {
+		t.Fatalf("?mode=sync must not enqueue an async run: %v", sub.submitted)
+	}
+}
+
+func TestGetRun_StatusAndDossier(t *testing.T) {
+	runs := newFakeRuns()
+	runs.runs["run-x"] = Run{RunID: "run-x", SubjectKey: "acme.com", Status: RunDone}
+	st := newFakeStore()
+	st.byDomain["acme.com"] = Dossier{DossierID: "acme.com", CompanyProfile: map[string]string{"name": "Acme"}}
+	h := &HTTPHandler{Assembler: fakeAssembler{}, Store: st, Runs: runs, Runner: &fakeSubmitter{}}
+
+	rw := doGet(t, h, "/v1/research/run-x", true)
+	if rw.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rw.Code, rw.Body.String())
+	}
+	var resp map[string]json.RawMessage
+	if err := json.Unmarshal(rw.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var status string
+	_ = json.Unmarshal(resp["status"], &status)
+	if status != RunDone {
+		t.Fatalf("status = %q, want done", status)
+	}
+	if _, ok := resp["dossier"]; !ok {
+		t.Fatal("a done run must include the assembled dossier")
+	}
+
+	// A queued run omits the dossier even if one exists for the subject.
+	runs.runs["run-q"] = Run{RunID: "run-q", SubjectKey: "acme.com", Status: RunQueued}
+	rwq := doGet(t, h, "/v1/research/run-q", true)
+	var respq map[string]json.RawMessage
+	_ = json.Unmarshal(rwq.Body.Bytes(), &respq)
+	if _, ok := respq["dossier"]; ok {
+		t.Fatal("a queued run must omit the dossier")
+	}
+
+	// Unknown run → 404; no principal → 401; async disabled (no Runs) → 404.
+	if rw := doGet(t, h, "/v1/research/nope", true); rw.Code != http.StatusNotFound {
+		t.Fatalf("unknown run status = %d, want 404", rw.Code)
+	}
+	if rw := doGet(t, h, "/v1/research/run-x", false); rw.Code != http.StatusUnauthorized {
+		t.Fatalf("no-principal status = %d, want 401", rw.Code)
+	}
+	if rw := doGet(t, &HTTPHandler{Assembler: fakeAssembler{}}, "/v1/research/run-x", true); rw.Code != http.StatusNotFound {
+		t.Fatalf("async-disabled status = %d, want 404", rw.Code)
+	}
+}

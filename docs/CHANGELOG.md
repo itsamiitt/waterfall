@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 25 (part b2): migration 0016 `intent_scores` + intent pgstore + RLS test (live-green)
+Persistence for the computed intent engine, mirroring research. **Migration 0016** = `intent_scores`
+(per-account class score + confidence + `reasoning` JSONB + pinned `config_version`;
+`UNIQUE(tenant_id,account,signal_class)` upsert target), Class-T FORCE RLS matching `0001`.
+`internal/intent.Store` (`SaveScores` upsert, `GetByAccount` score-desc; RLS-scoped from the ctx
+principal, no BYPASSRLS). A build-tagged (`integration`) RLS test **passes LIVE against ephemeral PG17**:
+all **16 migrations compose cleanly**; tenant B sees 0 of A's scores; upsert updates in place; reasoning
+round-trips; fail-closed on no-principal; cross-tenant INSERT rejected by `WITH CHECK`. Full suite +
+`-race` green; zero new Go dep. `GET /v1/intent/accounts/{domain}` + enrichapi wiring + the async
+`intent_refresh` lane follow.
+
 ### 2026-07-11 — R&I Slice 24 (part c): dossier persistence wired + `GET /v1/dossiers/{domain}` (live-green)
 `POST /v1/research` now **persists** the assembled Dossier (upsert-per-subject via `research.Store`) when
 Postgres is configured, and **`GET /v1/dossiers/{domain}`** reads the freshest one back — both behind the

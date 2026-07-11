@@ -30,6 +30,7 @@ export type ActionGroup =
   | "workers.actions"
   | "cost.read"
   | "budgets.write"
+  | "intent.read"
   | "alerts.read"
   | "alerts.write"
   | "users.read"
@@ -70,6 +71,8 @@ const MATRIX: Record<ActionGroup, Row> = {
   "workers.actions": row("allow", "deny", "deny"),
   "cost.read": row("allow", "own-tenant-only", "own-tenant-only"),
   "budgets.write": row("allow", "own-tenant-only", "deny"),
+  // R&I: computed intent read (matches internal/dash/rbac IntentRead — operator allow, TA/TU own-tenant).
+  "intent.read": row("allow", "own-tenant-only", "own-tenant-only"),
   "alerts.read": row("allow", "own-tenant-only", "own-tenant-only"),
   "alerts.write": row("allow", "own-tenant-only", "deny"),
   "users.read": row("allow", "own-tenant-only", "deny"),
@@ -116,7 +119,8 @@ export interface NavModule {
   group: ActionGroup;
 }
 
-/** The 12 nav-rail modules (doc 09 §0). Hidden when `can(role, group)` is false. */
+/** The nav-rail modules (doc 09 §0; R&I adds Intent, docs/research-intelligence/08). Hidden when
+ * `can(role, group)` is false. */
 export const NAV_MODULES: NavModule[] = [
   { id: "overview", abbr: "OV", label: "Overview", path: "/", group: "overview.read" },
   { id: "providers", abbr: "PR", label: "Providers", path: "/providers", group: "providers.read" },
@@ -128,6 +132,7 @@ export const NAV_MODULES: NavModule[] = [
   { id: "queues", abbr: "QU", label: "Queues", path: "/queues", group: "dead_letters.read" },
   { id: "workers", abbr: "WK", label: "Workers", path: "/workers", group: "workers.read" },
   { id: "cost", abbr: "CO", label: "Cost", path: "/cost", group: "cost.read" },
+  { id: "intent", abbr: "IN", label: "Intent", path: "/intent", group: "intent.read" },
   { id: "security", abbr: "SE", label: "Security", path: "/security/sessions", group: "sessions.read" },
   { id: "alerts", abbr: "AL", label: "Alerts", path: "/alerts", group: "alerts.read" },
 ];

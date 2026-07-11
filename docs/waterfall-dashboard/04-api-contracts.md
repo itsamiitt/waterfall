@@ -993,6 +993,22 @@ data: {"v":1,"ts":"2026-07-02T12:40:04Z","scope":{"tenant_id":"acme","provider_i
 
 ---
 
+### 2.14 Research & Intelligence (R&I) read surfaces
+
+The admin read models for computed intent and research dossiers (docs/research-intelligence/08; backed by
+`internal/dash/intent` + `internal/dash/research`). All are tenant-scoped by the dual-GUC RLS; an operator
+reads cross-Tenant via the enumerated operator-read policy (migration 0017). Reads only — the write paths
+(`POST /v1/research`, `POST /v1/intent/refresh`) live on the public enrichment API, not this admin surface.
+
+| Method | Path | Purpose | Roles | Notes |
+|---|---|---|---|---|
+| GET | `/intent/accounts` | Accounts with computed intent, strongest class first | TU+ (own Tenant) / O (cross-Tenant) | `{ items: [{ account, top_class, top_score, classes }] }`; `?limit=` (cap 200) |
+| GET | `/intent/accounts/{domain}` | Per-class Intent Class Scores for one account | TU+/O | `{ account, scores: [{ class, score, confidence, signal_count, config_version, computed_at }] }`; the ten class scores are never conflated with the single `intent_score` Field |
+| GET | `/research/dossiers` | Assembled dossiers, freshest first | TU+/O | `{ items: [{ dossier_id, subject_key, confidence, config_version, freshness_at }] }`; `?limit=` (cap 200) |
+| GET | `/research/dossiers/{id}` | The full stored Dossier JSON | TU+/O | raw Dossier document (per-section confidence + provenance; `source_type=ai_inference` visibly distinct) |
+
+---
+
 ## 3. SSE contract (ADR-0019)
 
 ### 3.1 One multiplexed stream

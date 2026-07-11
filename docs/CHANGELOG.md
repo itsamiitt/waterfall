@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part e): Intent web feature (first R&I SPA screen, full CI green)
+The first React screen for the R&I subsystems: `web/src/features/intent` surfaces the computed-intent
+admin read-model. **List** (`/intent`) → accounts with their strongest class over `GET /intent/accounts`;
+**detail** (`/intent/{domain}`) → the full per-class Intent Class Score breakdown (score, confidence,
+signal count, computed-at) over `GET /intent/accounts/{domain}`, with the strongest class highlighted in a
+StatTile — the ten class scores are never conflated with the single `intent_score` Field. Lazy route chunk
+(`app/router.tsx`), new `intent.read` RBAC group + nav-rail module in `lib/permissions.ts` (operator allow,
+TA/TU own-Tenant — mirrors backend `IntentRead`), vitest for the pure `strongestClass` selector, and the
+`04-api-contracts.md` §2.14 R&I read-surface table (also pre-registers the research-dossier endpoints) so
+the **no-orphan-UI gate stays green**. Full `npm run check:ci` green: tsc + vitest (10 tests) + allowlist +
+orphan + vite build + bundle-size (111 KB / 400 KB budget). Zero new npm dep (ADR-0016 allowlist unchanged).
+
 ### 2026-07-11 — R&I Slice 26 (part d): operator cross-Tenant read for the R&I dashboards (migration 0017, live-green)
 Closes the RBAC↔RLS gap on the two Slice 26 read-models: the rbac matrix grants the operator role
 `DecisionAllow` (cross-Tenant) for `research.read`/`intent.read`, but 0015/0016 shipped only the

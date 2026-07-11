@@ -59,6 +59,7 @@ describe("role x action mirror (doc 05 §2 — cosmetic; server is authority)", 
     const ids = visibleNav("tenant_user").map((m) => m.id);
     expect(ids).toContain("overview");
     expect(ids).toContain("cost");
+    expect(ids).toContain("intent"); // own-tenant computed intent
     expect(ids).toContain("security"); // own sessions
     expect(ids).not.toContain("keys");
     expect(ids).not.toContain("workers");
@@ -66,8 +67,8 @@ describe("role x action mirror (doc 05 §2 — cosmetic; server is authority)", 
     expect(ids).not.toContain("queues");
   });
 
-  it("operator sees all 12 modules", () => {
-    expect(visibleNav("operator")).toHaveLength(12);
+  it("operator sees all 13 modules", () => {
+    expect(visibleNav("operator")).toHaveLength(13);
   });
 
   it("hydrateFromServer overrides known groups and ignores unknown ones", () => {

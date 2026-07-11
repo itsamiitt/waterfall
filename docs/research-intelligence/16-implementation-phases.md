@@ -37,7 +37,7 @@
 5. **Migrations are append-only and slice-pinned.** New files follow `migrations/NNNN_snake_description.sql`
    (4-digit, no BEGIN/COMMIT — `internal/pgmigrate` wraps), with a top comment naming the doc section + gate each
    realizes. `pgmigrate` applies strictly in filename order, so migration numbers land in slice order: **0015**
-   (slice 23), **0016** (slice 25), **0017**+**0018** (slice 27). Config kinds `ai_prompt`/`llm_route`/
+   (slice 23), **0016** (slice 25), **0017** (slice 26, R&I operator-read), **0018**+**0019** (slice 27). Config kinds `ai_prompt`/`llm_route`/
    `intent_weights` reuse **0006** — **no new table** (`00 §2.3`). The 6 field additions are code+doc only, **not**
    a schema change (ADR-0023/0028).
 6. **Gate tests travel with the slice.** The G1 RLS zero-rows negative tests for every table a slice creates
@@ -59,7 +59,7 @@
 | 24 (46) | Research-Dossier API + schema + routes | — | `internal/api` (research handlers), `internal/webhook` | G1/G2/G4/G5 | `POST /v1/research` async+sync; OpenAPI parity; two-home boundary | L |
 | 25 (47) | Computed intent + `intent_*` + write-back | **0016** | `internal/intent/{signal,score}`, `internal/dash/intent` | G1/G5 | ten-class score with reasoning; parent+partition RLS; single write-back owner | XL |
 | 26 (48) | Dashboard modules + web screens | — | `internal/dash/{airouting,research,intent}`, `web/features/{aimodels,airesearch,intent}` | G1 (reads) | no-orphan-UI; every panel binds a live endpoint; `npm run build` green | L |
-| 27 (49) | Roadmap: news (0017) → CRM (0018) | **0017**, **0018** | `internal/news`, `internal/crm` | G1/G2/G3/G4/G5 | roadmap tables + RLS; CRM push through the single egress-proxy | XL |
+| 27 (49) | Roadmap: news (0018) → CRM (0019) | **0018**, **0019** | `internal/news`, `internal/crm` | G1/G2/G3/G4/G5 | roadmap tables + RLS; CRM push through the single egress-proxy | XL |
 
 ### Slice 21 (doc 43) — LLM-egress adapters + deterministic cost cascade
 
@@ -289,12 +289,21 @@ the single write-back owner. Ships **migration 0016**. Realizes `05` + ADR-0027.
 ### Slice 26 (doc 48) — Dashboard modules + web screens
 
 **Scope.** The admin surfaces for AI routing/prompts, research monitoring, and intent — backend modules + web
-features — under the no-orphan-UI rule. **No migration** (reads owned tables + `configver`). Realizes `08`.
+features — under the no-orphan-UI rule. One **migration 0017** (R&I operator cross-Tenant read — an additive
+`FOR SELECT USING (app_current_role()='operator')` policy on `research_dossiers` + `intent_scores`, so the rbac
+`DecisionAllow` for `research.read`/`intent.read` is honored at the RLS layer, mirroring 0009's `tenant_usage_*`
+operator-read); otherwise reads owned tables + `configver`. Realizes `08`.
 
 **Deliverables.**
-- `internal/dash/airouting` (thin service over `configver` for `ai_prompt`+`llm_route`; already stood up in slice
-  21 — this slice completes its admin surface), `internal/dash/research` (reads `research_*`, `/v1/admin/research/runs`),
-  `internal/dash/intent` (reads `intent_*`, owns `intent_weights` config, `/v1/admin/intent/weights`).
+- `internal/dash/research` — read-model over `research_dossiers` (`GET /v1/admin/research/dossiers` list +
+  `/dossiers/{id}` full JSON) via the dual-GUC RLS seam (**shipped**); `internal/dash/intent` — read-model over
+  `intent_scores` (`GET /v1/admin/intent/accounts` list + `/{domain}` per-class breakdown) (**shipped**). Both add
+  an rbac action (`research.read`/`intent.read`) and mount in `dashboardd`; both pass a live RLS integration test
+  (tenant isolation + operator cross-Tenant via 0017 + fail-closed). Richer surfaces — Research **Run** monitoring
+  (`/v1/admin/research/runs`, SSE-bound) and the intent **weights** editor (`/v1/admin/intent/weights`, owns the
+  `intent_weights` config) — are follow-on. `internal/dash/airouting` (thin service over `configver` for
+  `ai_prompt`+`llm_route`; stood up in slice 21) completes its admin surface here (deferred: needs the
+  `config_versions.kind` CHECK-widen migration).
 - `web/features/aimodels` → AI model catalog + prompt/route editors (publish through approval); `web/features/airesearch`
   → Research Run monitoring bound to `/v1/admin/research/runs` + the `research`/`ai` SSE topics; `web/features/intent`
   → per-class Intent Class Score breakdown + weight editor. Data-collection Providers surface automatically through
@@ -317,7 +326,7 @@ features — under the no-orphan-UI rule. **No migration** (reads owned tables +
 
 | Gate | Proof (this slice) |
 |---|---|
-| G1 | Admin reads run under the dual-GUC RLS transaction; cross-tenant Run/score not visible (Playwright deny check). |
+| G1 | Admin reads run under the dual-GUC RLS transaction; a tenant_admin/tenant_user sees only own-Tenant dossiers/scores, an operator reads across Tenants via the additive 0017 policy — both proven in the live RLS integration tests (`TestResearchDashboard_TenantIsolation`, `TestIntentDashboard_TenantIsolation`) + a Playwright deny check. |
 | G2 | Publish reuses the `configver` exactly-once publish/approval path (`TestConcurrentPublishConflict`). |
 | G3 | List endpoints cursor-paginated (cap 200); SSE bounded per the ADR-0019 ring. |
 | G4 | Cost/telemetry surfaces are read-only projections of the rollups (observe, never enforce). |
@@ -325,16 +334,16 @@ features — under the no-orphan-UI rule. **No migration** (reads owned tables +
 
 **Dependencies.** Slices 21, 23, 24, 25 (the backends) + dashboard P8 (FE foundation). **Size:** L.
 
-### Slice 27 (doc 49) — Roadmap: news (0017) → CRM outbound (0018)
+### Slice 27 (doc 49) — Roadmap: news (0018) → CRM outbound (0019)
 
 **Scope.** The first roadmap slice (ADR-0030 implementation behind its own approval gate): news/market tables and
-the CRM outbound direction of the single egress-proxy. Ships **migrations 0017 + 0018** together (append-only,
+the CRM outbound direction of the single egress-proxy. Ships **migrations 0018 + 0019** together (append-only,
 `pgmigrate` filename order). Realizes `15 §4.1`/§4.3 + ADR-0030.
 
 **Deliverables.**
-- `migrations/0017_news_market.sql` — `news_items`, `market_signals` (`tenant_id` + FORCE RLS; owner
+- `migrations/0018_news_market.sql` — `news_items`, `market_signals` (`tenant_id` + FORCE RLS; owner
   `internal/news`). **Schema-only** until the news-monitoring ADR (RM-OI-2) promotes the feature.
-- `migrations/0018_crm.sql` — `crm_connections`, `crm_field_maps`, `crm_push_ledger` (`tenant_id` + FORCE RLS, no
+- `migrations/0019_crm.sql` — `crm_connections`, `crm_field_maps`, `crm_push_ledger` (`tenant_id` + FORCE RLS, no
   BYPASSRLS; CRM OAuth secrets **envelope-sealed**, reference-only; owner `internal/crm`, a control-plane module).
 - `internal/crm` — connection config + field maps only. The push itself is a **CRM connector adapter executed
   through the egress-proxy** — same `AuthDescriptor` + egress key-injection (CRM token attached at the boundary,
@@ -381,7 +390,7 @@ flowchart LR
     S24["24 Dossier API + routes"]
     S25["25 computed intent + intent_* (0016)"]
     S26["26 dashboards + web"]
-    S27["27 roadmap news (0017) → CRM (0018)"]
+    S27["27 roadmap news (0018) → CRM (0019)"]
 
     DASH --> S21
     DASH --> S22
@@ -424,7 +433,7 @@ roadmap slice (27) requires 24 (`crm_ready`) and is gated behind its own approva
 
 | Check | Category | Verdict | Evidence |
 |---|---|---|---|
-| Every new table (`research_*` 0015, `intent_*` 0016, `crm_*`/`news_*` 0018/0017) FORCE RLS + zero-rows proven | Hard Gate | PENDING | `TestResearchRLSZeroRows`, `TestIntentRLSZeroRows` (parent+partitions), `TestCRMRLSZeroRows` (`14 §3.1`) |
+| Every new table (`research_*` 0015, `intent_*` 0016, `crm_*`/`news_*` 0019/0018) FORCE RLS + zero-rows proven | Hard Gate | PENDING | `TestResearchRLSZeroRows`, `TestIntentRLSZeroRows` (parent+partitions), `TestCRMRLSZeroRows` (`14 §3.1`) |
 | Idempotency — LLM cache-on-first-success; Dossier/intent/CRM writes idempotent | Hard Gate | PENDING | `TestLLMIdempotentReplayCache`, `TestResearchIdempotencyKeyRequired`, `TestChaosIntentRefreshCoalesce` |
 | Bounded — every new call a `provider.Call` + `CallPolicy` + breaker via the sole egress-proxy | Hard Gate | PENDING | `TestNewAdapterSSRFBlocked`, `CallPolicy{60–90s,MaxAttempts:1}` (`04 §2`) |
 | Cost ceiling — aggregate Dossier reserve; LLM reserve-on-estimate/charge-on-actual | Hard Gate | PENDING | `TestCascadeStopsOnBudget`, `TestChaosBudgetExhaustionMidRun` |
@@ -441,7 +450,7 @@ roadmap slice (27) requires 24 (`crm_ready`) and is gated behind its own approva
 
 | ID | Item | Status | Owner |
 |----|------|--------|-------|
-| IP-RI-1 | Migration ordering: 0015 (slice 23) < 0016 (slice 25) < 0017/0018 (slice 27); `pgmigrate` applies strictly in filename order — numbers must land in slice order (mirrors `docs/waterfall-dashboard/12` OI-IP-1) | DECISION RECORDED | Solutions Architect |
+| IP-RI-1 | Migration ordering: 0015 (slice 23) < 0016 (slice 25) < 0017 (slice 26) < 0018/0019 (slice 27); `pgmigrate` applies strictly in filename order — numbers must land in slice order (mirrors `docs/waterfall-dashboard/12` OI-IP-1) | DECISION RECORDED | Solutions Architect |
 | IP-RI-2 | `usage_events` token/model columns ship in 0015 (slice 23) though LLM calls begin in slice 21 — slice 21 stages token/model detail and reserves/charges credits until 0015 lands (deviation-protocol note) | DECISION RECORDED | Senior Backend Engineer |
 | IP-RI-3 | All numeric criteria (RI-1 100+ Runs/user, RI-2 paid-share cap, RI-3 latency, RI-4 intent accuracy) are UNVERIFIED design targets until the `14 §7`/§8 staging load-lab records measurements | OPEN — closes at staging | Backend + SRE |
 | IP-RI-4 | `wanted_sections[]` → task-graph pruning (skip Agent Tasks for unrequested sections) — refinement over slice 24 (API-OI-2) | Draft (`04 §4`) | Backend + ML |

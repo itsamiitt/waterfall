@@ -3,8 +3,11 @@
 // dual-GUC RLS seam (db.Store.Tx binds app.current_tenant + app.current_role from the verified
 // Principal, ADR-0020), so a tenant_admin / tenant_user sees only their own Tenant's dossiers.
 //
-// Operator cross-Tenant visibility needs an enumerated operator SELECT policy on research_dossiers
-// (the current policy is tenant-only); that policy + the web feature are follow-on increments.
+// Operator cross-Tenant visibility rides the enumerated operator SELECT policy on research_dossiers
+// (migration 0017, mirroring 0009's tenant_usage_* operator-read): rbac grants the operator
+// DecisionAllow for research.read, and the additive policy lets an operator's dual-GUC transaction
+// list/read dossiers across Tenants, while a tenant_admin / tenant_user stays confined to their own
+// Tenant by *_tenant_isolation. The web feature is a follow-on increment.
 package research
 
 import (

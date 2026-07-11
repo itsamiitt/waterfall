@@ -39,8 +39,8 @@ new subsystem slots into one of the existing slots:
 | AI routing/prompts admin | `internal/dash/airouting` (thin over `configver`) | control-plane | `dashboardd` | — (`config_versions` kinds `ai_prompt`, `llm_route`) |
 | Research monitoring admin | `internal/dash/research` | control-plane | `dashboardd` | — (reads `research_*`) |
 | Intent surface admin | `internal/dash/intent` | control-plane | `dashboardd` | — (reads `intent_*`; owns `intent_weights` config) |
-| News/market *(roadmap)* | `internal/news` | control-plane + data-plane egress | `enrichd` | `news_items`, `market_signals` (**0017**) |
-| CRM outbound *(roadmap)* | `internal/crm` (push is a *direction* of the egress-proxy) | control-plane + egress direction | `dashboardd` (config) + egress-proxy (push) | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0018**) |
+| News/market *(roadmap)* | `internal/news` | control-plane + data-plane egress | `enrichd` | `news_items`, `market_signals` (**0018**) |
+| CRM outbound *(roadmap)* | `internal/crm` (push is a *direction* of the egress-proxy) | control-plane + egress direction | `dashboardd` (config) + egress-proxy (push) | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0019**) |
 
 Two placement rules are load-bearing and appear again in §3/§4:
 

@@ -56,10 +56,10 @@ schemes, DocsURLs, and status rationale are in [`07 §2`](07-provider-expansion.
 | `dataset` | `common-crawl` | sync (`New`) | ACTIVE-CANDIDATE (**index-only**) | CDX capture index (URL/host discovery) | **WARC bodies DEFERRED** |
 | `dataset` | `openalex` | sync (`New`) | ACTIVE-CANDIDATE | Scholarly works/authors/institutions | structured entities |
 | `dataset` | `sec-edgar` | sync (`New`) | ACTIVE-CANDIDATE | US filings (Submissions / XBRL facts) | CIK resolves via EDGAR API |
-| `news` *(roadmap)* | *(e.g. `gdelt`)* | sync (`New`) | ACTIVE-CANDIDATE (**index-only**) | News/event index discovery | roadmap (`internal/news`, migration 0017); index-only, same boundary |
+| `news` *(roadmap)* | *(e.g. `gdelt`)* | sync (`New`) | ACTIVE-CANDIDATE (**index-only**) | News/event index discovery | roadmap (`internal/news`, migration 0018); index-only, same boundary |
 
 > `news` is **roadmap** (`00 §2.2`): `internal/news` owns `news_items`/`market_signals` at migration
-> **0017**, behind a later gate. Its adapters obey the *same* ADR-0025 boundary (index/structured
+> **0018**, behind a later gate. Its adapters obey the *same* ADR-0025 boundary (index/structured
 > response only), so they are listed here for completeness, not built in the core spine.
 
 ## 3. The ADR-0025 no-scraping boundary (load-bearing)
@@ -192,4 +192,4 @@ The six new **canonical scalar Fields** that collection can populate (`twitter_u
 | DC-OI-2 | Seed `rate_limit_rpm` / breaker for SEC EDGAR fair-access + Brave 50-qps | Open — from `01` RF-OI-1 | Backend |
 | DC-OI-3 | Common Crawl WARC-body extraction (index-only for now) | Deferred — needs its own ADR (`00` RI-OI-4) | Architecture |
 | DC-OI-4 | ADR-0009 human-policy confirmation for Serper/Tavily before enabling | Pending (`00` RI-OI-1) | Security + Product |
-| DC-OI-5 | `news` category adapters (roadmap, `internal/news`, migration 0017) | Roadmap (`15`) | Backend |
+| DC-OI-5 | `news` category adapters (roadmap, `internal/news`, migration 0018) | Roadmap (`15`) | Backend |

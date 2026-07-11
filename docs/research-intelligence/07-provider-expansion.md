@@ -82,7 +82,7 @@ stdlib-only** — no JSON-Schema engine, no third-party validator.
 ### 2.4 `news` (roadmap)
 
 Category reserved (one slug); adapters are **roadmap** under `internal/news` (owns
-`news_items`/`market_signals`, migration **0017**; `00 §2.2`, `15`). They obey the **same** ADR-0025
+`news_items`/`market_signals`, migration **0018**; `00 §2.2`, `15`). They obey the **same** ADR-0025
 boundary — structured/index responses only, returned URLs discovery-only. Not built in the core spine.
 
 ## 3. Projection into the catalog (`cmd/providerseed`, ADR-0023)
@@ -148,7 +148,7 @@ it lives only in the research-owned composite Dossier (`research_dossiers`), wit
 | `locations[]` | list of sites | Dossier | multi-valued (GLEIF hierarchy, registries) |
 | `seo_keywords[]` | list of keywords | Dossier | multi-valued |
 | `campaigns[]` | list of campaigns | Dossier | multi-valued |
-| `news[]` | list of news items | Dossier | multi-valued; roadmap `news_items` for depth (0017) |
+| `news[]` | list of news items | Dossier | multi-valued; roadmap `news_items` for depth (0018) |
 
 Every Dossier value carries a `source_type ∈ {api, dataset, ai_inference}`; **AI-inferred values are
 never fused as high-confidence facts** and are visibly distinguished (`00 §3`, ADR-0028).
@@ -178,5 +178,5 @@ guard.
 | PE-OI-1 | ADR-0009 human-policy confirmation for Serper/Tavily (DEPRIORITIZED) | Pending (`00` RI-OI-1) | Security + Product |
 | PE-OI-2 | `field.go` const + `canonicalFields` + `Valid()==39` lands at implementation (Slice 22) | Doc-first done; code pending | Backend |
 | PE-OI-3 | Per-provider pricing/limits/coverage seeded into rows | UNVERIFIED until /provider-audit + `11` (RI-5) | Research + Backend |
-| PE-OI-4 | `news` category adapters (roadmap, `internal/news`, 0017) | Roadmap (`15`) | Backend |
+| PE-OI-4 | `news` category adapters (roadmap, `internal/news`, 0018) | Roadmap (`15`) | Backend |
 | PE-OI-5 | Confirm SEC EDGAR `User-Agent` + rate cap and OpenAlex/GLEIF auth specifics into descriptors | Open (`01` RF-OI-1/2) | Research |

@@ -93,12 +93,13 @@ writes, uniform error body); the research/enrichment surface stays on the `enric
 | AI routing / prompts (admin) | `internal/dash/airouting` (thin service over `configver`) | control-plane | — (`config_versions` kinds `ai_prompt`, `llm_route`) | `/v1/admin/ai/prompts`, `/v1/admin/ai/models` |
 | Research monitoring (admin) | `internal/dash/research` | control-plane | — (reads `research_*`) | `/v1/admin/research/runs` |
 | Intent surface (admin) | `internal/dash/intent` | control-plane | — (reads `intent_*`, owns `intent_weights` config) | `/v1/admin/intent/weights` |
-| News/market *(roadmap)* | `internal/news` | control-plane + data-plane egress | `news_items`, `market_signals` (**0017**) | — |
-| CRM outbound *(roadmap)* | `internal/crm` (push via the **single** egress-proxy) | control-plane + egress direction | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0018**) | `/v1/admin/crm/connections` |
+| News/market *(roadmap)* | `internal/news` | control-plane + data-plane egress | `news_items`, `market_signals` (**0018**) | — |
+| CRM outbound *(roadmap)* | `internal/crm` (push via the **single** egress-proxy) | control-plane + egress direction | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0019**) | `/v1/admin/crm/connections` |
 
 **Global migration ledger (strictly sequential; no duplicates):** **0015** research core + `usage_events`
-token columns · **0016** intent signals/scores · **0017** *(roadmap)* news/market · **0018** *(roadmap)*
-CRM. Config kinds `ai_prompt`, `llm_route`, `intent_weights` reuse migration 0006 — **no new table**.
+token columns · **0016** intent signals/scores · **0017** R&I operator cross-Tenant read (additive
+SELECT policy on `research_dossiers` + `intent_scores`, Slice 26) · **0018** *(roadmap)* news/market ·
+**0019** *(roadmap)* CRM. Config kinds `ai_prompt`, `llm_route`, `intent_weights` reuse migration 0006 — **no new table**.
 Field-vocabulary additions (6 scalars, §6) are code+doc only, **not** a schema change (ADR-0023).
 
 ### 2.4 Dashboard extensions — [`08`](08-dashboard-extensions.md)

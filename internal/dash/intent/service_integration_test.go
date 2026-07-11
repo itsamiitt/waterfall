@@ -56,10 +56,19 @@ func TestIntentDashboard_TenantIsolation(t *testing.T) {
 
 	tryExec(admin, "drop owned by app_rls cascade")
 	tryExec(admin, "drop role if exists app_rls")
-	tryExec(admin, "drop table if exists intent_scores, field_versions, idempotency_ledger, cost_ledger cascade")
+	tryExec(admin, "drop table if exists intent_scores, research_runs, research_steps, research_dossiers, research_sources, field_versions, idempotency_ledger, cost_ledger cascade")
 	tryExec(admin, "drop function if exists app_current_tenant() cascade")
 	applyFile(t, admin, "../../../migrations/0001_init.sql")
+	// app_current_role() is the dual-GUC primitive from migration 0004; this minimal chain applies
+	// only the R&I migrations, so define the one function the 0017 operator-read policy depends on.
+	if err := admin.Exec("CREATE OR REPLACE FUNCTION app_current_role() RETURNS text LANGUAGE sql STABLE AS $f$ SELECT current_setting('app.current_role', true) $f$"); err != nil {
+		t.Fatalf("define app_current_role: %v", err)
+	}
+	// 0017 refines RLS on BOTH R&I read-model tables (research_dossiers + intent_scores), so both
+	// table migrations must be present before it — as they are in the production chain.
+	applyFile(t, admin, "../../../migrations/0015_research.sql")
 	applyFile(t, admin, "../../../migrations/0016_intent.sql")
+	applyFile(t, admin, "../../../migrations/0017_ri_operator_read.sql")
 	if err := admin.Exec("create role app_rls login nosuperuser"); err != nil {
 		t.Fatalf("create role: %v", err)
 	}
@@ -103,6 +112,29 @@ func TestIntentDashboard_TenantIsolation(t *testing.T) {
 	listB, err := svc.List(ctxB, 50)
 	if err != nil || len(listB) != 1 || listB[0].Account != "other.com" {
 		t.Fatalf("List B = %+v err=%v", listB, err)
+	}
+
+	// Operator (dual-GUC role=operator, tenant=platform) reads ACROSS tenants via the additive 0017
+	// operator-read policy (rbac intent.read = DecisionAllow): the List roll-up spans both accounts.
+	ctxOp := principal("platform", "operator")
+	listOp, err := svc.List(ctxOp, 50)
+	if err != nil {
+		t.Fatalf("List operator: %v", err)
+	}
+	gotOp := map[string]bool{}
+	for _, a := range listOp {
+		gotOp[a.Account] = true
+	}
+	if !gotOp["acme.com"] || !gotOp["other.com"] {
+		t.Fatalf("operator must read across tenants; got %+v", listOp)
+	}
+	// Operator reads tenant-A's account detail (both classes).
+	if opAcct, err := svc.Account(ctxOp, "acme.com"); err != nil || len(opAcct) != 2 {
+		t.Fatalf("operator Account(acme.com) = %d classes err=%v", len(opAcct), err)
+	}
+	// A non-operator role of tenant-B still cannot cross into tenant-A.
+	if gotUB, err := svc.Account(principal("tenant-B", "tenant_user"), "acme.com"); err != nil || len(gotUB) != 0 {
+		t.Fatalf("tenant_user of B must NOT see tenant-A's account (n=%d err=%v)", len(gotUB), err)
 	}
 
 	// Fail-closed: no principal ⇒ error, never cross-tenant.

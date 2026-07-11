@@ -73,7 +73,7 @@ targets are measured (`14 §8`), and docs `00`–`16` flip DRAFT→ACCEPTED.
   `news` Provider category, event streams, and market-signal aggregation feeding intent and alerts.
 - **Trigger.** Sustained tenant demand for *continuous* (not on-Run) monitoring **and** a `news`-category provider
   with adequate freshness (RI-6 measured, `03`).
-- **Dependency.** `16` slice 27 (news `news_items`/`market_signals`, **migration 0017**); the intent lane (`05`).
+- **Dependency.** `16` slice 27 (news `news_items`/`market_signals`, **migration 0018**); the intent lane (`05`).
 - **ADR.** A new **news-monitoring ADR** (category `news`, retention, dedup) + ADR-0027 (signals consume it). The
   `news` category slug is already reserved (ADR-0025) so no re-litigation.
 
@@ -94,7 +94,7 @@ targets are measured (`14 §8`), and docs `00`–`16` flip DRAFT→ACCEPTED.
 - **Trigger.** Tenant demand for write-back **and** the `crm_ready` normalization proven stable in production
   (`06 §7`); security sign-off on the outbound trust direction (`09 §2`).
 - **Dependency.** Dossier API + `crm_ready` (slice 24); `16` slice 27 (`crm_connections`/`crm_field_maps`/
-  `crm_push_ledger`, **migration 0018**).
+  `crm_push_ledger`, **migration 0019**).
 - **ADR.** **0030** (design accepted): push is an outbound *direction* of the single egress-proxy — **no second
   internet route**; CRM OAuth tokens envelope-sealed, injected only at egress; every push idempotent
   (`crm_push_ledger`) and provenanced. Per-CRM connector semantics land with the implementation.
@@ -160,9 +160,9 @@ targets are measured (`14 §8`), and docs `00`–`16` flip DRAFT→ACCEPTED.
 
 | ID | Item | Trigger (promotes to build) | Dependency | ADR |
 |----|------|-----------------------------|------------|-----|
-| RM-1 | News & market monitoring | continuous-monitoring demand + `news` freshness (RI-6) | slice 27 / 0017 | new news ADR + 0027 |
+| RM-1 | News & market monitoring | continuous-monitoring demand + `news` freshness (RI-6) | slice 27 / 0018 | new news ADR + 0027 |
 | RM-2 | Hiring-signal analysis | hiring proves predictive (RI-4) + posting coverage (RI-5) | slice 25 / `04 §3` | 0027 |
-| RM-3 | CRM outbound push | write-back demand + `crm_ready` stable + security sign-off | slice 27 / 0018 | **0030** |
+| RM-3 | CRM outbound push | write-back demand + `crm_ready` stable + security sign-off | slice 27 / 0019 | **0030** |
 | RM-4 | Company-intel objects (competitors/acquisitions/funding-rounds/partnerships/locations) | per-object dataset coverage (RI-5) + demand | slice 24 / `07` | **0028** (Dossier-only) |
 | RM-5 | Agent-orchestration depth (incl. Temporal fan-out) | Run scale/complexity exceeds durable-lane SLA (RI-1/RI-3) | slice 23 | 0014 + 0026 |
 | RM-6 | Embeddings / RAG | corpus outgrows deterministic+full-text dedup, OR semantic-similarity feature, OR grounding need | slice 23 corpus | **0029** → future RAG ADR |

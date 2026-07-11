@@ -56,10 +56,19 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 
 	tryExec(admin, "drop owned by app_rls cascade")
 	tryExec(admin, "drop role if exists app_rls")
-	tryExec(admin, "drop table if exists research_runs, research_steps, research_dossiers, research_sources, field_versions, idempotency_ledger, cost_ledger cascade")
+	tryExec(admin, "drop table if exists research_runs, research_steps, research_dossiers, research_sources, intent_scores, field_versions, idempotency_ledger, cost_ledger cascade")
 	tryExec(admin, "drop function if exists app_current_tenant() cascade")
 	applyFile(t, admin, "../../../migrations/0001_init.sql")
+	// app_current_role() is the dual-GUC primitive from migration 0004; this minimal chain applies
+	// only the R&I migrations, so define the one function the 0017 operator-read policy depends on.
+	if err := admin.Exec("CREATE OR REPLACE FUNCTION app_current_role() RETURNS text LANGUAGE sql STABLE AS $f$ SELECT current_setting('app.current_role', true) $f$"); err != nil {
+		t.Fatalf("define app_current_role: %v", err)
+	}
+	// 0017 refines RLS on BOTH R&I read-model tables (research_dossiers + intent_scores), so both
+	// table migrations must be present before it — as they are in the production chain.
 	applyFile(t, admin, "../../../migrations/0015_research.sql")
+	applyFile(t, admin, "../../../migrations/0016_intent.sql")
+	applyFile(t, admin, "../../../migrations/0017_ri_operator_read.sql")
 	if err := admin.Exec("create role app_rls login nosuperuser"); err != nil {
 		t.Fatalf("create role: %v", err)
 	}
@@ -95,6 +104,30 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 	}
 	if _, okB, err := svc.Dossier(ctxB, "d-A"); err != nil || okB {
 		t.Fatalf("tenant-B must NOT read tenant-A's dossier (ok=%v err=%v)", okB, err)
+	}
+
+	// Operator (dual-GUC role=operator, tenant=platform) reads ACROSS tenants via the additive
+	// 0017 operator-read policy (rbac research.read = DecisionAllow). tenant_user stays fail-closed.
+	ctxOp := principal("platform", "operator")
+	listOp, err := svc.List(ctxOp, 50)
+	if err != nil {
+		t.Fatalf("List operator: %v", err)
+	}
+	gotOp := map[string]bool{}
+	for _, d := range listOp {
+		gotOp[d.DossierID] = true
+	}
+	if !gotOp["d-A"] || !gotOp["d-B"] {
+		t.Fatalf("operator must read across tenants; got %+v", listOp)
+	}
+	if blobOp, ok, err := svc.Dossier(ctxOp, "d-A"); err != nil || !ok || !strings.Contains(string(blobOp), "Acme") {
+		t.Fatalf("operator must read tenant-A's dossier (ok=%v err=%v)", ok, err)
+	}
+	// A non-operator role of tenant-B still cannot cross into tenant-A (operator-read is FOR SELECT
+	// scoped to the operator role only; tenant_user remains confined by *_tenant_isolation).
+	ctxUserB := principal("tenant-B", "tenant_user")
+	if _, ok, err := svc.Dossier(ctxUserB, "d-A"); err != nil || ok {
+		t.Fatalf("tenant_user of B must NOT read tenant-A's dossier (ok=%v err=%v)", ok, err)
 	}
 
 	// Fail-closed: no principal ⇒ error.

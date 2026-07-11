@@ -117,7 +117,7 @@ the enumerated audited projections.
 | `TestResearchRLSZeroRows` | `research_runs`, `research_steps`, `research_dossiers`, `research_sources` (**0015**) | 4 tables; cross-tenant `GET /v1/research/{id}` → `NOT_FOUND`, existence never disclosed (`06 §4`) |
 | `TestUsageEventsLLMColumnsRLS` | `usage_events` token/model columns (**0015**) | new columns inherit the **existing** `usage_events` tenant policy — no new policy path; free-vs-paid query is Tenant-scoped |
 | `TestIntentRLSZeroRows` | `intent_signals` (partitioned), `intent_scores` (**0016**) | zero-rows on **parent AND every partition**; the partition-maintainer sets FORCE RLS on each partition it creates (`05 §7`) — a test creates a future partition and re-asserts |
-| `TestCRMRLSZeroRows` *(roadmap, slice 27)* | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0018**) | Tenant A cannot push into Tenant B's connection (ADR-0030 §Verification) |
+| `TestCRMRLSZeroRows` *(roadmap, slice 27)* | `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0019**) | Tenant A cannot push into Tenant B's connection (ADR-0030 §Verification) |
 | `TestAIConfigRLS` | `config_versions` kinds `ai_prompt`/`llm_route`/`intent_weights` (reuse **0006**) | existing `config_versions` isolation + operator-read enumeration; **no new table, no new policy** |
 
 `TestResearchRLSZeroRows` + `TestIntentRLSZeroRows` (+ `TestCRMRLSZeroRows` at slice 27) join the

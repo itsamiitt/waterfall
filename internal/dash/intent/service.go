@@ -3,9 +3,12 @@
 // dual-GUC RLS seam (db.Store.Tx binds app.current_tenant + app.current_role from the verified
 // Principal, ADR-0020), so a tenant_admin / tenant_user sees only their own Tenant's computed intent.
 //
-// Operator cross-Tenant visibility (a platform-wide intent overview) needs an enumerated operator
-// SELECT policy on intent_scores (the current policy is tenant-only); that policy + the HTTP surface
-// + the dashboardd mount + the web feature are follow-on increments. This file is the backing service.
+// Operator cross-Tenant visibility rides the enumerated operator SELECT policy on intent_scores
+// (migration 0017, mirroring 0009's tenant_usage_* operator-read): rbac grants the operator
+// DecisionAllow for intent.read, and the additive policy lets an operator's dual-GUC transaction read
+// across Tenants. For an operator the List roll-up (group by account) is therefore platform-wide —
+// same-named accounts in different Tenants collapse to one summary row; that coarse overview is
+// intended. A tenant_admin / tenant_user is still confined to their own Tenant by *_tenant_isolation.
 package intent
 
 import (

@@ -47,7 +47,7 @@ obligation — each cell's proof lands as a test in the slices (`14`, `16`).
 
 | Gate | `search` (ADR-0025) | `dataset` (ADR-0025) | `llm` (ADR-0026) | `crm` push — roadmap (ADR-0030) | Enforced at |
 |---|---|---|---|---|---|
-| **G1 tenant isolation** | Collected values + `research_sources` rows carry `tenant_id` + FORCE RLS (0015). | Same — `research_*` (0015), `intent_signals`/`intent_scores` parent+partitions (0016). | Token/cost rows: `usage_events` token/model cols (0015) inherit its tenant policy; `research_steps` carry `tenant_id`. | `crm_connections`/`crm_field_maps`/`crm_push_ledger` (0018) FORCE RLS; a push writes only the pushing Tenant's data. | `internal/dash/db` tx helper; RLS policies |
+| **G1 tenant isolation** | Collected values + `research_sources` rows carry `tenant_id` + FORCE RLS (0015). | Same — `research_*` (0015), `intent_signals`/`intent_scores` parent+partitions (0016). | Token/cost rows: `usage_events` token/model cols (0015) inherit its tenant policy; `research_steps` carry `tenant_id`. | `crm_connections`/`crm_field_maps`/`crm_push_ledger` (0019) FORCE RLS; a push writes only the pushing Tenant's data. | `internal/dash/db` tx helper; RLS policies |
 | **G2 idempotency** | Ledger-before-call; key = `config_version` + normalized subject (`company_domain`/CIK/LEI) + slug. | Same. | Key = `hash(tenant, subject, task_type, model_slug, prompt_version, input_hash, config_version)`; **cache-on-first-success** (nondeterministic output, ADR-0026). | Key = `hash(tenant, connection, record, field_map_version, dossier_version)`; a redelivered push is a no-op. | idempotency ledger; `crm_push_ledger` |
 | **G3 bounded** | `provider.Call` + engine-default `CallPolicy` + breaker; fetch only via egress. | Same; multi-round-trip datasets use ADR-0024 async shape `{Timeout:60–90s, MaxAttempts:1}`. | `CallPolicy{Timeout:60–90s, MaxAttempts:1}` + per-model breaker; the orchestrator re-ask loop is a **separate** gate-bounded layer above transport (`04 §5`). | `CallPolicy` + breaker on the CRM host. | `provider.Call`; egress-proxy |
 | **G4 cost ceiling** | Aggregate Dossier ceiling reserved before collection; per-call reserve/charge; DEPRIORITIZED sources routed last. | Same. | Reserve **estimated** tokens before the call, charge **actual** on success (buffer + reconcile, `11`); per-Tenant AI budget via `configver`. | Push cost/rate ceiling; per-Tenant CRM budget. | egress accounting; `configver/budget` |
@@ -132,7 +132,7 @@ contacts) alongside firmographics. The new PII-bearing stores are:
 | `research_steps` | 0015 | Agent Task I/O may contain PII in inputs/outputs | `internal/research` |
 | `field_versions` | existing | scalar Person/Company Fields (incl. the 6 new scalars) | enrichment core |
 | `intent_signals` / `intent_scores` | 0016 | account-keyed; low PII, but a signal may reference a Person (e.g. exec hire) | `internal/intent` |
-| `crm_push_ledger` *(roadmap)* | 0018 | record of Person/account data pushed to a CRM | `internal/crm` |
+| `crm_push_ledger` *(roadmap)* | 0019 | record of Person/account data pushed to a CRM | `internal/crm` |
 
 `source_type` is a **privacy control**, not just provenance: it distinguishes `api`/`dataset`
 (sourced) from `ai_inference` (model-derived) so an erasure or a consent decision can treat them
@@ -233,7 +233,7 @@ test** — a phase that adds a table without its zero-rows test fails its own ac
 | `research_runs`, `research_steps`, `research_dossiers`, `research_sources` (**0015**) | T | Insert as Tenant A → select as Tenant B returns **0 rows**; cross-tenant INSERT blocked by `WITH CHECK`. |
 | `usage_events` token/model columns (**0015**) | T | New columns inherit the existing `usage_events` tenant policy (no new policy path); free-vs-paid queries are Tenant-scoped. |
 | `intent_signals` (partitioned), `intent_scores` (**0016**) | T | Zero-rows test on **parent AND every partition**; the partition-maintainer sets FORCE RLS on each partition it creates (`05 §7`). |
-| `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0018**, roadmap) | T | Tenant A cannot push into Tenant B's connection; zero-rows + cross-tenant-push-isolation test (ADR-0030 §Verification). |
+| `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**0019**, roadmap) | T | Tenant A cannot push into Tenant B's connection; zero-rows + cross-tenant-push-isolation test (ADR-0030 §Verification). |
 | `config_versions` kinds `ai_prompt` / `llm_route` / `intent_weights` (reuse **0006**) | T | Existing `config_versions` tenant isolation + operator-read enumeration applies; no new table, no new policy. |
 
 Additional standing obligations: an integration test drives an `llm` adapter through `provider.Call`

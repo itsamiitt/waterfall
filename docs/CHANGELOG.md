@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part d): operator cross-Tenant read for the R&I dashboards (migration 0017, live-green)
+Closes the RBAC↔RLS gap on the two Slice 26 read-models: the rbac matrix grants the operator role
+`DecisionAllow` (cross-Tenant) for `research.read`/`intent.read`, but 0015/0016 shipped only the
+Class-T `*_tenant_isolation` policies — so under dual-GUC an operator (own Tenant = sentinel
+`platform`) saw **zero** real-Tenant rows. **Migration `0017_ri_operator_read.sql`** adds the additive
+permissive `FOR SELECT USING (app_current_role()='operator')` policy on `research_dossiers` +
+`intent_scores` (RLS OR-combines permissive policies, so `tenant_admin`/`tenant_user` stay confined by
+`*_tenant_isolation`; operator read is SELECT-only — no cross-Tenant write). Identical in shape to
+0009's `tenant_usage_*`/0006/0007 operator-read. Both dashboard RLS integration tests extended to prove
+operator cross-Tenant read **and** that a non-operator role stays fail-closed; both pass **LIVE against
+PG17**, in both run orders (no ordering dependence). Migration ledger renumbered (news→**0018**,
+CRM→**0019**) across the R&I doc series; ADR-0017/0018 references untouched. Full suite + `-race` green;
+zero new Go dep.
+
 ### 2026-07-11 — R&I Slice 26 (part c): research dashboard read-model + HTTP + dashboardd mount (live-green)
 `internal/dash/research.Service` (`List` → dossier summaries; `Dossier(id)` → full JSON) over
 `research_dossiers` via `db.Store.Tx` (dual-GUC RLS). HTTP: `GET /v1/admin/research/dossiers` (list) +

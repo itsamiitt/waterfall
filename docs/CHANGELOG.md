@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 25 (part b6): `POST /v1/intent/refresh` wired LIVE — full intent pipeline end-to-end
+`POST /v1/intent/refresh` (write; auth + write-scope + drain; Idempotency-Key required) recomputes intent
+for an account and returns the scores. `cmd/enrichapi` constructs the `IntentRefresher` over the **real**
+seams — `EngineSignalCollector` over the engine store (`st.Current`) + `Scorer(DefaultWeights)` + the intent
+store (`SaveScores`) + write-back via `st.Append`. `api.Server.IntentAPI` gains `Refresh`. Handler unit tests
+(runs / missing-key / no-account / no-principal / no-refresher) green. **Live smoke** (enrichapi on PG17): a
+seeded `buying_signal=hiring` Field for tenant-acme → `POST refresh` derives a hiring signal → scores **0.6**
+(reasoning intact) → persists → `GET /v1/intent/accounts` reads it back → `GET /v1/records/acme.com` shows the
+**write-back** (`intent_score=0.600`, provider `intent-engine`). **The full intent pipeline runs end-to-end
+through the real binary + PG + RLS** — enrichment Field → signal → score → persist → write-back → readable.
+Full suite + `-race` green; zero new Go dep. **Both research + intent subsystems are now complete and
+live-verified end-to-end; Slices 21–25 done.**
+
 ### 2026-07-11 — R&I Slice 25 (part b5): EngineSignalCollector — intent from enrichment Fields (data source)
 `internal/intent.EngineSignalCollector` implements `SignalCollector` by deriving Intent Signals from an
 account's current enrichment Fields (`buying_signal` event → hiring/buying class; `funding_stage` → a

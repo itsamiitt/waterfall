@@ -316,7 +316,12 @@ func main() {
 	// Intent read API (ADR-0027): GET /v1/intent/accounts/{domain} serves the last-computed per-class
 	// scores. Persistence (intent_scores, migration 0016) is enabled with Postgres; without it the
 	// route returns 404. The async intent_refresh lane that populates the scores is a follow-on.
-	intentHandler := &intent.HTTPHandler{}
+	// The refresh lane derives Signals from the account's enrichment Fields (st.Current), scores them
+	// deterministically, and writes back the canonical intent Fields (st.Append). Score persistence
+	// (intent_scores) is added when Postgres is enabled; the GET read API needs it (404 otherwise).
+	intentRefresher := intent.NewRefresher(intent.NewEngineSignalCollector(st), intent.NewScorer(intent.DefaultWeights()))
+	intentRefresher.Fields = st
+	intentHandler := &intent.HTTPHandler{Refresher: intentRefresher}
 	if usePG {
 		is, ierr := intent.OpenStore(pg.ParseDSN(pgDSN), 8)
 		if ierr != nil {
@@ -325,10 +330,11 @@ func main() {
 		}
 		defer is.Close()
 		intentHandler.Store = is
+		intentRefresher.Scores = is
 		logger.Info("intent score persistence enabled")
 	}
 	srv.Intent = intentHandler
-	logger.Info("intent API enabled", "route", "GET /v1/intent/accounts/{domain}")
+	logger.Info("intent API enabled", "routes", "GET /v1/intent/accounts/{domain}, POST /v1/intent/refresh")
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpSrv := &http.Server{

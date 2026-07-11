@@ -71,6 +71,7 @@ type ResearchAPI interface {
 // intent.HTTPHandler satisfies it. Accounts is a read (GET /v1/intent/accounts/{domain}).
 type IntentAPI interface {
 	Accounts(http.ResponseWriter, *http.Request)
+	Refresh(http.ResponseWriter, *http.Request)
 }
 
 // Handler builds the routed http.Handler with middleware applied.
@@ -118,6 +119,12 @@ func (s *Server) Handler() http.Handler {
 	if s.Intent != nil {
 		// GET /v1/intent/accounts/{domain} is a read: authenticated + rate-limited only.
 		mux.Handle("GET /v1/intent/accounts/{domain}", s.instrument("/v1/intent/accounts/{domain}", s.protected(s.Intent.Accounts)))
+		// POST /v1/intent/refresh is a write (recompute + persist): + write-scope + drain gate.
+		intentRefresh := s.gateDrain(s.Intent.Refresh)
+		if s.WriteScope != "" {
+			intentRefresh = s.requireScope(s.WriteScope, intentRefresh)
+		}
+		mux.Handle("POST /v1/intent/refresh", s.instrument("/v1/intent/refresh", s.protected(intentRefresh)))
 	}
 	return s.recoverer(mux)
 }

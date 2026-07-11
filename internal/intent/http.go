@@ -15,11 +15,18 @@ type ScoreStore interface {
 	GetByAccount(ctx context.Context, account string) ([]ClassScore, error)
 }
 
-// HTTPHandler serves the intent read API (ADR-0027) on the enrichapi deployable. The tenant flows
-// from the authenticated Principal (G1, never the path); errors use the uniform body
+// Refresher recomputes (and persists + writes back) intent for an account (the async lane, ADR-0027).
+// *IntentRefresher satisfies it; a nil Refresher disables POST /v1/intent/refresh.
+type Refresher interface {
+	Refresh(ctx context.Context, account string) ([]ClassScore, error)
+}
+
+// HTTPHandler serves the intent API (ADR-0027) on the enrichapi deployable. The tenant flows from the
+// authenticated Principal (G1, never the path/body); errors use the uniform body
 // {"error":{"code","message"}}.
 type HTTPHandler struct {
-	Store ScoreStore // optional; enables GET /v1/intent/accounts/{domain}
+	Store     ScoreStore // optional; enables GET /v1/intent/accounts/{domain}
+	Refresher Refresher  // optional; enables POST /v1/intent/refresh
 }
 
 // accountResponse is the GET /v1/intent/accounts/{domain} body: the per-class scores for an account.
@@ -32,6 +39,57 @@ type accountResponse struct {
 // mounting gateway instead sets api.Server.Intent = h and applies its own auth/rate-limit wrappers.
 func (h *HTTPHandler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/intent/accounts/{domain}", h.Accounts)
+	mux.HandleFunc("POST /v1/intent/refresh", h.Refresh)
+}
+
+// refreshRequest is the POST /v1/intent/refresh body.
+type refreshRequest struct {
+	CompanyDomain string `json:"company_domain"`
+	Account       string `json:"account"`
+}
+
+// Refresh handles POST /v1/intent/refresh: recompute intent for an account (collect signals → score →
+// persist → write back the canonical Fields) and return the computed class scores. This increment runs
+// synchronously; the async 202+job_id lane (job.Kind=intent_refresh) is a follow-on. Idempotency-Key
+// required (ADR-0012); 404 when the refresh lane is not enabled.
+func (h *HTTPHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Idempotency-Key") == "" {
+		writeErr(w, http.StatusBadRequest, "missing_idempotency_key",
+			"the Idempotency-Key header is required on writes")
+		return
+	}
+	if _, err := tenant.FromContext(r.Context()); err != nil {
+		writeErr(w, http.StatusUnauthorized, "unauthorized", "no principal")
+		return
+	}
+	if h.Refresher == nil {
+		writeErr(w, http.StatusNotFound, "not_found", "intent refresh is not enabled")
+		return
+	}
+	var body refreshRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	account := strings.TrimSpace(body.Account)
+	if account == "" {
+		account = strings.TrimSpace(body.CompanyDomain)
+	}
+	if account == "" {
+		writeErr(w, http.StatusUnprocessableEntity, "validation_error", "company_domain (or account) is required")
+		return
+	}
+	scores, err := h.Refresher.Refresh(r.Context(), account)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "refresh_failed", "the intent refresh failed")
+		return
+	}
+	if scores == nil {
+		scores = []ClassScore{}
+	}
+	writeJSON(w, http.StatusOK, accountResponse{Account: account, Scores: scores})
 }
 
 // Accounts handles GET /v1/intent/accounts/{domain}: the last-computed per-class intent scores for a

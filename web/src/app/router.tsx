@@ -30,6 +30,8 @@ const feature = (name: string) => {
       return () => import("../features/cost/routes");
     case "intent":
       return () => import("../features/intent/routes");
+    case "airesearch":
+      return () => import("../features/airesearch/routes");
     case "security":
       return () => import("../features/security/routes");
     case "alerts":
@@ -104,9 +106,11 @@ export const router = createBrowserRouter([
           // P11 — cost / security / alerts / approvals / settings
           { path: "cost", lazy: feature("cost") },
           { path: "budgets", lazy: feature("cost") },
-          // R&I — computed intent (docs/research-intelligence/08)
+          // R&I — computed intent + research dossiers (docs/research-intelligence/08)
           { path: "intent", lazy: feature("intent") },
           { path: "intent/:domain", lazy: feature("intent") },
+          { path: "research", lazy: feature("airesearch") },
+          { path: "research/:id", lazy: feature("airesearch") },
           { path: "alerts", lazy: feature("alerts") },
           { path: "alerts/rules/:id", lazy: feature("alerts") },
           { path: "security/users", lazy: feature("security") },

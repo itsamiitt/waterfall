@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part f): Research (dossiers) web feature (full CI green)
+`web/src/features/airesearch` surfaces the research-dossier admin read-model, mirroring the intent
+feature. **List** (`/research`) → assembled dossiers freshest-first over `GET /research/dossiers`;
+**detail** (`/research/{id}`) → the full stored Dossier document rendered verbatim in a copyable JSON
+`CodeBlock` over `GET /research/dossiers/{id}` (404 → zero-results state). A defensive `dossierHeadline`
+extractor (type-guarded against the arbitrary Dossier JSON) titles the viewer; unit-tested. Lazy route
+chunk, new `research.read` RBAC group + nav-rail module (operator allow, TA/TU own-Tenant — mirrors
+backend `ResearchRead`), `permissions.test.ts` updated (14 nav modules). Endpoints were pre-registered in
+`04-api-contracts.md §2.14`; corrected the list note to `overall_confidence`. Full `npm run check:ci`
+green: tsc + vitest (11 tests) + allowlist + orphan + vite build + bundle-size (111.5 KB / 400 KB). Zero
+new npm dep. **Both live R&I backends (intent + research) now have SPA screens** — `aimodels` remains
+blocked on the deferred `dash/airouting` backend.
+
 ### 2026-07-11 — R&I Slice 26 (part e): Intent web feature (first R&I SPA screen, full CI green)
 The first React screen for the R&I subsystems: `web/src/features/intent` surfaces the computed-intent
 admin read-model. **List** (`/intent`) → accounts with their strongest class over `GET /intent/accounts`;

@@ -5,6 +5,22 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 27 (part 2a): CRM schema + store + idempotency + DSAR (migration 0019, live-green)
+The CRM outbound persistence + G1/G2/DSAR contract (ADR-0030), schema + control-plane store; the
+push-through-egress adapter and the `/v1/admin/crm/connections` endpoint attach next. **Migration
+`0019_crm.sql`** — `crm_connections` (OAuth secret stored as an **ADR-0017 envelope reference only**, no
+plaintext), `crm_field_maps` (versioned Dossier→CRM mapping), `crm_push_ledger` (UNIQUE `(tenant, idem_key)`
++ status CHECK), all Class-T **FORCE RLS**, no BYPASSRLS. **`internal/crm`** is the single owner: types +
+the pure `PushKey` = `sha256(tenant, connection, record, field_map_version, dossier_version)` (NUL-delimited,
+unit-tested) + a `Store` (single-GUC RLS tx) with `SaveConnection`/`GetConnection`/`ListConnections`/
+`SaveFieldMap`/`LatestFieldMap`/`RecordPush` (idempotent — returns `false` on a redelivery so the egress
+push is skipped)/`MarkErasurePending` (DSAR cascade). **Live-verified on PG17** (non-superuser `app_rls`):
+tenant B sees 0 of A's connections/pushes and cannot read A's connection, a redelivered push is a no-op
+(G2), the UNIQUE key is per-Tenant, DSAR erasure marks A's rows only (idempotent), fail-closed without a
+principal; the **full 19-migration chain applies cleanly**. ADR-0030's stale migration ref corrected to
+0019. Full Go suite + `-race` green; zero new Go dep. **No second internet route** — the push executes
+through the single egress-proxy (a follow-on increment).
+
 ### 2026-07-11 — R&I Slice 27 (part 1): news & market schema + owner + live RLS proof (migration 0018)
 First Slice 27 (roadmap) increment: the news/market **persistence + tenant-isolation contract**, schema-only
 until a news-monitoring ADR (RM-OI-2) promotes the collection lane. **Migration `0018_news_market.sql`** —

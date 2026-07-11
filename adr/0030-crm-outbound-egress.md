@@ -28,7 +28,7 @@ memory** — both regressions. This ADR exists to prevent that.
 **CRM push is a new outbound direction of the existing egress-proxy, not a new deployable.**
 
 - **`internal/crm` is a control-plane module** (connection config + field maps only). It owns
-  `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**migration 0018**; FORCE RLS, no BYPASSRLS;
+  `crm_connections`, `crm_field_maps`, `crm_push_ledger` (**migration 0019**; FORCE RLS, no BYPASSRLS;
   CRM OAuth secrets sealed via the ADR-0017 envelope backend — reference only, no plaintext).
 - **The push itself is a CRM connector adapter executed through the egress-proxy** — same
   `AuthDescriptor` + egress key-injection (CRM OAuth token attached at the boundary, never in the

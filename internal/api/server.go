@@ -25,6 +25,7 @@ type Server struct {
 	Records     store.FieldVersions         // read model for GET /records
 	DeadLetters DeadLetterAdmin             // optional; enables the /v1/dead-letters routes when set
 	Research    ResearchAPI                 // optional; enables POST /v1/research + GET /v1/dossiers (ADR-0028) when set
+	Intent      IntentAPI                   // optional; enables GET /v1/intent/accounts/{domain} (ADR-0027) when set
 	Metrics     *metrics.Registry           // optional; enables /metrics + RED instrumentation
 	WriteScope  string                      // optional; if set, write routes require this JWT scope (403 otherwise)
 	ReadyCheck  func(context.Context) error // optional; /readyz is 200 only when this returns nil
@@ -64,6 +65,12 @@ func (s *Server) log() *slog.Logger {
 type ResearchAPI interface {
 	Research(http.ResponseWriter, *http.Request)
 	Dossier(http.ResponseWriter, *http.Request)
+}
+
+// IntentAPI is the computed-intent read surface (ADR-0027), injected by cmd/enrichapi;
+// intent.HTTPHandler satisfies it. Accounts is a read (GET /v1/intent/accounts/{domain}).
+type IntentAPI interface {
+	Accounts(http.ResponseWriter, *http.Request)
 }
 
 // Handler builds the routed http.Handler with middleware applied.
@@ -107,6 +114,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /v1/research", s.instrument("/v1/research", s.protected(research)))
 		// GET /v1/dossiers/{domain} is a read: authenticated + rate-limited only.
 		mux.Handle("GET /v1/dossiers/{domain}", s.instrument("/v1/dossiers/{domain}", s.protected(s.Research.Dossier)))
+	}
+	if s.Intent != nil {
+		// GET /v1/intent/accounts/{domain} is a read: authenticated + rate-limited only.
+		mux.Handle("GET /v1/intent/accounts/{domain}", s.instrument("/v1/intent/accounts/{domain}", s.protected(s.Intent.Accounts)))
 	}
 	return s.recoverer(mux)
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/enrichment/waterfall/internal/durable"
 	"github.com/enrichment/waterfall/internal/engine"
 	"github.com/enrichment/waterfall/internal/heartbeat"
+	"github.com/enrichment/waterfall/internal/intent"
 	"github.com/enrichment/waterfall/internal/job"
 	"github.com/enrichment/waterfall/internal/metrics"
 	"github.com/enrichment/waterfall/internal/pg"
@@ -312,6 +313,23 @@ func main() {
 	srv.Research = researchHandler
 	logger.Info("research API enabled", "routes", "POST /v1/research, GET /v1/dossiers/{domain}")
 
+	// Intent read API (ADR-0027): GET /v1/intent/accounts/{domain} serves the last-computed per-class
+	// scores. Persistence (intent_scores, migration 0016) is enabled with Postgres; without it the
+	// route returns 404. The async intent_refresh lane that populates the scores is a follow-on.
+	intentHandler := &intent.HTTPHandler{}
+	if usePG {
+		is, ierr := intent.OpenStore(pg.ParseDSN(pgDSN), 8)
+		if ierr != nil {
+			logger.Error("open intent store", "err", ierr)
+			os.Exit(1)
+		}
+		defer is.Close()
+		intentHandler.Store = is
+		logger.Info("intent score persistence enabled")
+	}
+	srv.Intent = intentHandler
+	logger.Info("intent API enabled", "route", "GET /v1/intent/accounts/{domain}")
+
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpSrv := &http.Server{
 		Addr:              addr,
@@ -382,6 +400,7 @@ end
 $$;
 grant select, insert, update on field_versions, idempotency_ledger, cost_ledger, job_outbox to app_rls;
 grant select, insert, update, delete on research_runs, research_steps, research_dossiers, research_sources to app_rls;
+grant select, insert, update, delete on intent_scores to app_rls;
 grant select, update on job_outbox to relay;
 `
 

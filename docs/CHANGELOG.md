@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 25 (part b3): intent read API `GET /v1/intent/accounts/{domain}` mounted LIVE
+The computed-intent read surface. `internal/intent.HTTPHandler` serves `GET /v1/intent/accounts/{domain}`
+(auth → principal G1; an account with no intent = 200 with `[]`; no store = 404) via a `ScoreStore` seam.
+`api.Server` gains an `IntentAPI` interface + mount (read: protected + rate-limited). `cmd/enrichapi`
+constructs `intent.OpenStore` when Postgres is enabled (guarding a typed-nil interface) and grants `app_rls`
+on `intent_scores`. Handler unit tests (scores/empty/no-store/no-principal/error) green. **Live smoke**
+(enrichapi on PG17): seeded scores for `tenant-acme` are returned (hiring 0.8 first, reasoning round-tripped)
+to the acme token, while the globex token sees `{"scores":[]}` — **cross-tenant RLS enforced end-to-end**
+through HTTP→store→PG. Full suite + `-race` green; zero new Go dep. The async `intent_refresh` lane that
+WRITES scores follows.
+
 ### 2026-07-11 — R&I Slice 25 (part b2): migration 0016 `intent_scores` + intent pgstore + RLS test (live-green)
 Persistence for the computed intent engine, mirroring research. **Migration 0016** = `intent_scores`
 (per-account class score + confidence + `reasoning` JSONB + pinned `config_version`;

@@ -1044,6 +1044,50 @@
     ]
    }
   },
+  "/v1/admin/research/dossiers": {
+   "get": {
+    "operationId": "get_v1_admin_research_dossiers",
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "List assembled Dossiers (Tenant-scoped, ADR-0028)",
+    "tags": [
+     "research"
+    ]
+   }
+  },
+  "/v1/admin/research/dossiers/{id}": {
+   "get": {
+    "operationId": "get_v1_admin_research_dossier",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "Get an assembled Dossier by id (Tenant-scoped, ADR-0028)",
+    "tags": [
+     "research"
+    ]
+   }
+  },
   "/v1/admin/intent/accounts": {
    "get": {
     "operationId": "get_v1_admin_intent_accounts",

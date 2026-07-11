@@ -5,6 +5,16 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part c): research dashboard read-model + HTTP + dashboardd mount (live-green)
+`internal/dash/research.Service` (`List` → dossier summaries; `Dossier(id)` → full JSON) over
+`research_dossiers` via `db.Store.Tx` (dual-GUC RLS). HTTP: `GET /v1/admin/research/dossiers` (list) +
+`/dossiers/{id}` (get) behind a new **`ResearchRead` RBAC action** (operator allow; TA/TU own-Tenant),
+mounted in `cmd/dashboardd`. Middleware unit tests + a build-tagged RLS integration test that **passes LIVE
+against PG17** (tenant B sees 0 of A's dossiers by id + list, fail-closed). **OpenAPI parity kept**: both
+paths added to `openapi-admin.{json,yaml}`; `TestAdminOpenAPIParity` green. Full suite + `-race` green; zero
+new Go dep. **Both intent + research dashboard read-models are now live-verified**; web features + an
+operator cross-Tenant policy follow.
+
 ### 2026-07-11 — R&I Slice 26 (part b): intent dashboard HTTP surface + dashboardd mount
 `GET /v1/admin/intent/accounts` (list) + `/v1/admin/intent/accounts/{domain}` (per-account) on `dashboardd`,
 behind the shared FeatureChain session auth + a new **`IntentRead` RBAC action** (operator allow;

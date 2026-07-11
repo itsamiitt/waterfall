@@ -41,6 +41,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/provisioning"
 	"github.com/enrichment/waterfall/internal/dash/queues"
 	"github.com/enrichment/waterfall/internal/dash/realtime"
+	"github.com/enrichment/waterfall/internal/dash/research"
 	"github.com/enrichment/waterfall/internal/dash/rotation"
 	"github.com/enrichment/waterfall/internal/dash/routing"
 	"github.com/enrichment/waterfall/internal/dash/secrets"
@@ -440,6 +441,9 @@ func main() {
 
 	// Intent dashboard (Slice 26, ADR-0027): tenant-scoped read of computed intent scores.
 	intent.Routes(fmux, intent.Deps{Service: intent.NewService(store), Auth: httpx.CtxAuthenticator{}, Logger: logger})
+
+	// Research dashboard (Slice 26, ADR-0028): tenant-scoped read of assembled Dossiers.
+	research.Routes(fmux, research.Deps{Service: research.NewService(store), Auth: httpx.CtxAuthenticator{}, Logger: logger})
 
 	alertStore := alerts.NewStore(store, time.Now)
 	alertEval := alerts.NewEvaluator(alertStore, auditLog, time.Now, reg, logger)

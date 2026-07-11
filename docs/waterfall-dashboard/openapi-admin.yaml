@@ -2022,6 +2022,32 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/research/dossiers':
+    get:
+      summary: List assembled Dossiers (Tenant-scoped, ADR-0028)
+      operationId: get_v1_admin_research_dossiers
+      tags: [research]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/research/dossiers/{id}':
+    get:
+      summary: Get an assembled Dossier by id (Tenant-scoped, ADR-0028)
+      operationId: get_v1_admin_research_dossier
+      tags: [research]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
   '/v1/admin/intent/accounts':
     get:
       summary: List accounts with computed intent (Tenant-scoped, ADR-0027)

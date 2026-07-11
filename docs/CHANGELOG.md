@@ -5,6 +5,15 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part b): intent dashboard HTTP surface + dashboardd mount
+`GET /v1/admin/intent/accounts` (list) + `/v1/admin/intent/accounts/{domain}` (per-account) on `dashboardd`,
+behind the shared FeatureChain session auth + a new **`IntentRead` RBAC action** (operator allow;
+tenant_admin/tenant_user own-Tenant) — mirrors `internal/dash/cost`. `cmd/dashboardd` mounts `intent.Routes`
+over the dashboard `db.Store`. Middleware unit tests (401 no-principal, 403 no-role) green. **OpenAPI parity
+restored**: added both paths to `docs/waterfall-dashboard/openapi-admin.{json,yaml}`; `TestAdminOpenAPIParity`
+green (the no-orphan/parity gate). Full suite + `-race` green; zero new Go dep. The web feature + an operator
+cross-Tenant SELECT policy are follow-ons.
+
 ### 2026-07-11 — R&I Slice 26 (part a): intent dashboard read-model service (live-green)
 The first **Slice-26 (dashboards)** brick: `internal/dash/intent.Service` — a tenant-scoped read model over
 `intent_scores` for the admin UI, riding the dashboard **dual-GUC RLS** seam (`db.Store.Tx` binds

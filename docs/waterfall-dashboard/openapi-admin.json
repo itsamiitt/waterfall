@@ -1044,6 +1044,50 @@
     ]
    }
   },
+  "/v1/admin/intent/accounts": {
+   "get": {
+    "operationId": "get_v1_admin_intent_accounts",
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "List accounts with computed intent (Tenant-scoped, ADR-0027)",
+    "tags": [
+     "intent"
+    ]
+   }
+  },
+  "/v1/admin/intent/accounts/{domain}": {
+   "get": {
+    "operationId": "get_v1_admin_intent_account",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "domain",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "Per-class computed intent for an account (Tenant-scoped, ADR-0027)",
+    "tags": [
+     "intent"
+    ]
+   }
+  },
   "/v1/admin/budgets": {
    "get": {
     "operationId": "get_v1_admin_budgets",

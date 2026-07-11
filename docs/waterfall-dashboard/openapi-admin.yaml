@@ -2022,6 +2022,32 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/intent/accounts':
+    get:
+      summary: List accounts with computed intent (Tenant-scoped, ADR-0027)
+      operationId: get_v1_admin_intent_accounts
+      tags: [intent]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
+  '/v1/admin/intent/accounts/{domain}':
+    get:
+      summary: Per-class computed intent for an account (Tenant-scoped, ADR-0027)
+      operationId: get_v1_admin_intent_account
+      tags: [intent]
+      parameters:
+        - in: path
+          name: domain
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
   '/v1/admin/budgets':
     get:
       summary: List budget objects

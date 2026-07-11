@@ -45,6 +45,7 @@ const (
 	WorkersActions   Action = "workers.actions"
 	CostRead         Action = "cost.read"
 	BudgetsWrite     Action = "budgets.write"
+	IntentRead       Action = "intent.read" // R&I: computed intent read (Slice 26, ADR-0027)
 	AlertsCRUD       Action = "alerts.crud"
 	AlertsAck        Action = "alerts.ack"
 	UsersCRUD        Action = "users.crud"
@@ -118,6 +119,7 @@ var matrix = map[Action]map[string]Decision{
 
 	CostRead:     {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionOwnTenant},
 	BudgetsWrite: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
+	IntentRead:   {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionOwnTenant},
 
 	AlertsCRUD: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 	AlertsAck:  {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},

@@ -34,6 +34,7 @@ import (
 	"github.com/enrichment/waterfall/internal/dash/db"
 	"github.com/enrichment/waterfall/internal/dash/health"
 	"github.com/enrichment/waterfall/internal/dash/httpx"
+	"github.com/enrichment/waterfall/internal/dash/intent"
 	"github.com/enrichment/waterfall/internal/dash/keys"
 	"github.com/enrichment/waterfall/internal/dash/overview"
 	"github.com/enrichment/waterfall/internal/dash/providers"
@@ -436,6 +437,9 @@ func main() {
 	// SSRF-guarded egress path. Doctrine: budgets alert, the G4 Cost Ceiling enforces.
 	costSvc := cost.NewService(store, time.Now)
 	cost.Routes(fmux, cost.Deps{Service: costSvc, Auth: httpx.CtxAuthenticator{}, Audit: auditLog, Logger: logger})
+
+	// Intent dashboard (Slice 26, ADR-0027): tenant-scoped read of computed intent scores.
+	intent.Routes(fmux, intent.Deps{Service: intent.NewService(store), Auth: httpx.CtxAuthenticator{}, Logger: logger})
 
 	alertStore := alerts.NewStore(store, time.Now)
 	alertEval := alerts.NewEvaluator(alertStore, auditLog, time.Now, reg, logger)

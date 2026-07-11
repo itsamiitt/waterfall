@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 27 (part 1): news & market schema + owner + live RLS proof (migration 0018)
+First Slice 27 (roadmap) increment: the news/market **persistence + tenant-isolation contract**, schema-only
+until a news-monitoring ADR (RM-OI-2) promotes the collection lane. **Migration `0018_news_market.sql`** —
+`news_items` (index-only per ADR-0025: URL + title/topic/published_at, never the article body; idempotent
+per `(tenant, account, url)`) + `market_signals` (signal_type/magnitude/detail/observed_at), both Class-T
+**FORCE RLS** (`tenant_isolation` USING/WITH CHECK `tenant_id = app_current_tenant()`, no BYPASSRLS).
+`internal/news` is the single owner: domain types (`NewsItem`, `MarketSignal`) + a `Store` (single-GUC RLS
+tx, mirrors `internal/intent`/`internal/research`) with `SaveItems`/`ItemsByAccount`/`SaveSignals`/
+`SignalsByAccount`. **Live-verified on PG17** (non-superuser `app_rls`): tenant B sees 0 of A's items +
+signals, `published_at` round-trips, idempotent re-insert is a no-op, fail-closed without a principal; the
+**full 18-migration chain applies cleanly in filename order**. `parseTime` unit-tested (Postgres ISO +
+RFC3339 forms). The news-category adapters + the intent-lane feed attach later behind the ADR gate — no
+migration needed then. Full Go suite + `-race` green; zero new Go dep.
+
 ### 2026-07-11 — R&I Slice 26 (part g): AI models catalog — dash/airouting backend + aimodels web (last Slice 26 module)
 The final Slice 26 module, end-to-end (backend + SPA), in read-only form. **Backend** `internal/dash/airouting`
 is a static projection of the `internal/ai` model cascade registry (`ai.Models`, ADR-0026) — it owns no

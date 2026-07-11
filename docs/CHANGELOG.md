@@ -5,6 +5,16 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part a): intent dashboard read-model service (live-green)
+The first **Slice-26 (dashboards)** brick: `internal/dash/intent.Service` — a tenant-scoped read model over
+`intent_scores` for the admin UI, riding the dashboard **dual-GUC RLS** seam (`db.Store.Tx` binds
+`app.current_tenant` + `app.current_role` from the Principal, ADR-0020). `Account(account)` → per-class
+scores (score desc); `List(limit)` → accounts with their strongest intent class. A build-tagged
+(`integration`) RLS test **passes LIVE against PG17** via the dual-GUC: tenant B sees 0 of tenant A's intent
+(per-account and in the list), fail-closed on no-principal. `go build/vet/test` + `gofmt` green (integration
+excluded from the default suite by tag); zero new Go dep. The HTTP surface (rbac read middleware) +
+dashboardd mount + web feature + an operator cross-Tenant policy are follow-on increments.
+
 ### 2026-07-11 — R&I Slice 25 (part b6): `POST /v1/intent/refresh` wired LIVE — full intent pipeline end-to-end
 `POST /v1/intent/refresh` (write; auth + write-scope + drain; Idempotency-Key required) recomputes intent
 for an account and returns the scores. `cmd/enrichapi` constructs the `IntentRefresher` over the **real**

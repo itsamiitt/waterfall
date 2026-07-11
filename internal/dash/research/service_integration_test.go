@@ -69,6 +69,7 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 	applyFile(t, admin, "../../../migrations/0015_research.sql")
 	applyFile(t, admin, "../../../migrations/0016_intent.sql")
 	applyFile(t, admin, "../../../migrations/0017_ri_operator_read.sql")
+	applyFile(t, admin, "../../../migrations/0020_research_runs_operator_read.sql")
 	if err := admin.Exec("create role app_rls login nosuperuser"); err != nil {
 		t.Fatalf("create role: %v", err)
 	}
@@ -135,6 +136,18 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 	}
 	if blobOp, ok, err := svc.Dossier(ctxOp, "d-A"); err != nil || !ok || !strings.Contains(string(blobOp), "Acme") {
 		t.Fatalf("operator must read tenant-A's dossier (ok=%v err=%v)", ok, err)
+	}
+	// Operator reads research RUNS across tenants too, via the additive 0020 operator-read policy.
+	runsOp, err := svc.Runs(ctxOp, 50)
+	if err != nil {
+		t.Fatalf("Runs operator: %v", err)
+	}
+	gotRuns := map[string]bool{}
+	for _, r := range runsOp {
+		gotRuns[r.RunID] = true
+	}
+	if !gotRuns["r-A"] || !gotRuns["r-B"] {
+		t.Fatalf("operator must read runs across tenants; got %+v", runsOp)
 	}
 	// A non-operator role of tenant-B still cannot cross into tenant-A (operator-read is FOR SELECT
 	// scoped to the operator role only; tenant_user remains confined by *_tenant_isolation).

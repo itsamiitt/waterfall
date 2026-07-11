@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: operator cross-Tenant read for research_runs (migration 0020) — closes the run-monitor RBAC↔RLS gap
+Completes the RBAC↔RLS contract for the Research Run monitor. When the run monitor landed, `research_runs`
+carried only the Class-T `_tenant_isolation` policy, so under dual-GUC an operator (own Tenant = sentinel
+`platform`) — despite the `research.read` matrix granting `DecisionAllow` — saw **zero** real-Tenant runs.
+**Migration `0020_research_runs_operator_read.sql`** adds the additive permissive `FOR SELECT USING
+(app_current_role()='operator')` policy on `research_runs` — the exact fix migration 0017 applied to
+`research_dossiers` + `intent_scores` (RLS OR-combines permissive policies, so tenant_admin/tenant_user stay
+own-Tenant; operator read is SELECT-only). `dash/research.Runs` comment updated. Live RLS integration test
+extended (non-superuser `app_rls` on PG17): an operator now reads runs across Tenants (r-A + r-B), while a
+tenant_user stays fail-closed. Full 20-migration chain applies cleanly in order; full Go suite green; zero
+new Go dep. All three R&I read tables (dossiers, scores, runs) now have matched operator cross-Tenant read.
+
 ### 2026-07-11 — R&I: Research Runs web tab (surfaces the async run monitor in the SPA)
 Adds a **Runs** view to `web/src/features/airesearch` over the part-`bb722db` `GET /v1/admin/research/runs`
 backend: a read-only table of the Tenant's async research runs (run_id, subject, status, updated) with

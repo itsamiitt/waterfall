@@ -73,9 +73,9 @@ type RunSummary struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
-// Runs returns research run lifecycle rows for the caller's Tenant, newest first (capped). research_runs
-// carries only the Class-T tenant-isolation policy (no operator cross-Tenant policy), so an operator sees
-// its own platform-Tenant runs; cross-Tenant run visibility is a follow-on policy (mirroring 0017).
+// Runs returns research run lifecycle rows for the caller's Tenant, newest first (capped). A tenant_admin
+// sees its own runs (Class-T *_tenant_isolation); an operator reads runs across Tenants via the additive
+// operator-read policy (migration 0020, mirroring 0017 for dossiers/scores).
 func (s *Service) Runs(ctx context.Context, limit int) ([]RunSummary, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50

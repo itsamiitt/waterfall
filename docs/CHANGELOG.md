@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: CRM connections web feature (completes the CRM vertical UI)
+`web/src/features/crm` surfaces the part-2c `/v1/admin/crm/connections` read-model in the SPA — a read-only
+table of the Tenant's configured CRM push targets (connection, provider, status, updated-at) over `GET
+/crm/connections`. The projection shows **no credential material** (the backend omits secret_ref/config).
+Behind a new operator + tenant_admin `crm.read` nav module (hidden from tenant_user — CRM integration config
+is a tenant_admin concern; mirrors backend `rbac.CRMRead`); pure `providerLabel` helper (brand names, else
+title-case) + vitest; `permissions.test.ts` updated (16 nav modules). Endpoints already registered in
+`04-api-contracts.md §2.14`, so the no-orphan-UI gate stays green. Full `npm run check:ci` green (tsc +
+vitest + allowlist + orphan + build + bundle-size 111.6 KB / 400 KB); zero new npm dep. **All four R&I read
+backends (intent, research, aimodels, crm) now have SPA screens.** The CRM configure-*write* (`POST`,
+envelope-sealed OAuth secret) is a security-sensitive follow-on left for human review before autonomous build.
+
 ### 2026-07-11 — R&I docs: implementation reconciliation (design ↔ shipped) after slices 21–27 landed
 Now that all planned slices are implemented + live-verified, reconciled the design docs with reality (no
 code change). `docs/research-intelligence/16-implementation-phases.md`: status DRAFT → **IMPLEMENTED**; added

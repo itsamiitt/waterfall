@@ -34,6 +34,8 @@ const feature = (name: string) => {
       return () => import("../features/airesearch/routes");
     case "aimodels":
       return () => import("../features/aimodels/routes");
+    case "crm":
+      return () => import("../features/crm/routes");
     case "security":
       return () => import("../features/security/routes");
     case "alerts":
@@ -114,6 +116,7 @@ export const router = createBrowserRouter([
           { path: "research", lazy: feature("airesearch") },
           { path: "research/:id", lazy: feature("airesearch") },
           { path: "ai-models", lazy: feature("aimodels") },
+          { path: "crm-connections", lazy: feature("crm") },
           { path: "alerts", lazy: feature("alerts") },
           { path: "alerts/rules/:id", lazy: feature("alerts") },
           { path: "security/users", lazy: feature("security") },

@@ -33,6 +33,7 @@ export type ActionGroup =
   | "intent.read"
   | "research.read"
   | "ai.models.read"
+  | "crm.read"
   | "alerts.read"
   | "alerts.write"
   | "users.read"
@@ -79,6 +80,8 @@ const MATRIX: Record<ActionGroup, Row> = {
   "research.read": row("allow", "own-tenant-only", "own-tenant-only"),
   // R&I: LLM model catalog read (matches rbac AIModelsRead — platform config, operator-only).
   "ai.models.read": row("allow", "deny", "deny"),
+  // R&I: CRM connection read (matches rbac CRMRead — outbound-integration config; tenant_admin own-tenant).
+  "crm.read": row("allow", "own-tenant-only", "deny"),
   "alerts.read": row("allow", "own-tenant-only", "own-tenant-only"),
   "alerts.write": row("allow", "own-tenant-only", "deny"),
   "users.read": row("allow", "own-tenant-only", "deny"),
@@ -141,6 +144,7 @@ export const NAV_MODULES: NavModule[] = [
   { id: "intent", abbr: "IN", label: "Intent", path: "/intent", group: "intent.read" },
   { id: "research", abbr: "RE", label: "Research", path: "/research", group: "research.read" },
   { id: "aimodels", abbr: "AI", label: "AI Models", path: "/ai-models", group: "ai.models.read" },
+  { id: "crm", abbr: "CR", label: "CRM", path: "/crm-connections", group: "crm.read" },
   { id: "security", abbr: "SE", label: "Security", path: "/security/sessions", group: "sessions.read" },
   { id: "alerts", abbr: "AL", label: "Alerts", path: "/alerts", group: "alerts.read" },
 ];

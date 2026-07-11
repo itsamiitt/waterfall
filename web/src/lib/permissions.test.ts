@@ -67,10 +67,11 @@ describe("role x action mirror (doc 05 §2 — cosmetic; server is authority)", 
     expect(ids).not.toContain("health");
     expect(ids).not.toContain("queues");
     expect(ids).not.toContain("aimodels"); // LLM registry is platform config (operator-only)
+    expect(ids).not.toContain("crm"); // CRM integration config is a tenant_admin concern
   });
 
-  it("operator sees all 15 modules", () => {
-    expect(visibleNav("operator")).toHaveLength(15);
+  it("operator sees all 16 modules", () => {
+    expect(visibleNav("operator")).toHaveLength(16);
   });
 
   it("hydrateFromServer overrides known groups and ignores unknown ones", () => {

@@ -5,6 +5,17 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 25 (part b5): EngineSignalCollector — intent from enrichment Fields (data source)
+`internal/intent.EngineSignalCollector` implements `SignalCollector` by deriving Intent Signals from an
+account's current enrichment Fields (`buying_signal` event → hiring/buying class; `funding_stage` → a
+buying/funding signal), carrying provider provenance + confidence through (`source_type=api`). Unknown
+values yield no signal (no fabricated intent). A v1 bridge over the engine's Field read model
+(`store.FieldVersions.Current` via a `FieldReader` seam); a dedicated signal-provider collector
+(job-posting volumes, technographics deltas over time) is roadmap. An **end-to-end test wires it into the
+`IntentRefresher`** (Fields → `ScoreAll` → write-back), proving the full intent pipeline runs from real
+enrichment data. Tests + `-race` green; full suite clean; zero new Go dep. This gives the intent engine a
+working data source; the remaining wiring is a scheduled/triggered `job.Kind=intent_refresh` in enrichapi.
+
 ### 2026-07-11 — R&I Slice 25 (part b4): `intent_refresh` orchestration (async lane core)
 `internal/intent.IntentRefresher` — the async lane that makes intent self-populating (ADR-0027): collect
 signals (`SignalCollector` seam) → `Scorer.ScoreAll` → persist per-class scores (`ScoreWriter`) →

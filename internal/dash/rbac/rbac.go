@@ -45,8 +45,9 @@ const (
 	WorkersActions   Action = "workers.actions"
 	CostRead         Action = "cost.read"
 	BudgetsWrite     Action = "budgets.write"
-	IntentRead       Action = "intent.read"   // R&I: computed intent read (Slice 26, ADR-0027)
-	ResearchRead     Action = "research.read" // R&I: research dossier read (Slice 26, ADR-0028)
+	IntentRead       Action = "intent.read"    // R&I: computed intent read (Slice 26, ADR-0027)
+	ResearchRead     Action = "research.read"  // R&I: research dossier read (Slice 26, ADR-0028)
+	AIModelsRead     Action = "ai.models.read" // R&I: LLM model catalog read (Slice 26, ADR-0026)
 	AlertsCRUD       Action = "alerts.crud"
 	AlertsAck        Action = "alerts.ack"
 	UsersCRUD        Action = "users.crud"
@@ -122,6 +123,8 @@ var matrix = map[Action]map[string]Decision{
 	BudgetsWrite: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 	IntentRead:   {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionOwnTenant},
 	ResearchRead: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionOwnTenant},
+	// The LLM model registry is platform config (not tenant data): operator-only, like health/workers.
+	AIModelsRead: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionDeny, RoleTenantUser: DecisionDeny},
 
 	AlertsCRUD: {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},
 	AlertsAck:  {RoleOperator: DecisionAllow, RoleTenantAdmin: DecisionOwnTenant, RoleTenantUser: DecisionDeny},

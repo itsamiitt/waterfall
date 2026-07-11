@@ -2022,6 +2022,16 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/ai/models':
+    get:
+      summary: List the LLM model cascade catalog (operator-only, ADR-0026)
+      operationId: get_v1_admin_ai_models
+      tags: [ai]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
   '/v1/admin/research/dossiers':
     get:
       summary: List assembled Dossiers (Tenant-scoped, ADR-0028)

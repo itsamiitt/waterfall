@@ -5,6 +5,23 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 26 (part g): AI models catalog — dash/airouting backend + aimodels web (last Slice 26 module)
+The final Slice 26 module, end-to-end (backend + SPA), in read-only form. **Backend** `internal/dash/airouting`
+is a static projection of the `internal/ai` model cascade registry (`ai.Models`, ADR-0026) — it owns no
+tenant tables (the LLM registry is platform config, identical for every caller), so it needs **no store, no
+RLS, no migration**. `GET /v1/admin/ai/models` returns the free-first cascade `{ items: [{ slug, model_id,
+dialect, host, status, free, in_per_mtok, out_per_mtok, docs_url }] }` behind a new **operator-only**
+`AIModelsRead` RBAC action (platform config, like health/workers); the egress `AuthDescriptor` and keys are
+stripped from the projection. Mounted in `cmd/dashboardd`; OpenAPI parity kept (`/v1/admin/ai/models` added
+to `openapi-admin.{json,yaml}`, `TestAdminOpenAPIParity` green); a handler unit test covers 401/403/200 +
+free-first ordering (no PG needed — static data). **Web** `web/src/features/aimodels` renders the catalog as
+a read-only table (slug, model, dialect, tier, placeholder cost, inclusion status, host) behind an
+operator-only `ai.models.read` nav module (hidden from tenants); pure `modelCost` helper + vitest. Config
+editing (`ai_prompt`/`llm_route` via `config_versions`, needs a kind-CHECK-widen migration) remains a
+documented follow-on. Full Go suite + `npm run check:ci` green (tsc + vitest + allowlist + orphan + build +
+bundle-size 111.6 KB / 400 KB); zero new Go/npm dep. **All three Slice 26 web features (intent, research,
+aimodels) now ship.**
+
 ### 2026-07-11 — R&I Slice 26 (part f): Research (dossiers) web feature (full CI green)
 `web/src/features/airesearch` surfaces the research-dossier admin read-model, mirroring the intent
 feature. **List** (`/research`) → assembled dossiers freshest-first over `GET /research/dossiers`;

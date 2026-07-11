@@ -32,6 +32,7 @@ export type ActionGroup =
   | "budgets.write"
   | "intent.read"
   | "research.read"
+  | "ai.models.read"
   | "alerts.read"
   | "alerts.write"
   | "users.read"
@@ -76,6 +77,8 @@ const MATRIX: Record<ActionGroup, Row> = {
   "intent.read": row("allow", "own-tenant-only", "own-tenant-only"),
   // R&I: research dossier read (matches internal/dash/rbac ResearchRead — operator allow, TA/TU own-tenant).
   "research.read": row("allow", "own-tenant-only", "own-tenant-only"),
+  // R&I: LLM model catalog read (matches rbac AIModelsRead — platform config, operator-only).
+  "ai.models.read": row("allow", "deny", "deny"),
   "alerts.read": row("allow", "own-tenant-only", "own-tenant-only"),
   "alerts.write": row("allow", "own-tenant-only", "deny"),
   "users.read": row("allow", "own-tenant-only", "deny"),
@@ -137,6 +140,7 @@ export const NAV_MODULES: NavModule[] = [
   { id: "cost", abbr: "CO", label: "Cost", path: "/cost", group: "cost.read" },
   { id: "intent", abbr: "IN", label: "Intent", path: "/intent", group: "intent.read" },
   { id: "research", abbr: "RE", label: "Research", path: "/research", group: "research.read" },
+  { id: "aimodels", abbr: "AI", label: "AI Models", path: "/ai-models", group: "ai.models.read" },
   { id: "security", abbr: "SE", label: "Security", path: "/security/sessions", group: "sessions.read" },
   { id: "alerts", abbr: "AL", label: "Alerts", path: "/alerts", group: "alerts.read" },
 ];

@@ -26,6 +26,7 @@ import (
 
 	"github.com/enrichment/waterfall/internal/auth"
 	"github.com/enrichment/waterfall/internal/bandit"
+	"github.com/enrichment/waterfall/internal/dash/airouting"
 	"github.com/enrichment/waterfall/internal/dash/alerts"
 	"github.com/enrichment/waterfall/internal/dash/approvals"
 	"github.com/enrichment/waterfall/internal/dash/audit"
@@ -444,6 +445,9 @@ func main() {
 
 	// Research dashboard (Slice 26, ADR-0028): tenant-scoped read of assembled Dossiers.
 	research.Routes(fmux, research.Deps{Service: research.NewService(store), Auth: httpx.CtxAuthenticator{}, Logger: logger})
+
+	// AI models catalog (Slice 26, ADR-0026): operator-only read of the LLM cascade registry (no store).
+	airouting.Routes(fmux, airouting.Deps{Service: airouting.NewService(), Auth: httpx.CtxAuthenticator{}, Logger: logger})
 
 	alertStore := alerts.NewStore(store, time.Now)
 	alertEval := alerts.NewEvaluator(alertStore, auditLog, time.Now, reg, logger)

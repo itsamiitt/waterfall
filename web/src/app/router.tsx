@@ -32,6 +32,8 @@ const feature = (name: string) => {
       return () => import("../features/intent/routes");
     case "airesearch":
       return () => import("../features/airesearch/routes");
+    case "aimodels":
+      return () => import("../features/aimodels/routes");
     case "security":
       return () => import("../features/security/routes");
     case "alerts":
@@ -111,6 +113,7 @@ export const router = createBrowserRouter([
           { path: "intent/:domain", lazy: feature("intent") },
           { path: "research", lazy: feature("airesearch") },
           { path: "research/:id", lazy: feature("airesearch") },
+          { path: "ai-models", lazy: feature("aimodels") },
           { path: "alerts", lazy: feature("alerts") },
           { path: "alerts/rules/:id", lazy: feature("alerts") },
           { path: "security/users", lazy: feature("security") },

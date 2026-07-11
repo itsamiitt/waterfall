@@ -1002,6 +1002,7 @@ reads cross-Tenant via the enumerated operator-read policy (migration 0017). Rea
 
 | Method | Path | Purpose | Roles | Notes |
 |---|---|---|---|---|
+| GET | `/ai/models` | LLM model cascade catalog (free-first) | O (operator-only) | `{ items: [{ slug, model_id, dialect, host, status, free, in_per_mtok, out_per_mtok, docs_url }] }`; platform config, identical for all callers; keys never surface (ADR-0026) |
 | GET | `/intent/accounts` | Accounts with computed intent, strongest class first | TU+ (own Tenant) / O (cross-Tenant) | `{ items: [{ account, top_class, top_score, classes }] }`; `?limit=` (cap 200) |
 | GET | `/intent/accounts/{domain}` | Per-class Intent Class Scores for one account | TU+/O | `{ account, scores: [{ class, score, confidence, signal_count, config_version, computed_at }] }`; the ten class scores are never conflated with the single `intent_score` Field |
 | GET | `/research/dossiers` | Assembled dossiers, freshest first | TU+/O | `{ items: [{ dossier_id, subject_key, overall_confidence, config_version, freshness_at }] }`; `?limit=` (cap 200) |

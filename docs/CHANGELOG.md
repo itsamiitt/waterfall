@@ -5,6 +5,19 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I Slice 24 (part c): dossier persistence wired + `GET /v1/dossiers/{domain}` (live-green)
+`POST /v1/research` now **persists** the assembled Dossier (upsert-per-subject via `research.Store`) when
+Postgres is configured, and **`GET /v1/dossiers/{domain}`** reads the freshest one back — both behind the
+gateway's auth (the read is protected + rate-limited; the write adds write-scope + drain gate).
+`api.Server.Research` became a small `ResearchAPI` interface (`Research` write + `Dossier` read).
+`cmd/enrichapi` constructs the `research.Store` when Postgres is enabled (guarding against a typed-nil
+interface) and the startup bootstrap now grants `app_rls` on `research_*`. Handler unit tests (persist-on-POST,
+dossier GET hit/miss/no-store/no-principal) green. **Live smoke** (enrichapi on real PG17 as the `app_rls`
+role): 15 migrations apply (incl. 0015), `POST` persists, `GET /v1/dossiers/acme.com` reads the **same**
+dossier back through RLS, an unknown domain → 404. Full suite + `-race` green; zero new Go dep. This
+completes the research subsystem end-to-end (assemble → persist → retrieve); the async 202+job lane is a
+later refinement.
+
 ### 2026-07-10 — R&I Slice 23 (part e): research pgstore + RLS integration test (live-green)
 `internal/research.Store` — a Postgres-backed store for Dossiers + queryable provenance (migration 0015),
 RLS-scoped exactly like `internal/pgstore` (never takes a tenant id; binds `app.current_tenant` per tx from

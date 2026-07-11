@@ -11,8 +11,12 @@ import (
 
 type stubResearch struct{ called bool }
 
-func (s *stubResearch) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (s *stubResearch) Research(w http.ResponseWriter, _ *http.Request) {
 	s.called = true
+	writeJSON(w, http.StatusOK, map[string]string{"dossier_id": "d1"})
+}
+
+func (s *stubResearch) Dossier(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"dossier_id": "d1"})
 }
 

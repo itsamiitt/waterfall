@@ -119,3 +119,87 @@ func TestPostResearch_EndToEnd(t *testing.T) {
 		t.Fatalf("expected provenance rows")
 	}
 }
+
+type fakeDossierStore struct {
+	saved    map[string]Dossier
+	byDomain map[string]Dossier
+}
+
+func newFakeStore() *fakeDossierStore {
+	return &fakeDossierStore{saved: map[string]Dossier{}, byDomain: map[string]Dossier{}}
+}
+
+func (f *fakeDossierStore) SaveDossier(_ context.Context, dossierID, subjectKey string, d Dossier) error {
+	f.saved[dossierID] = d
+	f.byDomain[subjectKey] = d
+	return nil
+}
+
+func (f *fakeDossierStore) LatestBySubject(_ context.Context, subjectKey string) (Dossier, bool, error) {
+	d, ok := f.byDomain[subjectKey]
+	return d, ok, nil
+}
+
+func TestPostResearch_PersistsWhenStoreSet(t *testing.T) {
+	store := newFakeStore()
+	h := &HTTPHandler{Assembler: fakeAssembler{d: Dossier{CompanyProfile: map[string]string{"name": "Acme"}}}, Store: store}
+	rw := doPost(t, h, `{"company_domain":"acme.com"}`, true, true)
+	if rw.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rw.Code, rw.Body.String())
+	}
+	if _, ok := store.byDomain["acme.com"]; !ok {
+		t.Fatal("dossier was not persisted")
+	}
+	var d Dossier
+	if err := json.Unmarshal(rw.Body.Bytes(), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.DossierID != "acme.com" {
+		t.Fatalf("dossier_id = %q, want acme.com (derived from subject)", d.DossierID)
+	}
+}
+
+func doGet(t *testing.T, h *HTTPHandler, path string, withPrincipal bool) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := http.NewServeMux()
+	h.Routes(mux)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if withPrincipal {
+		req = req.WithContext(tenant.WithPrincipal(req.Context(), tenant.Principal{TenantID: "t1", UserID: "u1"}))
+	}
+	rw := httptest.NewRecorder()
+	mux.ServeHTTP(rw, req)
+	return rw
+}
+
+func TestGetDossier_ReturnsStored(t *testing.T) {
+	store := newFakeStore()
+	store.byDomain["acme.com"] = Dossier{DossierID: "acme.com", CompanyProfile: map[string]string{"name": "Acme"}}
+	h := &HTTPHandler{Assembler: fakeAssembler{}, Store: store}
+	rw := doGet(t, h, "/v1/dossiers/acme.com", true)
+	if rw.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rw.Code, rw.Body.String())
+	}
+	var d Dossier
+	if err := json.Unmarshal(rw.Body.Bytes(), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.CompanyProfile["name"] != "Acme" {
+		t.Fatalf("dossier = %+v", d)
+	}
+}
+
+func TestGetDossier_404WhenNoStoreOrMissing(t *testing.T) {
+	// No store configured → 404.
+	if rw := doGet(t, &HTTPHandler{Assembler: fakeAssembler{}}, "/v1/dossiers/acme.com", true); rw.Code != http.StatusNotFound {
+		t.Fatalf("no-store status = %d, want 404", rw.Code)
+	}
+	// Store set but no dossier for the domain → 404.
+	if rw := doGet(t, &HTTPHandler{Assembler: fakeAssembler{}, Store: newFakeStore()}, "/v1/dossiers/missing.com", true); rw.Code != http.StatusNotFound {
+		t.Fatalf("missing status = %d, want 404", rw.Code)
+	}
+	// No principal → 401.
+	if rw := doGet(t, &HTTPHandler{Assembler: fakeAssembler{}, Store: newFakeStore()}, "/v1/dossiers/acme.com", false); rw.Code != http.StatusUnauthorized {
+		t.Fatalf("no-principal status = %d, want 401", rw.Code)
+	}
+}

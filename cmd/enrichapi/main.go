@@ -284,7 +284,7 @@ func main() {
 			braveSearch = p
 		}
 	}
-	srv.Research = &research.HTTPHandler{Assembler: research.NewOrchestrator(
+	researchHandler := &research.HTTPHandler{Assembler: research.NewOrchestrator(
 		research.EngineEnricher{
 			Engine: eng, Planner: router.New(provs...),
 			CostCeiling: 100, ConfidenceTarget: 0.8, ConfigVersion: "research-v1",
@@ -295,7 +295,22 @@ func main() {
 			Budget: ai.Budget{Credits: 100}, Prompts: research.DefaultPrompts(),
 		},
 	)}
-	logger.Info("research API enabled", "route", "POST /v1/research")
+	// Dossier persistence (migration 0015): when Postgres is configured, assembled Dossiers are stored
+	// (upsert-per-subject) and served by GET /v1/dossiers/{domain}. In memory mode the sync endpoint
+	// still assembles + returns a Dossier, just without persistence (Store stays nil → GET is 404).
+	// NB: assign the concrete *research.Store only when non-nil to avoid a typed-nil interface.
+	if usePG {
+		rs, rerr := research.OpenStore(pg.ParseDSN(pgDSN), 8)
+		if rerr != nil {
+			logger.Error("open research store", "err", rerr)
+			os.Exit(1)
+		}
+		defer rs.Close()
+		researchHandler.Store = rs
+		logger.Info("research dossier persistence enabled")
+	}
+	srv.Research = researchHandler
+	logger.Info("research API enabled", "routes", "POST /v1/research, GET /v1/dossiers/{domain}")
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpSrv := &http.Server{
@@ -366,6 +381,7 @@ begin
 end
 $$;
 grant select, insert, update on field_versions, idempotency_ledger, cost_ledger, job_outbox to app_rls;
+grant select, insert, update, delete on research_runs, research_steps, research_dossiers, research_sources to app_rls;
 grant select, update on job_outbox to relay;
 `
 

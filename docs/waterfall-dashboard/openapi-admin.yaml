@@ -2058,6 +2058,16 @@ paths:
           $ref: '#/components/responses/OK'
         "default":
           $ref: '#/components/responses/Error'
+  '/v1/admin/research/runs':
+    get:
+      summary: List research run lifecycle rows (Tenant-scoped, ADR-0028)
+      operationId: get_v1_admin_research_runs
+      tags: [research]
+      responses:
+        "200":
+          $ref: '#/components/responses/OK'
+        "default":
+          $ref: '#/components/responses/Error'
   '/v1/admin/research/dossiers':
     get:
       summary: List assembled Dossiers (Tenant-scoped, ADR-0028)

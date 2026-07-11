@@ -63,6 +63,45 @@ func (s *Service) List(ctx context.Context, limit int) ([]DossierSummary, error)
 	return out, err
 }
 
+// RunSummary is a dashboard read model of one research run's lifecycle (research_runs, migration 0015).
+type RunSummary struct {
+	RunID      string `json:"run_id"`
+	SubjectKey string `json:"subject_key"`
+	Status     string `json:"status"`
+	ConfigVer  string `json:"config_version"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+// Runs returns research run lifecycle rows for the caller's Tenant, newest first (capped). research_runs
+// carries only the Class-T tenant-isolation policy (no operator cross-Tenant policy), so an operator sees
+// its own platform-Tenant runs; cross-Tenant run visibility is a follow-on policy (mirroring 0017).
+func (s *Service) Runs(ctx context.Context, limit int) ([]RunSummary, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	out := []RunSummary{}
+	err := s.store.Tx(ctx, func(c *pg.Conn) error {
+		res, err := c.QueryParams(`select run_id, subject_key, status, config_version, created_at, updated_at
+			from research_runs order by created_at desc, run_id asc limit $1`, limit)
+		if err != nil {
+			return err
+		}
+		for _, row := range res.Rows {
+			out = append(out, RunSummary{
+				RunID:      cell(row, 0),
+				SubjectKey: cell(row, 1),
+				Status:     cell(row, 2),
+				ConfigVer:  cell(row, 3),
+				CreatedAt:  cell(row, 4),
+				UpdatedAt:  cell(row, 5),
+			})
+		}
+		return nil
+	})
+	return out, err
+}
+
 // Dossier returns the full stored Dossier JSON for the caller's Tenant, or ok=false if absent.
 func (s *Service) Dossier(ctx context.Context, dossierID string) (json.RawMessage, bool, error) {
 	var out json.RawMessage

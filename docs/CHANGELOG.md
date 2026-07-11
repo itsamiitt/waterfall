@@ -5,6 +5,20 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-11 — R&I: Research Run monitor dashboard — completes the async research lane surface
+The dashboard read surface for the async lane, now that `research_runs` is populated by real submissions.
+`internal/dash/research.Service` gains `Runs(ctx, limit)` → run lifecycle rows (run_id, subject_key,
+status, config_version, created/updated_at) over `research_runs` via the dual-GUC RLS seam; new **`GET
+/v1/admin/research/runs`** behind the existing `ResearchRead` RBAC. `research_runs` carries only the
+Class-T tenant-isolation policy (no operator cross-Tenant policy), so a tenant_admin sees its own runs
+(operator cross-Tenant run visibility is a follow-on policy, mirroring 0017). Mounted route + OpenAPI parity
+(path added to `openapi-admin.{json,yaml}`; `TestAdminOpenAPIParity` green) + `04-api-contracts.md §2.14`
+row; closed the remaining grant gap (`grant select … research_runs … to dash_app`). Live RLS integration
+test extended (non-superuser `app_rls` on PG17): tenant A sees its `done` run, tenant B only its `running`
+run. Full Go suite green; zero new Go dep. **The async research lane is now complete end-to-end: submit
+(202+run_id) → worker → `GET /v1/research/{id}` status → admin run monitor.** A web tab is an optional
+follow-on.
+
 ### 2026-07-11 — R&I: async research HTTP wiring — POST 202+run_id + GET /v1/research/{id} (LIVE end-to-end)
 Realizes the plan's designed **async** research flow (ADR-0028), the third and final async-lane increment.
 `POST /v1/research` is now async by default when the run store + worker are wired: it records a **queued**

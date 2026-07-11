@@ -1105,6 +1105,23 @@
     ]
    }
   },
+  "/v1/admin/research/runs": {
+   "get": {
+    "operationId": "get_v1_admin_research_runs",
+    "responses": {
+     "200": {
+      "$ref": "#/components/responses/OK"
+     },
+     "default": {
+      "$ref": "#/components/responses/Error"
+     }
+    },
+    "summary": "List research run lifecycle rows (Tenant-scoped, ADR-0028)",
+    "tags": [
+     "research"
+    ]
+   }
+  },
   "/v1/admin/research/dossiers": {
    "get": {
     "operationId": "get_v1_admin_research_dossiers",

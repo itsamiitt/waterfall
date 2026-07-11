@@ -49,6 +49,7 @@ func Routes(mux *http.ServeMux, d Deps) {
 	h := &handlers{svc: d.Service, auth: d.Auth, log: log}
 	mux.HandleFunc("GET "+researchBase+"/dossiers", h.read(rbac.ResearchRead, h.list))
 	mux.HandleFunc("GET "+researchBase+"/dossiers/{id}", h.read(rbac.ResearchRead, h.dossier))
+	mux.HandleFunc("GET "+researchBase+"/runs", h.read(rbac.ResearchRead, h.runs))
 }
 
 func (h *handlers) read(action rbac.Action, next http.HandlerFunc) http.HandlerFunc {
@@ -98,6 +99,21 @@ func (h *handlers) list(w http.ResponseWriter, r *http.Request) {
 	items, err := h.svc.List(r.Context(), limit)
 	if err != nil {
 		h.log.Error("research dashboard list failed", "err", err)
+		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// runs handles GET /v1/admin/research/runs — the Tenant's research run lifecycle rows (async lane).
+func (h *handlers) runs(w http.ResponseWriter, r *http.Request) {
+	limit := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		limit, _ = strconv.Atoi(v)
+	}
+	items, err := h.svc.Runs(r.Context(), limit)
+	if err != nil {
+		h.log.Error("research dashboard runs failed", "err", err)
 		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
 		return
 	}

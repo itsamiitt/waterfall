@@ -80,6 +80,11 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 		       ('tenant-B','d-B','other.com','{}',0.5,'v1')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	if err := admin.Exec(`insert into research_runs (tenant_id, run_id, subject_key, status, config_version)
+		values ('tenant-A','r-A','acme.com','done','v1'),
+		       ('tenant-B','r-B','other.com','running','v1')`); err != nil {
+		t.Fatalf("seed runs: %v", err)
+	}
 
 	appCfg := cfg
 	appCfg.User = "app_rls"
@@ -95,6 +100,14 @@ func TestResearchDashboard_TenantIsolation(t *testing.T) {
 	}
 	if listB, err := svc.List(ctxB, 50); err != nil || len(listB) != 1 || listB[0].DossierID != "d-B" {
 		t.Fatalf("List B = %+v err=%v", listB, err)
+	}
+
+	// research_runs monitor: tenant-A sees its run (with status); tenant-B only its own (RLS G1).
+	if runsA, err := svc.Runs(ctxA, 50); err != nil || len(runsA) != 1 || runsA[0].RunID != "r-A" || runsA[0].Status != "done" {
+		t.Fatalf("Runs A = %+v err=%v", runsA, err)
+	}
+	if runsB, err := svc.Runs(ctxB, 50); err != nil || len(runsB) != 1 || runsB[0].RunID != "r-B" || runsB[0].Status != "running" {
+		t.Fatalf("Runs B = %+v err=%v", runsB, err)
 	}
 
 	// tenant-A reads d-A's blob; tenant-B cannot (RLS).

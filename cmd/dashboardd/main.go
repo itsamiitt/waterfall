@@ -784,7 +784,7 @@ grant select, insert, update, delete on mfa_used_steps, dash_admin_idempotency t
 grant select, insert, update, delete on self_monitor to dash_app;
 -- R&I dashboard read models (0016 intent, 0015 research, 0019 crm): read-only projections for the admin
 -- surface (internal/dash/{intent,research,crm}). Writes stay with the R&I owner modules (enrichapi).
-grant select on intent_scores, research_dossiers, crm_connections to dash_app;
+grant select on intent_scores, research_dossiers, research_runs, crm_connections to dash_app;
 `
 
 // startupSelfCheck refuses to run as a role that bypasses RLS (which would silently defeat G1) and

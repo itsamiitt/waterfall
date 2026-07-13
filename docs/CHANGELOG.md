@@ -5,6 +5,18 @@ Format: reverse-chronological; group by phase; note back-propagated improvements
 
 ## [Unreleased]
 
+### 2026-07-13 — fix(dashboardd): route the R&I feature subtrees (intent/research/ai/crm) — they 404'd at runtime
+Runtime routing bug found by running dashboardd locally: the R&I dashboard routes (`/v1/admin/intent/*`,
+`/research/*`, `/ai/*`, `/crm/*`) were mounted on the FeatureChain mux (`fmux`) but their prefixes were
+missing from the admin mux's feature-prefix list, so every request fell through to the P0 `/` handler and
+**404'd** — even though the handler unit tests, RLS integration tests, and `TestAdminOpenAPIParity` (all of
+which exercise the handlers directly, not the composed admin mux) passed. Added `intent`, `research`, `ai`,
+`crm` to the (now package-level, documented) `adminFeaturePrefixes`, and added a regression test
+`TestAdminFeaturePrefixesRouteToFeatureHandler` that rebuilds the admin-mux composition and asserts every
+prefix — and the R&I ones specifically — routes to the feature handler, not the fallback. Verified live: all
+five R&I admin endpoints now return **200** with data (AI model catalog, research runs + dossiers). Full Go
+suite green; zero new dep.
+
 ### 2026-07-11 — R&I: operator cross-Tenant read for research_runs (migration 0020) — closes the run-monitor RBAC↔RLS gap
 Completes the RBAC↔RLS contract for the Research Run monitor. When the run monitor landed, `research_runs`
 carried only the Class-T `_tenant_isolation` policy, so under dual-GUC an operator (own Tenant = sentinel

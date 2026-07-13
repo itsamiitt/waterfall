@@ -63,6 +63,20 @@ import (
 // queue_defs row; multi-queue topology arrives with the target engines (doc 06 §1.3).
 const defaultQueueName = "enrich-default"
 
+// adminFeaturePrefixes is the closed set of /v1/admin/<prefix> subtrees routed to the FeatureChain
+// (fmux). EVERY feature that mounts routes on fmux MUST appear here, or its paths fall through to the P0
+// "/" handler and 404 at runtime — a gap the handler-level tests do not exercise (see TestAdminFeature
+// PrefixesRouteToFeatureHandler). Keep in sync with the *.Routes(fmux, …) calls in main().
+var adminFeaturePrefixes = []string{
+	"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
+	"routing", "workflows", "config", "health", "approvals", "change-history",
+	"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts",
+	// R&I feature subtrees (Slices 26–27): intent scores, research dossiers/runs, AI model catalog,
+	// CRM connections.
+	"intent", "research", "ai", "crm",
+	"streams", "overview", "search", "meta", "tenants",
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -509,10 +523,7 @@ func main() {
 	// precedence over "/", so /v1/admin/providers/{id} lands on featureHandler.
 	admin := http.NewServeMux()
 	admin.Handle("/", srv.Handler())
-	for _, p := range []string{"providers", "keys", "key-pools", "key-imports", "bulk-jobs", "rotation",
-		"routing", "workflows", "config", "health", "approvals", "change-history",
-		"queues", "dead-letters", "jobs", "workers", "cost", "budgets", "alerts",
-		"streams", "overview", "search", "meta", "tenants"} {
+	for _, p := range adminFeaturePrefixes {
 		admin.Handle("/v1/admin/"+p, featureHandler)
 		admin.Handle("/v1/admin/"+p+"/", featureHandler)
 	}
